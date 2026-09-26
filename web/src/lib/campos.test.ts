@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
-  CAMPOS_POR_TIPO, camposDoErro, cascata, origemEsperada, secoesComErro, visivel,
+  CAMPOS_POR_TIPO, CAMPOS_POR_TIPO_GRUPO, camposDoErro, cascata, origemEsperada,
+  secoesComErro, temValor, visivel,
 } from "./campos"
 
 const PADROES = {
@@ -38,6 +39,30 @@ describe("a visibilidade de um campo", () => {
       expect(visivel("apelido", vazio, {}, CAMPOS_POR_TIPO, tipo)).toBe(true)
       expect(visivel("nome", vazio, {}, CAMPOS_POR_TIPO, tipo)).toBe(true)
     }
+  })
+
+  it("no grupo do tipo IX o aprendizado e o do bloco do IX", () => {
+    const doGrupo = { aprendizado: "", aprendizado_ix: "" }
+    expect(visivel("aprendizado_ix", doGrupo, {}, CAMPOS_POR_TIPO_GRUPO, "ix", true)).toBe(true)
+    expect(visivel("aprendizado", doGrupo, {}, CAMPOS_POR_TIPO_GRUPO, "ix", true)).toBe(false)
+    // e o erro da API chega com a chave `aprendizado`: quem aparece e o campo
+    // do bloco do IX, que e para onde o `camposDoErro` o traduz
+    expect(visivel("aprendizado_ix", doGrupo, { aprendizado: "obrigatorio" }, CAMPOS_POR_TIPO_GRUPO, "ix", true)).toBe(true)
+    expect(visivel("aprendizado", doGrupo, { aprendizado: "obrigatorio" }, CAMPOS_POR_TIPO_GRUPO, "ix", true)).toBe(false)
+  })
+})
+
+describe("o que conta como valor preenchido", () => {
+  it("so o que o operador preencheu", () => {
+    expect(temValor("")).toBe(false)
+    expect(temValor("   ")).toBe(false)
+    expect(temValor([])).toBe(false)
+    expect(temValor([""])).toBe(false)
+    expect(temValor(false)).toBe(false)
+    // zero e caixa marcada sao valor: um LP base 0 e uma escolha
+    expect(temValor("0")).toBe(true)
+    expect(temValor(["15169"])).toBe(true)
+    expect(temValor(true)).toBe(true)
   })
 })
 
@@ -89,6 +114,11 @@ describe("o indice de secoes", () => {
     expect(Object.values(contagem).reduce((a, b) => a + b, 0)).toBe(1)
     expect(contagem.prefixos).toBe(1)
   })
+
+  it("conta o erro na secao do grupo, inclusive o do bloco do IX", () => {
+    expect(secoesComErro({ nome: "ja usado" }, "upstream", true).identificacao).toBe(1)
+    expect(secoesComErro({ aprendizado: "obrigatorio" }, "ix", true).ix).toBe(1)
+  })
 })
 
 describe("a cascata de defaults ao trocar o tipo", () => {
@@ -110,9 +140,29 @@ describe("a cascata de defaults ao trocar o tipo", () => {
     expect(novo.route_limit).toBe("50")
   })
 
-  it("troca de tipo redesenha a origem", () => {
+  it("troca de tipo redesenha a origem quando a atual nao vale no tipo novo", () => {
     const novo = cascata("upstream", "ix", base, PADROES, ["lp_base"])
     expect(novo.origem).toBe("1300")
+  })
+
+  it("troca de tipo mantem a origem que ainda vale no tipo novo", () => {
+    // As listas se sobrepoem: 1900 vale no pni e no ix, e 1900 pode ter sido
+    // escolha do operador. A tela antiga mantinha
+    // (`lista.indexOf(manter) >= 0 ? manter : ...`), e trocar por um default
+    // aqui seria trocar uma origem de politica escolhida a mao
+    const padroes = {
+      ...PADROES,
+      origens_por_tipo: { pni: [1500, 1200, 1000, 1900], ix: [1300, 1200, 1000, 1900] },
+    }
+    expect(cascata("pni", "ix", { ...base, origem: "1900" }, padroes, ["lp_base"]).origem).toBe("1900")
+  })
+
+  it("troca de tipo cai na origem do tipo novo quando a atual so valia no antigo", () => {
+    const padroes = {
+      ...PADROES,
+      origens_por_tipo: { upstream: [1400, 1000, 1900], cliente: [1100, 1110] },
+    }
+    expect(cascata("upstream", "cliente", { ...base, origem: "1400" }, padroes, ["lp_base"]).origem).toBe("1100")
   })
 
   it("a classe nao mexida deixa a origem onde esta", () => {

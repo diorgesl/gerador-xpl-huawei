@@ -1,7 +1,12 @@
 // O que o formulario mostra e o que cada erro aponta. A tabela de campos por
-// tipo vem da API (/api/plano, servida de form.CAMPOS_POR_TIPO); a copia
-// abaixo existe para o teste rodar sem servidor e e conferida contra a API
-// pelo teste da casca.
+// tipo vem da API (/api/plano, servida de form.CAMPOS_POR_TIPO), e e ELA que a
+// tela usa: o formulario so monta depois que o plano chegou. A copia abaixo
+// existe para o teste deste modulo rodar sem servidor, e nao chega ao
+// operador. Se a tabela do Python mudar, quem sente primeiro e a tela (que le
+// a da API) e nao este arquivo.
+//
+// A copia do grupo e montada por espalhamento, entao a ORDEM das chaves e
+// diferente da do dicionario do Python; o conteudo e o mesmo.
 export type Valor = string | string[] | boolean
 export type Valores = Record<string, Valor>
 export type Erros = Record<string, string>
@@ -105,7 +110,15 @@ const ERRO_PARA_CAMPO: Record<string, string[]> = {
   te_prefixos: ["te_prefixos_v4", "te_prefixos_v6"],
 }
 
-// Sem campo nenhum: o resumo mostra, nenhum input marca.
+// Sem campo nenhum: o resumo mostra, nenhum input marca. As quatro primeiras
+// sao chaves que a API realmente emite (a falha do bgpq4, o corpo malformado,
+// o 404 e o 409 do grupo com membros).
+//
+// `confirmado` esta aqui por decisao: a tela antiga tinha uma caixa com esse
+// nome e o erro embaixo dela, e a API nova nao pede mais nada disso (a
+// confirmacao virou dialogo e o DELETE nao le campo nenhum). A chave fica
+// mapeada por precaucao, porque o custo e zero e o efeito de nao estar e o
+// resumo mandar o operador clicar num campo que nao existe.
 const SEM_CAMPO = ["bgpq4", "_corpo", "_", "membros", "confirmado"]
 
 export function camposDoErro(chave: string, tipo: string, deGrupo = false): string[] {
@@ -174,10 +187,16 @@ export function origemEsperada(tipo: string, classe: string, padroes: Padroes): 
 }
 
 /**
- * A regra da cascata da tela antiga: ao trocar o tipo, o campo que ainda
- * estiver no default do tipo anterior passa para o default do novo. O que o
- * operador digitou por cima fica onde esta. Devolve um objeto novo, e so com
- * as chaves que mudaram.
+ * A regra da cascata da tela antiga, nas duas partes dela: (1) ao trocar o
+ * tipo, o campo que ainda estiver no default do tipo anterior passa para o
+ * default do novo, e o que o operador digitou por cima fica; (2) a origem
+ * segue a mesma ideia ao contrario — ela so e trocada se nao valer no tipo
+ * novo, porque a lista de origens validas muda com o tipo e as listas se
+ * sobrepoem.
+ *
+ * Devolve uma copia do formulario inteiro, com os campos que a cascata tocou
+ * ja com o valor novo — e nao so as chaves que mudaram, porque quem chama
+ * escreve de volta o objeto todo no formulario.
  */
 export function cascata(tipoAntes: string, tipo: string, valores: Valores,
                         padroes: Padroes, campos: string[], classeAntes?: string): Valores {
@@ -195,7 +214,16 @@ export function cascata(tipoAntes: string, tipo: string, valores: Valores,
   }
 
   if (tipo !== tipoAntes) {
-    novo.origem = String(origemEsperada(tipo, String(valores.classe ?? ""), padroes))
+    // A origem nao e reescrita de cara: o tipo novo pode aceitar a que esta la.
+    // As listas se sobrepoem (1000, 1200 e 1900 valem em dois ou tres tipos), e
+    // a tela antiga mantinha a escolha do operador quando ela ainda valia —
+    // `lista.indexOf(manter) >= 0 ? manter : origemEsperada(...)`. Sobrescrever
+    // aqui trocaria uma origem de politica escolhida a mao por um default.
+    const atual = Number(valores.origem)
+    const lista = padroes.origens_por_tipo[tipo]
+    novo.origem = lista && lista.includes(atual)
+      ? String(valores.origem)
+      : String(origemEsperada(tipo, String(valores.classe ?? ""), padroes))
   } else if (classeAntes !== undefined && padroes.downstream.includes(tipo) && String(valores.classe ?? "") !== classeAntes) {
     // a classe do downstream carrega a origem junto, mas so quando a origem
     // ainda e a da classe anterior
