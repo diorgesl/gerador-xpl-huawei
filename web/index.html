@@ -1,10 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <title>bgpgen</title>
+    <script>
+      // antes da primeira pintura: sem isso a tela abre no tema do sistema e
+      // troca depois, com um piscar branco no meio
+      (function () {
+        try {
+          var escolha = localStorage.getItem("tema")
+          var escuro = escolha
+            ? escolha === "escuro"
+            : window.matchMedia("(prefers-color-scheme: dark)").matches
+          document.documentElement.classList.toggle("dark", escuro)
+        } catch (e) {
+          // storage bloqueado: fica no tema claro, que e o fallback do CSS
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

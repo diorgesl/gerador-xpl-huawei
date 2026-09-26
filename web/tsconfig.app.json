@@ -4,7 +4,9 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
-    "types": ["vite/client"],
+    // os testes em src/ leem arquivo do disco (node:fs e node:path): sem o
+    // "node" aqui o `tsc -b` do build morre com TS2307 neles
+    "types": ["vite/client", "node"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
     "baseUrl": ".",

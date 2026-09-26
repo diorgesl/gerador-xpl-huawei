@@ -1,0 +1,191 @@
+/* Os quatro imports nao sao opcionais: o `tw-animate-css` traz as classes
+   `animate-in`/`animate-out` que o dialog, o dropdown, o select e o tooltip
+   usam, e o `shadcn/tailwind.css` traz o `no-scrollbar` da lista da paleta.
+   Sem eles os dois compilam e simplesmente nao fazem efeito. */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Fundo e bordas com pouca saturacao, texto corrido com contraste AA nos dois
+   temas. O --border e decorativo (separador de painel); o --input e o limite
+   do campo, e por isso e mais escuro: ele e o unico par de borda que a WCAG
+   cobra em 3:1. Os valores saem do teste de contraste, que falha abaixo do
+   minimo de cada par. */
+:root {
+  --radius: 0.375rem;
+
+  --background: oklch(0.975 0.004 85);
+  --foreground: oklch(0.28 0.012 250);
+  --card: oklch(0.99 0.003 85);
+  --card-foreground: oklch(0.28 0.012 250);
+  --popover: oklch(0.99 0.003 85);
+  --popover-foreground: oklch(0.28 0.012 250);
+  --primary: oklch(0.52 0.07 215);
+  --primary-foreground: oklch(0.98 0.01 215);
+  --secondary: oklch(0.955 0.005 85);
+  --secondary-foreground: oklch(0.28 0.012 250);
+  --muted: oklch(0.955 0.005 85);
+  --muted-foreground: oklch(0.5 0.012 250);
+  --accent: oklch(0.955 0.005 85);
+  --accent-foreground: oklch(0.28 0.012 250);
+  --destructive: oklch(0.48 0.1 25);
+  --destructive-foreground: oklch(0.98 0.01 25);
+  --border: oklch(0.9 0.006 85);
+  --input: oklch(0.63 0.006 85);
+  --ring: oklch(0.52 0.07 215);
+
+  --sucesso-fundo: oklch(0.95 0.03 150);
+  --sucesso-texto: oklch(0.42 0.08 150);
+  --erro-fundo: oklch(0.95 0.025 25);
+  --erro-texto: oklch(0.48 0.1 25);
+  --aviso-fundo: oklch(0.95 0.035 80);
+  --aviso-texto: oklch(0.47 0.08 70);
+
+  --badge-cliente-fundo: oklch(0.93 0.035 150);
+  --badge-cliente-texto: oklch(0.42 0.06 150);
+  --badge-parceiro-fundo: oklch(0.93 0.035 95);
+  --badge-parceiro-texto: oklch(0.42 0.06 95);
+  --badge-upstream-fundo: oklch(0.93 0.035 250);
+  --badge-upstream-texto: oklch(0.42 0.06 250);
+  --badge-ix-fundo: oklch(0.93 0.035 300);
+  --badge-ix-texto: oklch(0.42 0.06 300);
+  --badge-pni-fundo: oklch(0.93 0.035 350);
+  --badge-pni-texto: oklch(0.42 0.06 350);
+
+  --xpl-palavra: oklch(0.45 0.07 215);
+  --xpl-community: oklch(0.45 0.07 300);
+  --xpl-prefixo: oklch(0.45 0.07 150);
+  --xpl-objeto: oklch(0.45 0.07 250);
+  --xpl-numero: oklch(0.45 0.07 60);
+  --xpl-comentario: oklch(0.5 0.012 250);
+}
+
+.dark {
+  --background: oklch(0.21 0.012 250);
+  --foreground: oklch(0.88 0.008 250);
+  --card: oklch(0.245 0.012 250);
+  --card-foreground: oklch(0.88 0.008 250);
+  --popover: oklch(0.245 0.012 250);
+  --popover-foreground: oklch(0.88 0.008 250);
+  --primary: oklch(0.72 0.07 215);
+  --primary-foreground: oklch(0.21 0.012 250);
+  --secondary: oklch(0.28 0.012 250);
+  --secondary-foreground: oklch(0.88 0.008 250);
+  --muted: oklch(0.28 0.012 250);
+  --muted-foreground: oklch(0.7 0.01 250);
+  --accent: oklch(0.28 0.012 250);
+  --accent-foreground: oklch(0.88 0.008 250);
+  --destructive: oklch(0.8 0.07 25);
+  --destructive-foreground: oklch(0.21 0.012 250);
+  --border: oklch(0.33 0.012 250);
+  --input: oklch(0.55 0.012 250);
+  --ring: oklch(0.72 0.07 215);
+
+  --sucesso-fundo: oklch(0.3 0.04 150);
+  --sucesso-texto: oklch(0.82 0.07 150);
+  --erro-fundo: oklch(0.31 0.04 25);
+  --erro-texto: oklch(0.8 0.07 25);
+  --aviso-fundo: oklch(0.31 0.035 75);
+  --aviso-texto: oklch(0.84 0.07 80);
+
+  --badge-cliente-fundo: oklch(0.32 0.035 150);
+  --badge-cliente-texto: oklch(0.85 0.05 150);
+  --badge-parceiro-fundo: oklch(0.32 0.035 95);
+  --badge-parceiro-texto: oklch(0.85 0.05 95);
+  --badge-upstream-fundo: oklch(0.32 0.035 250);
+  --badge-upstream-texto: oklch(0.85 0.05 250);
+  --badge-ix-fundo: oklch(0.32 0.035 300);
+  --badge-ix-texto: oklch(0.85 0.05 300);
+  --badge-pni-fundo: oklch(0.32 0.035 350);
+  --badge-pni-texto: oklch(0.85 0.05 350);
+
+  --xpl-palavra: oklch(0.78 0.07 215);
+  --xpl-community: oklch(0.78 0.07 300);
+  --xpl-prefixo: oklch(0.78 0.07 150);
+  --xpl-objeto: oklch(0.78 0.07 250);
+  --xpl-numero: oklch(0.78 0.07 60);
+  --xpl-comentario: oklch(0.7 0.01 250);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sucesso-fundo: var(--sucesso-fundo);
+  --color-sucesso-texto: var(--sucesso-texto);
+  --color-erro-fundo: var(--erro-fundo);
+  --color-erro-texto: var(--erro-texto);
+  --color-aviso-fundo: var(--aviso-fundo);
+  --color-aviso-texto: var(--aviso-texto);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  /* o dialog e o sheet usam `font-heading` no titulo; sem o mapeamento o
+     titulo cai no que estiver herdado */
+  --font-heading: var(--font-sans);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+  }
+
+  /* o dado (ASN, IP, prefixo, community) e o estado sao o que se le primeiro:
+     numero tabular alinha coluna sem o operador contar digito */
+  .dado {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 32 px de altura de campo (h-8), e nao os 36 do padrao do shadcn: a tela e
+     densa de proposito, e um formulario de 40 campos com campo alto vira
+     rolagem sem fim */
+  [data-slot="input"],
+  [data-slot="select-trigger"] {
+    height: 2rem;
+  }
+
+  /* a animacao e curta (150 a 200ms) e nenhuma sobrevive ao pedido de menos
+     movimento do sistema */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
