@@ -33,7 +33,7 @@ const PADROES: [Classe, string][] = [
   ["community", String.raw`\d{1,10}:\d{1,10}(?::\d{1,10})?(?![0-9A-Za-z:])`],
   ["prefixo", String.raw`\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,3})?`],
   // IPv6 em duas formas: com grupos antes dos dois pontos, e a comprimida que
-  // COMECA com "::" — a lista de bogons do bloco base tem ::/0, :: 128,
+  // COMECA com "::": a lista de bogons do bloco base tem ::/0, :: 128,
   // ::1 128 e ::ffff:0:0 96, e sem a segunda forma nenhuma delas casa
   ["prefixo", String.raw`(?:[0-9a-fA-F]{1,4}:){1,}(?::[0-9a-fA-F]{0,4})*(?:/\d{1,3})?|::(?:[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{0,4})*)?(?:/\d{1,3})?`],
   // Duas formas de nome de objeto, as duas tiradas da saida do projeto:

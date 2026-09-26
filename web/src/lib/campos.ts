@@ -190,12 +190,12 @@ export function origemEsperada(tipo: string, classe: string, padroes: Padroes): 
  * A regra da cascata da tela antiga, nas duas partes dela: (1) ao trocar o
  * tipo, o campo que ainda estiver no default do tipo anterior passa para o
  * default do novo, e o que o operador digitou por cima fica; (2) a origem
- * segue a mesma ideia ao contrario — ela so e trocada se nao valer no tipo
+ * segue a mesma ideia ao contrario: ela so e trocada se nao valer no tipo
  * novo, porque a lista de origens validas muda com o tipo e as listas se
  * sobrepoem.
  *
  * Devolve uma copia do formulario inteiro, com os campos que a cascata tocou
- * ja com o valor novo — e nao so as chaves que mudaram, porque quem chama
+ * ja com o valor novo, e nao so as chaves que mudaram, porque quem chama
  * escreve de volta o objeto todo no formulario.
  */
 export function cascata(tipoAntes: string, tipo: string, valores: Valores,
@@ -216,7 +216,7 @@ export function cascata(tipoAntes: string, tipo: string, valores: Valores,
   if (tipo !== tipoAntes) {
     // A origem nao e reescrita de cara: o tipo novo pode aceitar a que esta la.
     // As listas se sobrepoem (1000, 1200 e 1900 valem em dois ou tres tipos), e
-    // a tela antiga mantinha a escolha do operador quando ela ainda valia —
+    // a tela antiga mantinha a escolha do operador quando ela ainda valia:
     // `lista.indexOf(manter) >= 0 ? manter : origemEsperada(...)`. Sobrescrever
     // aqui trocaria uma origem de politica escolhida a mao por um default.
     const atual = Number(valores.origem)
