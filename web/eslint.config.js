@@ -35,7 +35,9 @@ export default defineConfig([
     // conferem nada, porque nenhuma regra olha para eles
     files: ["scripts/**/*.mjs"],
     extends: [js.configs.recommended],
-    languageOptions: { globals: globals.node, ecmaVersion: 2022 },
+    // sem `ecmaVersion`: o padrao do flat config ja e o mais novo, e fixar um
+    // numero aqui so rebaixa o parser para os scripts que vierem depois
+    languageOptions: { globals: globals.node },
   },
   {
     // os componentes do shadcn saem do CLI com o helper do cva exportado ao
