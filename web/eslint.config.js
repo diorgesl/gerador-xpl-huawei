@@ -30,4 +30,14 @@ export default defineConfig([
       ],
     },
   },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    // os componentes do shadcn saem do CLI com o helper do cva exportado ao
+    // lado do componente: e codigo gerado, e o aviso nao tem o que consertar
+    files: ["src/components/ui/**/*.tsx"],
+    rules: { "react-refresh/only-export-components": "off" },
+  },
 ])
