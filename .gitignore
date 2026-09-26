@@ -1,0 +1,31 @@
+# companion de brainstorm do superpowers: rascunho de sessao, nao e
+# conteudo do repositorio. O que vale de um brainstorm vira spec em
+# docs/superpowers/specs/.
+/.claude/
+/.claude/*/.venv/
+.superpowers/
+
+# cache do bgpq4: derivado do IRR, refaz com o botao de atualizar
+out/.cache/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+/.venv/
+.venv
+
+# macOS
+.DS_Store
+
+# saida gerada: derivada do peers.yaml, nao e fonte
+out/*.txt
+
+peers.yaml
+
+# config real do equipamento: fica no disco, nao no repositorio
+BGP_EXEMPLO.txt
+
+# grafo derivado do codigo e do config acima, refaz com o graphify
+graphify-out/

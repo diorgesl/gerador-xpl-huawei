@@ -1,0 +1,26 @@
+!- gerado por bgpgen - nao editar a mao
+!- remocao do peer 1 - upstream - AS14840
+!- cole so isto para excluir a sessao do equipamento
+
+undo peer 203.0.113.1
+undo peer 2001:db8:200::1
+undo xpl route-filter UP-14840-EXPORT-V4
+undo xpl route-filter UP-14840-IMPORT-V4
+undo xpl ip-prefix-list PL-TE-PREFER-14840-V4
+undo xpl route-filter UP-14840-EXPORT-V6
+undo xpl route-filter UP-14840-IMPORT-V6
+undo xpl community-list CL-5PPA-01
+undo xpl large-community-list LC-5PPA-14840
+undo xpl large-community-list LC-PREP1-14840
+undo xpl large-community-list LC-PREP2-14840
+undo xpl large-community-list LC-PREP3-14840
+undo xpl as-path-list AP-BLOCK-14840
+undo xpl community-list CL-NOADV-14840
+undo xpl large-community-list LC-NOADV-14840
+undo xpl route-filter APPLY-PEER-14840
+
+!- ATENCAO: CL-PEER-14840 tem o conteudo no cadastro do peer,
+!- entao da para recriar pelo quadro "ao criar o peer". O undo segue
+!- comentado porque derrubar a sessao nao exige apagar a lista, e um
+!- descomente sem querer leva embora o que esta la.
+!- undo xpl community-list CL-PEER-14840

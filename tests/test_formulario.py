@@ -1,0 +1,118 @@
+"""O formulario.py: os helpers que a tela HTML e a API dividem."""
+
+from dataclasses import replace
+
+import pytest
+
+from app import app as mod
+from app import formulario, plan, render, validate
+from app.api import dados_do_formulario, modelo_do_grupo, modelo_do_peer
+from app.formulario import grupo_do_formulario, peer_do_formulario
+from test_render import (grupo_do_tipo, peer_cliente, peer_ix, peer_parceiro,
+                         peer_pni, peer_upstream)
+
+
+def test_os_helpers_moram_no_formulario_e_o_app_reexporta():
+    # o test_app.py e as rotas HTML leem estes nomes por app.app ate o corte
+    # das telas; a API os le do formulario.py
+    for nome in ("peer_do_formulario", "grupo_do_formulario", "_padroes",
+                 "_blocos_do_formulario", "_texto_blocos", "_ativos",
+                 "_asn_do_formulario", "_usados", "_origem_padrao",
+                 "_aprendizado_padrao", "CAMPOS_INT", "CAMPOS_INT_GRUPO"):
+        assert getattr(mod, nome) is getattr(formulario, nome), nome
+
+
+# O valor "preenchido" de cada campo restrito, em texto de formulario. O
+# "vazio" e o branco do tipo do campo.
+CHEIO = {
+    "classe": "residencial", "pop": "2001", "default_route": True,
+    "aprendizado": "3100", "aprendizado_ix": "3010", "prepend_base": "2",
+    "bh_upstream": "14840:666", "ap_block": ["270814"], "ap_te": ["264381"],
+    "te_prefixos_v4": ["198.51.100.0/24"],
+    "te_prefixos_v6": ["2001:db8:900::/48"],
+    "ix_id": "9999", "ap_prefer": ["15169"], "ap_allowed": ["64510"],
+    "communities": ["64512:1500"], "large_communities": ["64512:4:264130"],
+}
+PEER_DO_TIPO = {"cliente": peer_cliente, "parceiro": peer_parceiro,
+                "upstream": peer_upstream, "ix": peer_ix, "pni": peer_pni}
+# dual-stack: a excecao de TE em v6 so aparece na saida de sessao com v6
+V6 = {"local": "2001:db8:1::1", "remoto": "2001:db8:1::2"}
+
+
+def _vazio(valor):
+    if isinstance(valor, bool):
+        return False
+    return [] if isinstance(valor, list) else ""
+
+
+def _chave_de_erro(campo):
+    # o validate nomeia o erro pelo atributo: te_prefixos, e o aprendizado do
+    # IX do grupo e o mesmo atributo aprendizado
+    if campo.startswith("te_prefixos"):
+        return "te_prefixos"
+    return {"aprendizado_ix": "aprendizado"}.get(campo, campo)
+
+
+def _saida(monta):
+    try:
+        return monta()
+    except Exception as exc:  # campo obrigatorio em branco estoura no render
+        return "estourou: %s" % type(exc).__name__
+
+
+def _peer(tipo, campo, valor):
+    base = PEER_DO_TIPO[tipo]()
+    base = replace(base, sessoes={"v4": base.sessoes["v4"], "v6": V6})
+    modelo = modelo_do_peer(base).model_copy(update={campo: valor})
+    peer, erros = peer_do_formulario(dados_do_formulario(modelo), [], None, ())
+    erros = erros + validate.validar(peer, [], grupos=[])
+    return (_saida(lambda: render.render_peer(peer) + render.render_remove(peer)
+                   + render.render_criar_lista(peer)),
+            {e.campo for e in erros})
+
+
+def _grupo(tipo, campo, valor):
+    modelo = modelo_do_grupo(grupo_do_tipo(tipo)).model_copy(update={campo: valor})
+    grupo, erros = grupo_do_formulario(dados_do_formulario(modelo), [], None, ())
+    erros = erros + validate.validar_grupo(grupo, [], [])
+    return (_saida(lambda: render.render_grupo(grupo)
+                   + render.render_criar_lista(grupo=grupo)),
+            {e.campo for e in erros})
+
+
+def _efeito(monta, tipo, campo):
+    """(muda a saida, a validacao olha o campo) ao preencher o campo."""
+    saida_vazia, erros_vazio = monta(tipo, campo, _vazio(CHEIO[campo]))
+    saida_cheia, erros_cheio = monta(tipo, campo, CHEIO[campo])
+    return (saida_vazia != saida_cheia,
+            _chave_de_erro(campo) in (erros_vazio ^ erros_cheio))
+
+
+TABELAS = [("peer", formulario.CAMPOS_POR_TIPO, _peer),
+           ("grupo", formulario.CAMPOS_POR_TIPO_GRUPO, _grupo)]
+
+
+@pytest.mark.parametrize("nome,tabela,monta", TABELAS)
+def test_fora_da_tabela_o_campo_nao_muda_nada_ou_e_recusado(nome, tabela, monta):
+    # esconder o campo num tipo so e seguro se, nesse tipo, ele nao muda a
+    # saida ou a validacao o recusa
+    for campo, tipos in tabela.items():
+        for tipo in plan.TIPOS:
+            if tipo in tipos:
+                continue
+            muda, olha = _efeito(monta, tipo, campo)
+            assert not muda or olha, (nome, campo, tipo)
+
+
+@pytest.mark.parametrize("nome,tabela,monta", TABELAS)
+def test_dentro_da_tabela_o_campo_faz_diferenca(nome, tabela, monta):
+    for campo, tipos in tabela.items():
+        for tipo in tipos:
+            muda, olha = _efeito(monta, tipo, campo)
+            assert muda or olha, (nome, campo, tipo)
+
+
+def test_as_tabelas_so_citam_tipos_do_plano():
+    for tabela in (formulario.CAMPOS_POR_TIPO, formulario.CAMPOS_POR_TIPO_GRUPO):
+        for tipos in tabela.values():
+            assert set(tipos) <= set(plan.TIPOS)

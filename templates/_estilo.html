@@ -1,0 +1,426 @@
+<style>
+/* ==========================================================================
+   bgpgen - folha da tela. Sem build: o CSS mora aqui dentro.
+
+   Tres camadas de token, como manda o desenho:
+     primitiva   valor cru, sem significado ....... --c-gray-200, --sp-4
+     semantica   papel no desenho ................. --border, --fg-muted
+     componente  pedaco de um componente .......... --input-border, --btn-bg
+   No tema escuro muda so a camada semantica.
+   ========================================================================== */
+
+/* --- primitivas ---------------------------------------------------------- */
+:root {
+ --c-gray-0: #ffffff;
+ --c-gray-25: #fbfcfd;
+ --c-gray-50: #f3f5f8;
+ --c-gray-100: #e8ecf1;
+ --c-gray-200: #d9e0e8;
+ --c-gray-300: #c0cad6;
+ --c-gray-400: #8b98a7;
+ --c-gray-500: #647180;
+ --c-gray-600: #4a5563;
+ --c-gray-700: #333d49;
+ --c-gray-800: #1e2630;
+ --c-gray-900: #121920;
+ --c-blue-50: #eaf2fd;
+ --c-blue-500: #3b82d6;
+ --c-blue-600: #2568b8;
+ --c-blue-700: #1b5093;
+ --c-amber-50: #fdf5e2;
+ --c-amber-300: #e6bd5c;
+ --c-amber-700: #8a5f06;
+ --c-red-50: #fdecec;
+ --c-red-300: #eb9c9c;
+ --c-red-700: #9c2a2a;
+ --c-green-50: #e8f5ec;
+ --c-green-300: #8ec7a2;
+ --c-green-700: #1f6f3d;
+
+ --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+ --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+
+ --fs-xs: 11px; --fs-sm: 12px; --fs-base: 13px;
+ --fs-md: 14px; --fs-lg: 17px; --fs-xl: 20px;
+ --lh-tight: 1.25; --lh-base: 1.5;
+
+ --ff-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+ --ff-mono: ui-monospace, SFMono-Regular, Menlo, Consolas,
+            "Liberation Mono", monospace;
+
+ --r-sm: 4px; --r-md: 6px; --r-lg: 10px;
+ --sh-sm: 0 1px 2px rgb(16 26 38 / .06);
+ --sh-md: 0 2px 8px rgb(16 26 38 / .10);
+ --dur: 150ms;
+
+ /* o campo de IP, ASN e prefixo alinha em coluna com fonte mono; o resto
+    da tela e texto corrido e pede a fonte do sistema */
+ --largura-lista: 232px;
+ --altura-cabecalho: 53px;
+}
+
+/* --- semanticas: tema claro (o padrao) ----------------------------------- */
+:root {
+ --bg: var(--c-gray-50);
+ --surface: var(--c-gray-0);
+ --surface-2: var(--c-gray-25);
+ --surface-3: var(--c-gray-100);
+ --fg: var(--c-gray-800);
+ --fg-strong: var(--c-gray-900);
+ --fg-muted: var(--c-gray-500);
+ --fg-subtle: var(--c-gray-400);
+ --border: var(--c-gray-200);
+ --border-strong: var(--c-gray-300);
+ --accent: var(--c-blue-600);
+ --accent-hover: var(--c-blue-700);
+ --accent-soft: var(--c-blue-50);
+ --accent-fg: var(--c-gray-0);
+ --focus: var(--c-blue-500);
+ --warn-fg: var(--c-amber-700);
+ --warn-bg: var(--c-amber-50);
+ --warn-border: var(--c-amber-300);
+ --danger-fg: var(--c-red-700);
+ --danger-bg: var(--c-red-50);
+ --danger-border: var(--c-red-300);
+ --ok-fg: var(--c-green-700);
+ --ok-bg: var(--c-green-50);
+ --ok-border: var(--c-green-300);
+}
+
+/* --- semanticas: tema escuro (segue o sistema, sem botao e sem JS) ------- */
+@media (prefers-color-scheme: dark) {
+ :root {
+  --bg: #0f151b;
+  --surface: #161e26;
+  --surface-2: #1b242e;
+  --surface-3: #22303c;
+  --fg: #dbe3eb;
+  --fg-strong: #f2f6fa;
+  --fg-muted: #93a1b0;
+  --fg-subtle: #6d7b8a;
+  --border: #27333f;
+  --border-strong: #3a4855;
+  --accent: #5b9ee6;
+  --accent-hover: #7db3ee;
+  --accent-soft: #18293c;
+  --accent-fg: #0f151b;
+  --focus: #5b9ee6;
+  --warn-fg: #e2bb63;
+  --warn-bg: #2a2416;
+  --warn-border: #4d4020;
+  --danger-fg: #e58b8b;
+  --danger-bg: #2c1c1c;
+  --danger-border: #4e2b2b;
+  --ok-fg: #7cc79a;
+  --ok-bg: #16271d;
+  --ok-border: #2b4a37;
+  --sh-sm: 0 1px 2px rgb(0 0 0 / .30);
+  --sh-md: 0 2px 8px rgb(0 0 0 / .40);
+ }
+}
+
+/* --- tokens de componente ------------------------------------------------ */
+:root {
+ --input-bg: var(--surface);
+ --input-fg: var(--fg);
+ --input-border: var(--border-strong);
+ --input-pad: 5px 8px;
+ --input-radius: var(--r-sm);
+ --input-h: 30px;
+
+ --btn-bg: var(--surface);
+ --btn-fg: var(--fg);
+ --btn-border: var(--border-strong);
+ --btn-pad: 5px 12px;
+ --btn-radius: var(--r-sm);
+ --btn-h: 30px;
+
+ --painel-bg: var(--surface);
+ --painel-border: var(--border);
+ --painel-radius: var(--r-md);
+ --painel-pad: var(--sp-4);
+}
+
+/* --- base ---------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+ margin: 0;
+ background: var(--bg);
+ color: var(--fg);
+ font: var(--fs-base)/var(--lh-base) var(--ff-ui);
+ -webkit-text-size-adjust: 100%;
+}
+
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+
+h2, h3 { color: var(--fg-strong); font-weight: 600; }
+
+/* --- cabecalho ----------------------------------------------------------- */
+.topo {
+ display: flex; align-items: center; justify-content: space-between;
+ gap: var(--sp-4); flex-wrap: wrap;
+ padding: var(--sp-3) var(--sp-5);
+ background: var(--surface);
+ border-bottom: 1px solid var(--border);
+ position: sticky; top: 0; z-index: 5;
+}
+.marca { display: flex; align-items: baseline; gap: var(--sp-3); }
+.marca-nome {
+ font-size: var(--fs-lg); font-weight: 650; letter-spacing: -.01em;
+ color: var(--fg-strong);
+}
+.marca-sub { font-size: var(--fs-sm); color: var(--fg-muted); }
+.topo-estado { display: flex; align-items: center; gap: var(--sp-2); }
+
+/* o AS da rede: os mesmos .campo e .rotulo do formulario, deitados. No
+   cabecalho os campos ficam lado a lado, e a largura e a do numero, entao o
+   input nao pega o width: 100% da regra geral */
+.topo-asn { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.topo-asn .campo { flex-direction: row; align-items: center; gap: var(--sp-2); }
+.topo-asn input { width: 10ch; }
+
+/* --- botao: default, hover, active, focus, desabilitado ------------------ */
+.btn {
+ display: inline-flex; align-items: center; justify-content: center;
+ height: var(--btn-h); padding: var(--btn-pad);
+ font: 500 var(--fs-base)/1 var(--ff-ui);
+ color: var(--btn-fg); background: var(--btn-bg);
+ border: 1px solid var(--btn-border); border-radius: var(--btn-radius);
+ cursor: pointer; text-decoration: none; white-space: nowrap;
+ transition: background-color var(--dur) ease-in-out,
+             border-color var(--dur) ease-in-out,
+             color var(--dur) ease-in-out,
+             box-shadow var(--dur) ease-in-out;
+}
+.btn:hover { background: var(--surface-3); color: var(--fg-strong); }
+.btn:active { box-shadow: inset 0 1px 3px rgb(0 0 0 / .14); }
+.btn:focus-visible {
+ outline: none;
+ box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
+}
+.btn[disabled] { opacity: .5; cursor: not-allowed; pointer-events: none; }
+
+.btn-primario {
+ --btn-bg: var(--accent); --btn-fg: var(--accent-fg); --btn-border: var(--accent);
+}
+.btn-primario:hover {
+ background: var(--accent-hover); border-color: var(--accent-hover);
+ color: var(--accent-fg);
+}
+.btn-perigo {
+ --btn-bg: transparent; --btn-fg: var(--danger-fg); --btn-border: var(--danger-border);
+}
+.btn-perigo:hover { background: var(--danger-bg); color: var(--danger-fg); }
+.btn-fantasma { --btn-bg: transparent; --btn-border: var(--border); }
+
+/* --- grade da tela ------------------------------------------------------- */
+.linha {
+ display: grid;
+ grid-template-columns: var(--largura-lista) minmax(0, 1fr);
+ gap: var(--sp-5); align-items: start;
+ padding: var(--sp-5); max-width: 1800px;
+}
+.linha.com-saida {
+ grid-template-columns: var(--largura-lista) minmax(0, 1fr) minmax(0, 1.1fr);
+}
+
+@media (max-width: 1100px) {
+ .linha, .linha.com-saida { grid-template-columns: minmax(0, 1fr); }
+ #lista, #saida { position: static; max-height: none; }
+}
+
+/* --- painel -------------------------------------------------------------- */
+.painel {
+ background: var(--painel-bg);
+ border: 1px solid var(--painel-border);
+ border-radius: var(--painel-radius);
+ box-shadow: var(--sh-sm);
+}
+.painel > h2 {
+ margin: 0;
+ padding: var(--sp-3) var(--painel-pad);
+ font-size: var(--fs-md); line-height: var(--lh-tight);
+ border-bottom: 1px solid var(--border);
+}
+.painel-corpo { padding: var(--painel-pad); }
+.painel-pe { padding: var(--sp-3) var(--painel-pad); }
+
+#lista { position: sticky; top: calc(var(--altura-cabecalho) + var(--sp-3)); }
+#saida {
+ position: sticky; top: calc(var(--altura-cabecalho) + var(--sp-3));
+ max-height: calc(100vh - var(--altura-cabecalho) - var(--sp-6));
+ display: flex; flex-direction: column;
+}
+#saida .painel-corpo { overflow: auto; }
+
+/* a secao dos blocos mora na grade para herdar o recuo e o limite de largura
+   do .linha, como o #saida; ela ocupa a linha de baixo inteira em vez de
+   virar uma quarta coluna ao lado das tres de cima */
+#blocos { grid-column: 1 / -1; }
+
+/* --- lista de peers ------------------------------------------------------ */
+.tabela-peers { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.tabela-peers th {
+ text-align: left; padding: 0 var(--sp-2) var(--sp-1);
+ font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em;
+ text-transform: uppercase; color: var(--fg-subtle);
+}
+.tabela-peers td {
+ padding: 5px var(--sp-2); border-top: 1px solid var(--border);
+ vertical-align: middle;
+}
+.tabela-peers tbody tr:hover td { background: var(--surface-2); }
+.tabela-peers tr[aria-current="true"] td { background: var(--accent-soft); }
+.tabela-peers tr[aria-current="true"] td:first-child {
+ box-shadow: inset 2px 0 0 var(--accent);
+}
+.mono { font-family: var(--ff-mono); }
+.vazio { margin: 0; padding: var(--sp-2) 0; color: var(--fg-muted); font-size: var(--fs-sm); }
+
+/* --- aviso, erro e tag --------------------------------------------------- */
+.noticia {
+ display: flex; gap: var(--sp-2); align-items: flex-start;
+ padding: var(--sp-2) var(--sp-3); margin: 0 0 var(--sp-3);
+ border: 1px solid; border-radius: var(--r-sm);
+ font-size: var(--fs-sm);
+}
+.noticia.erro { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-fg); }
+.noticia.aviso { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-fg); }
+.noticia strong { font-weight: 600; }
+.noticia ul { margin: var(--sp-1) 0 0; padding-left: var(--sp-5); }
+.noticia li { margin: 1px 0; }
+.noticia a { color: inherit; }
+
+.tag {
+ padding: 1px 6px; border-radius: var(--r-sm); white-space: nowrap;
+ font: 500 var(--fs-xs)/1.7 var(--ff-ui);
+ background: var(--surface-3); color: var(--fg-muted);
+ border: 1px solid var(--border);
+}
+
+/* --- formulario ---------------------------------------------------------- */
+.secao {
+ margin: 0 0 var(--sp-4); padding: var(--sp-3) var(--painel-pad) var(--sp-4);
+ background: var(--surface-2);
+ border: 1px solid var(--border); border-radius: var(--r-md);
+ /* o fieldset nasce com min-inline-size: min-content, que estoura a grade
+    quando um rotulo comprido nao cabe */
+ min-inline-size: 0;
+}
+.secao > legend {
+ padding: 0 var(--sp-2);
+ font-size: var(--fs-xs); font-weight: 600;
+ letter-spacing: .06em; text-transform: uppercase; color: var(--fg-subtle);
+}
+.campos {
+ display: grid; gap: var(--sp-3) var(--sp-4);
+ grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+}
+.campo { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.campo-largo { grid-column: 1 / -1; }
+.campo > .rotulo {
+ display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+ font-size: var(--fs-sm); font-weight: 500; color: var(--fg-muted);
+}
+/* as tres aparecem dentro do campo e soltas no quadro (o erro de lista
+   pertence a lista, nao a familia), entao o seletor nao e filho de .campo */
+.ajuda { font-size: var(--fs-xs); color: var(--fg-subtle); }
+.msg-erro { font-size: var(--fs-xs); font-weight: 500; color: var(--danger-fg); }
+.msg-aviso { font-size: var(--fs-xs); color: var(--warn-fg); }
+p.msg-erro { margin: var(--sp-2) 0 0; }
+
+.campo-caixa { flex-direction: row; align-items: center; gap: var(--sp-2); }
+.campo-caixa > .rotulo { color: var(--fg); }
+
+input, select, textarea {
+ width: 100%;
+ font: var(--fs-base)/1.4 var(--ff-mono);
+ color: var(--input-fg); background: var(--input-bg);
+ border: 1px solid var(--input-border); border-radius: var(--input-radius);
+ padding: var(--input-pad);
+ transition: border-color var(--dur) ease-in-out, box-shadow var(--dur) ease-in-out;
+}
+input:not([type="checkbox"]), select { height: var(--input-h); }
+input[type="checkbox"] { width: auto; height: auto; padding: 0; accent-color: var(--accent); }
+
+/* o datalist nao desenha seta: sem marca nenhuma, um campo com sugestao fica
+   identico a um campo livre e o operador nao descobre a lista. O canto e
+   desenhado com dois degradezinhos em vez de uma seta de select, porque o
+   campo continua aceitando valor que nao esta na lista - um select de
+   verdade nao aceitaria o POP novo. */
+input[list] {
+ background-image:
+  linear-gradient(45deg, transparent 50%, var(--fg-subtle) 50%),
+  linear-gradient(135deg, var(--fg-subtle) 50%, transparent 50%);
+ background-position: right calc(var(--sp-3) + 5px) center, right var(--sp-3) center;
+ background-size: 5px 5px, 5px 5px;
+ background-repeat: no-repeat, no-repeat;
+ padding-right: var(--sp-8);
+}
+
+textarea {
+ min-height: 84px; resize: vertical;
+ font-size: var(--fs-sm); line-height: 1.5;
+ /* uma entrada por linha, sem quebra: a lista cola no equipamento assim */
+ white-space: pre; overflow-wrap: normal; overflow-x: auto;
+}
+
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+ outline: none; border-color: var(--focus);
+ box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* campo marcado: a borda vermelha aponta o alvo que o resumo do topo cita */
+.campo-com-erro input, .campo-com-erro select, .campo-com-erro textarea {
+ /* background-color e nao background: o atalho zeraria o background-image,
+    que e onde mora a marca de campo com lista */
+ border-color: var(--danger-border); background-color: var(--danger-bg);
+}
+.campo-com-erro :focus-visible { box-shadow: 0 0 0 3px var(--danger-bg); }
+
+.acoes {
+ display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+ padding-top: var(--sp-3); border-top: 1px solid var(--border);
+}
+.acoes-fim { justify-content: flex-end; }
+
+/* a exclusao fica separada do salvar, com aviso proprio de cor: encostada
+   no botao primario ela era um clique errado de distancia */
+.secao-perigo {
+ margin-top: var(--sp-4);
+ background: var(--danger-bg); border-color: var(--danger-border);
+}
+.secao-perigo > legend { color: var(--danger-fg); }
+.secao-perigo .acoes { border-top-color: var(--danger-border); }
+
+details.tabela-plano { margin-top: var(--sp-1); font-size: var(--fs-xs); }
+details.tabela-plano summary { cursor: pointer; color: var(--fg-muted); }
+details.tabela-plano table { margin-top: var(--sp-1); border-collapse: collapse; }
+details.tabela-plano td {
+ padding: 1px var(--sp-3) 1px 0; color: var(--fg-subtle);
+ font-family: var(--ff-mono);
+}
+
+/* --- saida --------------------------------------------------------------- */
+.abas { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.bloco { margin-bottom: var(--sp-4); }
+.bloco:last-child { margin-bottom: 0; }
+.bloco-topo {
+ display: flex; align-items: center; justify-content: space-between;
+ gap: var(--sp-3); margin-bottom: var(--sp-1);
+}
+.bloco-nome {
+ font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em;
+ text-transform: uppercase; color: var(--fg-subtle);
+}
+pre {
+ margin: 0; padding: var(--sp-3);
+ font: var(--fs-sm)/1.45 var(--ff-mono);
+ color: var(--fg); background: var(--surface-2);
+ border: 1px solid var(--border); border-radius: var(--r-sm);
+ overflow: auto; max-height: 46vh; tab-size: 2;
+}
+</style>

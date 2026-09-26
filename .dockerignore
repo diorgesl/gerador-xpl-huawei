@@ -1,0 +1,18 @@
+# o contexto de build tem que ficar pequeno: o .venv sozinho passa de 100 MB
+# e nao serve para nada dentro da imagem, que usa o python do sistema
+.venv/
+venv/
+
+.git/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# saida gerada e cache do bgpq4: derivados do peers.yaml e do IRR
+out/
+
+# grafo do graphify: material de navegacao do checkout, nao do app
+graphify-out/
+.superpowers/
+docs/
+PLANO.md.bak

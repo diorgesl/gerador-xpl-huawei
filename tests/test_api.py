@@ -1,0 +1,126 @@
+"""A API JSON: formato de erro, plano e AS da rede."""
+
+from fastapi.testclient import TestClient
+
+from app import app as mod
+from app import formulario, plan
+from app import peers as peers_mod
+from test_render import peer_cliente, peer_upstream
+
+
+def test_o_plano_traz_as_tabelas_do_plan_sem_copia(api):
+    r = api.get("/api/plano")
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["rede"] == {"asn": plan.ASN, "politica": ""}
+    assert corpo["tipos"] == list(plan.TIPOS)
+    assert corpo["lp_base"] == plan.LP_BASE
+    assert corpo["route_limit"] == plan.ROUTE_LIMIT
+    assert corpo["classes_cliente"] == list(plan.CLASSES_CLIENTE)
+    assert corpo["tipos_com_criar_lista"] == list(plan.TIPOS_COM_APPLY_PEER)
+    assert corpo["padroes"] == formulario._padroes(plan.Rede())
+    assert corpo["campos_por_tipo"] == {
+        c: list(t) for c, t in formulario.CAMPOS_POR_TIPO.items()}
+    assert corpo["campos_por_tipo_grupo"]["aprendizado_ix"] == ["ix"]
+    assert corpo["pop_usados"] == [] and corpo["aprendizado_usados"] == []
+
+
+def test_o_plano_sugere_o_que_ja_foi_cadastrado(api, tmp_path):
+    peers_mod.gravar([peer_cliente(), peer_upstream(id=2)], tmp_path / "peers.yaml")
+    corpo = api.get("/api/plano").json()
+    assert corpo["pop_usados"] == [2001]
+    assert corpo["aprendizado_usados"] == [3100]
+
+
+def test_gravar_o_as_da_rede(api, tmp_path):
+    # 16 bits: o namespace e o proprio ASN e fica em branco
+    r = api.put("/api/rede", json={"asn": "53062"})
+    assert r.status_code == 200
+    assert r.json() == {"asn": "53062", "politica": ""}
+    assert peers_mod.carregar_asn(tmp_path / "peers.yaml").asn == 53062
+    assert api.get("/api/plano").json()["rede"]["asn"] == "53062"
+
+
+def test_asn_de_32_bits_pede_o_namespace_no_campo_dele(api, tmp_path):
+    r = api.put("/api/rede", json={"asn": "4200000000"})
+    assert r.status_code == 422
+    assert set(r.json()["erros"]) == {"asn_politica"}
+    assert not (tmp_path / "peers.yaml").exists()
+
+
+def test_asn_de_32_bits_com_namespace_grava(api):
+    r = api.put("/api/rede", json={"asn": "4200000000", "politica": "65000"})
+    assert r.status_code == 200
+    assert r.json() == {"asn": "4200000000", "politica": "65000"}
+
+
+def test_asn_torto_e_recusado_no_campo(api):
+    r = api.put("/api/rede", json={"asn": "abc"})
+    assert r.status_code == 422
+    assert r.json() == {"erros": {"asn_rede": "so digitos: abc"}, "avisos": []}
+
+
+def test_corpo_fora_do_modelo_volta_no_formato_da_api(api):
+    r = api.put("/api/rede", json={"asn": "53062", "xpto": "1"})
+    assert r.status_code == 422
+    assert "xpto" in r.json()["erros"]["_corpo"]
+
+
+def test_fora_da_api_o_erro_de_query_continua_o_do_fastapi(api):
+    # a rota HTML /bgpq4 tem o forcar como int na query
+    r = api.post("/bgpq4?forcar=abc", data={})
+    assert r.status_code == 422
+    assert "detail" in r.json()
+
+
+def test_yaml_quebrado_vira_500_em_json(api, monkeypatch):
+    def quebrado(caminho):
+        raise ValueError("peers.yaml: ASN 4200000000 nao cabe nos 16 bits")
+    monkeypatch.setattr(peers_mod, "carregar_asn", quebrado)
+    cliente = TestClient(mod.app, raise_server_exceptions=False)
+    r = cliente.get("/api/plano")
+    assert r.status_code == 500
+    assert "nao cabe nos 16 bits" in r.json()["erros"]["_"]
+
+
+def test_o_irr_devolve_os_prefixos_sem_gravar(api, tmp_path, fake_bgpq4):
+    r = api.post("/api/irr", json={"asn": "268127"})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"v4": ["45.169.232.0/22", "45.169.236.0/23"],
+                        "v6": ["2001:db8::/32"]}
+    assert not (tmp_path / "peers.yaml").exists()
+
+
+def test_irr_sem_asn_e_recusado_no_campo(api):
+    r = api.post("/api/irr", json={"asn": ""})
+    assert r.status_code == 422
+    assert r.json()["erros"] == {"asn": "informe o ASN antes de consultar o IRR"}
+
+
+def test_irr_com_asn_torto_e_recusado_no_campo(api):
+    r = api.post("/api/irr", json={"asn": "12a"})
+    assert r.status_code == 422
+    assert r.json()["erros"] == {"asn": "valor numerico invalido"}
+
+
+def test_irr_sem_bgpq4_volta_502(api, tmp_path, monkeypatch):
+    vazio = tmp_path / "sem-bgpq4"
+    vazio.mkdir()
+    monkeypatch.setenv("PATH", str(vazio))
+    r = api.post("/api/irr", json={"asn": "268127"})
+    assert r.status_code == 502
+    assert "bgpq4 nao esta no PATH" in r.json()["erros"]["bgpq4"]
+
+
+def test_irr_com_bgpq4_sem_permissao_volta_502(api, tmp_path, monkeypatch):
+    # um bgpq4 no PATH sem permissao de execucao: o subprocess levanta
+    # PermissionError, que o _rodar nao converte
+    pasta = tmp_path / "bgpq4-travado"
+    pasta.mkdir()
+    binario = pasta / "bgpq4"
+    binario.write_text("#!/bin/sh\n", encoding="ascii")
+    binario.chmod(0o644)
+    monkeypatch.setenv("PATH", str(pasta))
+    r = api.post("/api/irr", json={"asn": "268127"})
+    assert r.status_code == 502
+    assert "bgpq4" in r.json()["erros"]

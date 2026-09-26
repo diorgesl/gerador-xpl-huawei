@@ -1,0 +1,19 @@
+{% import "_macros.j2" as m %}
+{{ m.cabecalho_grupo(grupo) }}
+
+{% for fam in ("v4", "v6") %}
+{{ m.filtro_ix_import(grupo, fam) }}
+
+{{ m.filtro_ix_export(grupo, fam) }}
+{% endfor %}
+{{ m.listas_ix(grupo) }}
+
+bgp {{ plan.ASN }}
+ group {{ grupo.nome }} external
+{{ m.sessao_do_grupo(grupo) }}
+{% for fam in ("v4", "v6") %}
+{% set U = fam|upper %}
+{{ m.familia_grupo(grupo, fam,
+     "IX-" ~ grupo.nome ~ "-IMPORT-" ~ U,
+     "IX-" ~ grupo.nome ~ "-EXPORT-" ~ U) }}
+{% endfor %}

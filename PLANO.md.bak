@@ -1,0 +1,1422 @@
+# Plano de Communities BGP — AS64512
+
+2026-09-20 · @Someone
+
+## Escopo e princípios
+
+Este documento define o padrão de BGP communities do AS64512 e sua implementação em XPL no NetEngine 8000 F1A. Cobre clientes de trânsito, clientes residenciais e corporativos, IX, PNI e upstreams, em IPv4 e IPv6.
+
+Cinco regras estruturais sustentam todo o resto:
+
+1. **Namespace único: 64512.** Nenhuma community informativa ou de ação usa ASN privado. O que o 64512 carimba leva o 64512.
+2. **Sem separação v4/v6.** A família já está implícita no NLRI. Duplicar a tabela dobra o namespace e o esforço de manutenção sem nenhum ganho operacional.
+3. **Informativa é escrita só pelo 64512.** O cliente lê, nunca escreve. Toda informativa vinda de fora é apagada no ingress antes de qualquer carimbo próprio.
+4. **Ação é escrita só pelo cliente.** O 64512 executa e apaga antes de propagar, para não vazar taxonomia interna.
+5. **Polaridade negativa.** O default é anunciar; a community restringe. Misturar com polaridade positiva (default não anuncia, tag libera) é exatamente como nasce route leak, quando uma rota escapa por um caminho sem tag nenhuma e o filtro daquele lado era negativo.
+
+A convenção numérica se autodefende: **ação tem 3 dígitos, informativa tem 4**. Isso reduz "apagar tudo que o cliente mandou de informativa" a um único regex, sem lista de exceções para manter.
+
+Duas decisões de polaridade que valem registrar porque aparecem no legado e não devem voltar: ASN codificado nos 16 bits baixos da community (`64512:8167` para dizer "AS8167") é substituído por large community, e community de blackhole de terceiro é propagada, nunca obedecida.
+
+## Mapa de faixas
+
+Todo o namespace `64512:` divide-se em oito faixas. Ação ocupa `100`–`699`, informativa ocupa `1000`–`9999`.
+
+| Faixa             | Classe | Uso                                                           | Quem escreve |
+| ----------------- | ------ | ------------------------------------------------------------- | ------------ |
+| `64512:100–199`   | Ação   | Local preference                                              | Cliente      |
+| `64512:200–299`   | Ação   | Escopo de anúncio                                             | Cliente      |
+| `64512:5PPA`      | Ação   | Prepend e bloqueio por peer específico (ID + ação)            | Cliente      |
+| `64512:6CA`       | Ação   | Prepend por classe (upstream, IX, PNI, CDN, bilateral, todos) | Cliente      |
+| `64512:600–699`   | Ação   | Blackhole (`666`/`667`, dentro de `6xx`)                      | Cliente      |
+| `64512:1000–1999` | Info   | Origem da rota                                                | AS64512      |
+| `64512:2000–2999` | Info   | Geografia (POP e região)                                      | AS64512      |
+| `64512:3000–3999` | Info   | Ponto de aprendizado (IX, upstream)                           | AS64512      |
+| `64512:9000–9999` | Info   | RPKI, IRR e estado interno                                    | AS64512      |
+
+A faixa `64512:5PPA` (ID de peer + ação, detalhada na seção de prepend por classe) é a exceção ao padrão "3 dígitos = ação": tem 4 dígitos porque carrega dois de ID de peer mais um de ação. Não colide com o regex de limpeza de informativas porque esse regex casa apenas `1`, `2`, `3` e `9` no primeiro dígito, e `5PPA` começa em `5`.
+
+As faixas `500`, `700` e `800` ficam livres de propósito, para expansão sem reorganizar o que já está publicado.
+
+## Communities informativas
+
+Informativas são carimbadas pelo AS64512 no ingress de toda sessão e propagadas apenas para dentro do AS e para clientes. Nunca saem para upstream, IX ou PNI.
+
+### Origem da rota — `1xxx`
+
+| Community    | Significado                              |
+| ------------ | ---------------------------------------- |
+| `64512:1000` | Prefixo próprio do AS64512               |
+| `64512:1100` | Cliente de trânsito (ISP downstream)     |
+| `64512:1110` | Cliente residencial / FTTH               |
+| `64512:1120` | Cliente corporativo / link dedicado      |
+| `64512:1130` | Pool CGNAT / IP dinâmico                 |
+| `64512:1200` | Peer bilateral / PNI                     |
+| `64512:1300` | Peer via route server em IX              |
+| `64512:1400` | Upstream (trânsito pago)                 |
+| `64512:1500` | CDN / conteúdo (cache ou peering direto) |
+| `64512:1900` | Infra interna — nunca sai do AS          |
+
+Separar residencial de corporativo de CGNAT parece detalhe, mas é o que permite responder "esse /24 é de quem, e posso anunciá-lo?" sem consultar planilha.
+
+### Classificação da rota — `2xxx`
+
+Duas informativas fazem o trabalho pesado no egress, e valem mais que toda a tabela de origem acima. Esta faixa desloca a geografia para `7xxx`.
+
+| Community    | Significado                                                              |
+| ------------ | ------------------------------------------------------------------------ |
+| `64512:2000` | **Rota de full table** — aprendida de fora, não é própria nem de cliente |
+| `64512:2010` | Tier 1                                                                   |
+| `64512:2020` | Tier 2                                                                   |
+| `64512:2030` | Tier 3                                                                   |
+| `64512:2040` | Regional                                                                 |
+| `64512:2050` | IX público                                                               |
+| `64512:2060` | IX privado                                                               |
+| `64512:2070` | PNI                                                                      |
+| `64512:2080` | Peer bilateral                                                           |
+| `64512:2090` | CDN                                                                      |
+
+O `64512:2000` é o marcador mestre. Com ele, "nunca vazar full table para o IX" vira uma condição só no egress:
+
+```
+ if community matches-any {64512:2000} then
+  refuse
+ endif
+```
+
+E "mandar full table para este cliente, mas só rotas de cliente para aquele" vira a presença ou ausência dessa mesma checagem. Sem um marcador assim, cada filtro de egress precisa reconstruir a lógica de origem do zero.
+
+### Rota recebida de qual peer — `64512:4PP0`
+
+| Community    | Significado            |
+| ------------ | ---------------------- |
+| `64512:4010` | Aprendida do peer 01   |
+| `64512:4020` | Aprendida do peer 02   |
+| `64512:4PP0` | Aprendida do peer `PP` |
+
+Duplica o que `64512:1000:<ASN>` já diz em large community, de propósito. A standard é mais barata de casar em filtro e funciona em equipamento que não lê large. A large continua sendo a fonte precisa, porque carrega ASN de 32 bits.
+
+### Geografia — `2xxx`
+
+| Community    | Significado         |
+| ------------ | ------------------- |
+| `64512:2001` | POP Dourados        |
+| `64512:2002` | POP Campo Grande    |
+| `64512:2003` | POP São Paulo       |
+| `64512:2101` | Região Centro-Oeste |
+| `64512:2102` | Região Sudeste      |
+| `64512:2199` | Internacional       |
+
+### Ponto de aprendizado — `3xxx`
+
+| Community    | Significado        |
+| ------------ | ------------------ |
+| `64512:3010` | IX.br São Paulo    |
+| `64512:3011` | IX.br Campo Grande |
+| `64512:3100` | Upstream #1        |
+| `64512:3101` | Upstream #2        |
+| `64512:3102` | Upstream #3        |
+
+O detalhe por ASN vai na large community `64512:1000:<ASN>`, descrita adiante. A standard aqui serve para casar rápido em filtro; a large serve para identificar com precisão.
+
+### RPKI e segurança — `9xxx`
+
+| Community    | Significado                              |
+| ------------ | ---------------------------------------- |
+| `64512:9001` | RPKI Valid                               |
+| `64512:9002` | RPKI NotFound                            |
+| `64512:9003` | RPKI Invalid (apenas em modo observação) |
+| `64512:9010` | Aceito via IRR / AS-SET                  |
+| `64512:9011` | Aceito por exceção manual (ticket)       |
+| `64512:9666` | Prefixo em blackhole                     |
+
+## Communities de ação
+
+Ações são escritas pelo cliente e executadas pelo AS64512. Toda ação é apagada antes da rota sair do AS.
+
+### Local preference — `1xx`
+
+Os valores internos padrão do AS64512 são: cliente 300, PNI 200, IX 190, upstream 100. As communities abaixo movem o prefixo do cliente em relação a essa escala.
+
+| Community   | LP resultante | Intenção                   |
+| ----------- | ------------- | -------------------------- |
+| `64512:101` | 50            | Último recurso absoluto    |
+| `64512:102` | 80            | Abaixo dos upstreams       |
+| `64512:103` | 150           | Abaixo do IX e do peering  |
+| `64512:104` | 250           | Abaixo dos demais clientes |
+| `64512:105` | 350           | Acima dos demais clientes  |
+
+### Escopo de anúncio — `2xx`
+
+| Community   | Efeito                                   |
+| ----------- | ---------------------------------------- |
+| `64512:200` | Não anunciar para ninguém (mantém local) |
+| `64512:201` | Não anunciar para upstreams              |
+| `64512:202` | Não anunciar para peers bilaterais       |
+| `64512:203` | Não anunciar para IX / route servers     |
+| `64512:204` | Não anunciar para outros clientes        |
+| `64512:210` | Anunciar **somente** para upstreams      |
+| `64512:211` | Anunciar **somente** para IX             |
+| `64512:212` | Anunciar **somente** para CDN / PNI      |
+| `64512:213` | Anunciar **somente** para clientes       |
+
+As `21x` são a única concessão à polaridade positiva, e ficam confinadas ao próprio bloco justamente para não contaminar o resto do esquema.
+
+### Prepend por classe de peer — `64512:6CA`
+
+A escala de prepend vai de **P1 a P7**, onde P1 é anunciar sem prepend nenhum e P7 são seis prepends. Ter o P1 explícito importa: dá ao cliente uma forma de dizer "anuncie normalmente aqui" sem depender do default.
+
+O dígito de ação é o mesmo nos dois eixos, por peer e por classe:
+
+| Dígito    | Efeito                                   |
+| --------- | ---------------------------------------- |
+| `0`       | Não anunciar para este destino           |
+| `1` a `7` | P1 a P7 — 0, 1, 2, 3, 4, 5 ou 6 prepends |
+| `8`       | Anunciar com `no-export`                 |
+| `9`       | Default explícito                        |
+
+**Por classe de peer — `64512:6CA`**, três dígitos, onde `C` é a classe:
+
+| Classe           | `C` | Exemplo P3 (2 prepends) |
+| ---------------- | --- | ----------------------- |
+| Upstreams        | `1` | `64512:613`             |
+| IX público       | `2` | `64512:623`             |
+| IX privado e PNI | `3` | `64512:633`             |
+| CDN              | `4` | `64512:643`             |
+| Peer bilateral   | `5` | `64512:653`             |
+| Todos            | `7` | `64512:673`             |
+
+A classe `6` fica reservada para não colidir com `666` e `667`.
+
+**Por peer específico — `64512:5PPA`**, quatro dígitos começando com `5`, onde `PP` é o ID do peer da tabela da seção anterior:
+
+| Envio        | Efeito                              |
+| ------------ | ----------------------------------- |
+| `64512:5010` | Não anunciar para o peer 01         |
+| `64512:5013` | P3 no peer 01 — dois prepends       |
+| `64512:5017` | P7 no peer 01 — seis prepends       |
+| `64512:5018` | Anunciar ao peer 01 com `no-export` |
+| `64512:5101` | P1 no peer 10 — anuncia sem prepend |
+
+O `5PPA` não colide com o regex de informativas, que casa apenas `1`, `2`, `3` e `9` no primeiro dígito.
+
+### Blackhole e manutenção — `6xx`
+
+| Community   | Efeito                                                |
+| ----------- | ----------------------------------------------------- |
+| `65535:666` | RTBH — padrão RFC 7999, é o gatilho oficial           |
+| `64512:666` | Alias interno; ambos são aceitos                      |
+| `64512:667` | RTBH e propagar aos upstreams que aceitam             |
+| `65535:0`   | Graceful Shutdown (RFC 8326) — aplica LP 0 no ingress |
+
+Community de blackhole de terceiro (`8167:666`, `37468:666` e semelhantes) é propagada quando apropriado, mas **nunca** usada como gatilho na rede do AS64512. Obedecer a tag de outro AS deixa qualquer rota em trânsito capaz de disparar descarte local.
+
+## Large communities e controle por peer
+
+A large community resolve o que a standard não comporta: ASN de 32 bits no campo de valor. O formato é `64512:<função>:<ASN>`, conforme a RFC 8195.
+
+### Ações por ASN
+
+| Large community | Efeito                            |
+| --------------- | --------------------------------- |
+| `64512:0:<ASN>` | Não anunciar para `<ASN>`         |
+| `64512:1:<ASN>` | Prepend 1x para `<ASN>`           |
+| `64512:2:<ASN>` | Prepend 2x para `<ASN>`           |
+| `64512:3:<ASN>` | Prepend 3x para `<ASN>`           |
+| `64512:4:<ASN>` | Anunciar **somente** para `<ASN>` |
+
+A vantagem operacional é que a tabela publicada nunca muda. Trocou de upstream, entrou num IX novo, fechou um PNI: o cliente já sabe o ASN e já sabe a community. Zero comunicação, zero atualização de documentação.
+
+### Informativas por ASN
+
+| Large community       | Significado                       |
+| --------------------- | --------------------------------- |
+| `64512:1000:<ASN>`    | Rota aprendida do vizinho `<ASN>` |
+| `64512:1001:<IX-ID>`  | Aprendida no IX (ID do PeeringDB) |
+| `64512:1002:<POP-ID>` | POP de entrada                    |
+
+### Alias em standard community — `64512:5PPA`
+
+Nem todo cliente consegue enviar large community: equipamento antigo, RouterOS em versão velha, ou NOC que não sabe configurar. Oferecer só large significa que metade não usa. O alias em standard cobre esses casos.
+
+Formato: `64512:4` + dois dígitos de ID de peer + um dígito de ação.
+
+| Dígito de ação  | Efeito                          |
+| --------------- | ------------------------------- |
+| `0`             | Não anunciar para este peer     |
+| `1` / `2` / `3` | Prepend 1x / 2x / 3x            |
+| `4`             | Anunciar somente para este peer |
+
+Exemplos: `64512:4012` é prepend 2x no peer de ID 01; `64512:4020` não anuncia para o peer de ID 02; `64512:4101` é prepend 1x no peer de ID 10.
+
+### Precedência
+
+**O específico vence o genérico.** Um cliente que envia `64512:312` (prepend 2x em todos os upstreams) junto com `64512:4011` (prepend 1x no peer 01) recebe 1x no peer 01 e 2x nos demais. Isso cobre o caso mais comum de todos: prepend em tudo, menos no upstream preferido.
+
+Em XPL a precedência sai de graça com `if` / `elseif`, sem aritmética de número de nó.
+
+## Tabela de peers e IDs
+
+Esta tabela é a fonte única de verdade para o alias `64512:5PPA`, para a classe `64512:6CA` e para as informativas `64512:3xxx`. Os ASNs abaixo são **exemplos e precisam ser substituídos** pelos reais antes de publicar.
+
+| ID   | Peer                    | ASN   | Tipo         | Info `3xxx`  |
+| ---- | ----------------------- | ----- | ------------ | ------------ |
+| `01` | Upstream #1             | 64500 | Trânsito     | `64512:3100` |
+| `02` | Upstream #2             | 64501 | Trânsito     | `64512:3101` |
+| `03` | Upstream #3             | 64502 | Trânsito     | `64512:3102` |
+| `10` | IX.br São Paulo (RS)    | 26162 | Route server | `64512:3010` |
+| `11` | IX.br Campo Grande (RS) | 26162 | Route server | `64512:3011` |
+| `20` | PNI — CDN A             | 64510 | Bilateral    | —            |
+| `21` | PNI — CDN B             | 64511 | Bilateral    | —            |
+
+O AS14840 que aparece nos exemplos de filtro adiante corresponde a um upstream real já em produção; encaixe-o num ID livre da faixa `0x` ao adotar a tabela.
+
+### Geração por template
+
+Com 3 upstreams, 2 IXs e 2 PNIs, esta tabela produz cerca de 60 sets e 50 ramos de filtro. Escrever isso à mão é onde nasce o erro que derruba BGP na madrugada de sábado.
+
+A recomendação é manter um único YAML com `id`, `nome`, `asn`, `tipo` e `prefixos`, e gerar a configuração com Jinja2 mais `bgpq4`. A lista agregada de prefixos de cliente sai da soma das individuais, nunca digitada em separado — foi exatamente assim que o legado acumulou um `/22` autorizado para dois ASNs diferentes e um prefixo órfão sem dono.
+
+## Referência de sintaxe XPL
+
+O XPL é mais expressivo que `route-policy`, mas tem armadilhas de parsing que não estão evidentes na documentação. Esta seção registra o que foi verificado no F1A via `?` contextual.
+
+### Aspas por cláusula — não há regra unificadora
+
+| Cláusula        | Aspas   | Evidência                                        |
+| --------------- | ------- | ------------------------------------------------ |
+| `regular`       | **Sem** | `regular _0_`, `regular ^$`                      |
+| `origin`        | **Com** | `origin ?` retorna apenas `'`                    |
+| `pass`          | **Com** | `pass ?` retorna apenas `'`; `pass ''` é erro    |
+| `peer-is`       | **Com** | `peer-is ?` retorna apenas `'`                   |
+| `length`        | **Sem** | `length '222'` é erro; aceita `eq` / `ge` / `le` |
+| `unique-length` | **Sem** | Mesma família de `length`                        |
+
+Dentro de `route-filter` as aspas funcionam em contextos onde no set não funcionam. Na dúvida, `?` depois da palavra-chave resolve em dois segundos.
+
+### Cláusulas de AS-path sem regex
+
+O VRP oferece primitivas semânticas que evitam regex. A documentação da Huawei recomenda no máximo 100 expressões regulares por política e alerta que o processamento é intensivo em CPU, degradando conforme cresce o atributo avaliado — em rota full-table o AS-path é longo.
+
+| Cláusula               | Casa                                        | Equivalente regex |
+| ---------------------- | ------------------------------------------- | ----------------- |
+| `origin '<asn>'`       | AS que originou o prefixo (último do path)  | `_<asn>$`         |
+| `pass '<asn>'`         | AS em qualquer posição do path              | `_<asn>_`         |
+| `peer-is '<asn>'`      | AS diretamente adjacente (primeiro do path) | `^<asn>_`         |
+| `length ge <n>`        | Tamanho do AS-path                          | —                 |
+| `unique-length ge <n>` | Tamanho ignorando prepends                  | —                 |
+
+A diferença entre `origin` e `pass` é política, não cosmética. `origin '270814'` recusa o que esse AS anuncia como dele, mas aceita se ele for apenas trânsito de um terceiro. `pass '270814'` recusa qualquer coisa que passe por ele.
+
+`pass` aceita faixa: `pass '[64496..64511]'` cobre um intervalo inteiro num único elemento.
+
+### `whole-match`
+
+Modificador por elemento, colocado após o valor. Transforma o match de OU em E quando a string contém vários ASNs.
+
+```
+pass '64500 64501'              → passa por 64500 OU 64501
+pass '64500 64501' whole-match  → passa por 64500 E 64501
+```
+
+Confirme o comportamento com `display xpl as-path-list <nome>` antes de depender dele. O uso mais direto é detecção de leak: rota que transita por dois upstreams seus ao mesmo tempo é quase sempre vazamento.
+
+Para listas de bogon, `whole-match` seria errado — ali se quer OU, que já é o default entre elementos separados por vírgula.
+
+### Armadilhas de fluxo
+
+1. **`approve` NÃO encerra o processamento.** A documentação da Huawei define `approve` como "filtra novamente as rotas que casaram no branch atual contra o próximo branch `if`". O filtro continua. Quem encerra é `finish` (permitindo), `refuse` (negando), `break` (sai do filtro atual) ou o último branch `if`.
+2. **Use `finish` quando quiser terminar ali.** Um ramo de blackhole que aprova com `approve` e depois cai num `EXPORT-SANITY` com limite `le 24` tem a rota `/32` recusada logo em seguida. O ramo precisa de `finish`.
+3. **`and` liga mais forte que `or`.** `A or B and C` é lido como `A or (B and C)`. Use parênteses em toda condição mista.
+4. **`overwrite` substitui o conjunto inteiro.** Sempre `overwrite` primeiro, `additive` depois.
+5. **Filtro vazio ou sem ação executada é `refuse` por padrão.** A documentação diz que, se nem `finish`, nem `refuse`, nem um `apply` tiverem executado ao fim do processamento, a rota é negada. Isso afeta sub-filtros de sanidade que só contêm ramos de `refuse`: valide o comportamento com `xpl simulate` antes de depender deles.
+6. **`apply as-path` em XPL recebe ASN + contador, não uma lista de ASNs repetidos.** `apply as-path 64512 3 additive` prepende o AS64512 três vezes. É diferente do `route-policy` clássico do VRP, onde `apply as-path 64512 64512 64512 additive` lista os ASNs a prepender um por um. Confirmado via `?` no equipamento.
+7. **`advertise-community` não é default no VRP**, inclusive em iBGP. Sem ele a community simplesmente não sai.
+8. **Coringa `*` substitui campo inteiro.** `64512:*` funciona, `64512:1*` não.
+
+### Comentários
+
+Comentário em XPL começa com `!-`, conforme a cláusula `!-comment` listada pelo `?` dentro das views de set e de route-filter.
+
+```
+xpl route-filter EXEMPLO
+ !- este e um comentario valido
+ if community matches-any CL-BLACKHOLE then
+  finish
+ endif
+ end-filter
+```
+
+O `#` que aparece entre blocos na saída de `display current-configuration` é separador de seção do VRP, não comentário. Usar `#` dentro de um filtro não comenta nada.
+
+### Parâmetros não funcionam dentro de `if`
+
+Um parâmetro de filtro (`$prepend_base`, `$lp_base`) só é válido como **valor substituído** dentro de uma cláusula existente — `apply local-preference $lp_base`, `apply as-path 64512 $prepend_base additive`, `if ip route-destination in {$prefixo}`. Ele não funciona como a condição inteira: `if $prepend_base eq 1 then` falha, porque XPL não tem uma cláusula de condição genérica "compare este valor com aquele" — as cláusulas de condição são todas amarradas a atributos de rota (community, as-path, prefixo, tag, MED), não a comparação de parâmetros entre si.
+
+Isso muda onde a aritmética "P1 é zero prepends, P2 é um prepend..." acontece. Não dá para fazer a conta dentro do filtro com um `if`; ela precisa ser feita antes, por quem gera a linha `peer ... route-filter ...($valor) export`. O parâmetro passado já é o resultado — a contagem de prepends, de 0 a 6 — e o filtro só usa esse valor direto:
+
+```
+ apply as-path 64512 $prepend_base additive
+```
+
+A sessão que não precisa de prepend de engenharia recebe `0` como argumento. Isso pressupõe que `apply as-path <asn> 0 additive` é aceito como no-op — vale confirmar com `xpl simulate`, porque se `0` for rejeitado, a saída é manter duas variantes de chamada (com e sem essa linha) só para o caso zero, em vez de uma única chamada parametrizada.
+
+### `call route-filter` para eliminar duplicação
+
+Toda sessão de cliente repete a mesma escada de local preference. Em vez de copiar o bloco `if/elseif` em cada filtro de import, ele vira um `route-filter` chamado uma vez:
+
+```
+xpl route-filter APPLY-CUSTOMER-LP
+ if community matches-any CL-GSHUT then
+  apply local-preference 0
+  finish
+ endif
+ if community matches-any {64512:101} then
+  apply local-preference 50
+  finish
+ endif
+ if community matches-any {64512:102} then
+  apply local-preference 80
+  finish
+ endif
+ if community matches-any {64512:103} then
+  apply local-preference 150
+  finish
+ endif
+ if community matches-any {64512:104} then
+  apply local-preference 250
+  finish
+ endif
+ if community matches-any {64512:105} then
+  apply local-preference 350
+  finish
+ endif
+ apply local-preference 300
+ finish
+ end-filter
+```
+
+O import do cliente encolhe para:
+
+```
+ call route-filter APPLY-CUSTOMER-LP
+ apply community {64512:1100, 64512:2001} additive
+ apply large-community {64512:1000:268127} additive
+ finish
+```
+
+Um cliente novo passa a herdar qualquer ajuste na escala de LP automaticamente, sem editar N filtros.
+
+**Ponto em aberto:** a documentação descreve `call` como "filtra novamente as rotas que casam no filtro atual contra o filtro especificado", o que indica que um `finish` dentro do filtro chamado aprova a checagem e devolve o controle para quem chamou, sem encerrar o filtro de fora. É essa leitura que sustenta o desenho acima: a rota sai de `APPLY-CUSTOMER-LP` com o `finish` interno, mas o `CUST-IMPORT-*` continua executando as linhas seguintes ao `call`. Valide com `xpl simulate` antes de generalizar: se o comportamento real for diferente, e um `finish` dentro do chamado encerrar tudo, os `apply` de community e large-community que vêm depois do `call` nunca rodariam.
+
+### `apply community` só tem `overwrite` e `additive`
+
+Não existe `apply community <lista> delete` em route-filter. As duas únicas operações são substituir o conjunto inteiro (`overwrite`) ou acrescentar a ele (`additive`). O `delete` existe em outro contexto, não aqui.
+
+Isso tem consequência direta de desenho:
+
+| Onde    | O que dá para fazer                                                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ingress | Nada é removível seletivamente. Sobrescrever apagaria as ações do cliente, que só são consumidas no egress. Solução: não limpar no ingress. |
+| Egress  | `overwrite` como última ação resolve: o conjunto final é exatamente o que você escreve, e tudo que o cliente mandou desaparece.             |
+
+E obriga o anti-leak a mudar de base. Se as communities do cliente chegam intactas à RIB, uma checagem do tipo "só exporta o que tem `64512:1100`" é forjável: basta o cliente enviar a community. Por isso o `EXPORT-SANITY` testa `PL-ANNOUNCEABLE-V4`, um prefix-list gerado a partir do IRR.
+
+Verifique se conjunto vazio é aceito:
+
+```
+apply community {} overwrite
+```
+
+Se o parser recusar, a alternativa é sobrescrever com uma community inócua e conhecida, por exemplo `64512:1900`, aceitando que ela saia no anúncio.
+
+### Condição em uma linha
+
+O XPL não aceita quebra de linha dentro de `if`. Toda a condição, incluindo os `and` e `or`, tem que caber numa linha só. Quebrar para legibilidade gera erro de sintaxe ao colar a configuração.
+
+Isso torna cadeia longa de `or` impraticável. A saída é agregar os valores num community-list e casar uma vez:
+
+```
+!- em vez de quatro condicoes encadeadas
+xpl community-list CL-NOADV-UP1
+ 64512:200,
+ 64512:201,
+ 64512:4010
+ end-list
+
+!- a condicao vira uma linha curta
+ if community matches-any CL-NOADV-UP1 or large-community matches-any LC-NOADV-14840 then
+  refuse
+ endif
+```
+
+O ganho não é só sintático. Um `matches-any` contra um set é mais barato que quatro condições avaliadas em sequência, e a lista fica num lugar só quando precisar mudar.
+
+Evite acentos em comentários: a configuração trafega por TFTP, backup e diff, e caracteres fora de ASCII costumam quebrar em algum ponto da cadeia.
+
+## Sets XPL
+
+Sets são dados puros, sem ação de permit ou deny. Só filtram quando referenciados por um `route-filter`.
+
+Convenção de nomes: `TIPO-FUNÇÃO-ESCOPO`, tudo maiúsculo. `PL` para prefix-list, `AP` para as-path-list, `CL` para community-list, `LC` para large-community-list.
+
+### Bogons de prefixo
+
+```
+xpl ip-prefix-list PL-BOGONS-V4
+ 0.0.0.0 8 le 32,
+ 10.0.0.0 8 le 32,
+ 100.64.0.0 10 le 32,
+ 127.0.0.0 8 le 32,
+ 169.254.0.0 16 le 32,
+ 172.16.0.0 12 le 32,
+ 192.0.0.0 24 le 32,
+ 192.0.2.0 24 le 32,
+ 192.88.99.0 24 le 32,
+ 192.168.0.0 16 le 32,
+ 198.18.0.0 15 le 32,
+ 198.51.100.0 24 le 32,
+ 203.0.113.0 24 le 32,
+ 224.0.0.0 3 le 32
+ end-list
+
+xpl ipv6-prefix-list PL-BOGONS-V6
+ :: 0 le 0,
+ :: 128,
+ ::1 128,
+ ::ffff:0:0 96 le 128,
+ 64:ff9b:1:: 48 le 128,
+ 100:: 64 le 128,
+ 2001:: 32 le 128,
+ 2001:2:: 48 le 128,
+ 2001:db8:: 32 le 128,
+ 2002:: 16 le 128,
+ 3fff:: 20 le 128,
+ fc00:: 7 le 128,
+ fe80:: 10 le 128,
+ ff00:: 8 le 128
+ end-list
+```
+
+O `224.0.0.0 3 le 32` cobre multicast, classe E e broadcast numa entrada só. O `192.88.99.0/24` é relay 6to4, deprecado pela RFC 7526. Usar `le 32` em vez de `le 24` é defesa em profundidade: custa nada e protege se algum dia o limite de import for relaxado.
+
+### Bogons de ASN
+
+```
+xpl as-path-list AP-BOGON-ASN
+ regular _0_,
+ pass '23456',
+ pass '[64496..64511]',
+ pass '[64512..65534]',
+ pass '65535',
+ pass '[65536..65551]',
+ pass '[65552..131071]',
+ pass '[4200000000..4294967294]',
+ pass '4294967295'
+ end-list
+```
+
+Esta lista cobre a alocação completa do IANA: AS0, AS23456 (transição 32-bit), documentação 16 e 32 bits, privados 16 e 32 bits, reservados e os dois últimos valores.
+
+### AS-path auxiliares
+
+```
+xpl as-path-list AP-LOCAL-ORIGIN
+ regular ^$
+ end-list
+
+xpl as-path-list AP-PATH-TOO-LONG
+ length ge 40
+ end-list
+
+xpl as-path-list AP-BLOCK-14840
+ pass '270814'
+ end-list
+
+xpl as-path-list AP-TE-PREFER-14840
+ origin '264381'
+ end-list
+
+xpl as-path-list AP-IX-CDN-A
+ peer-is '64510'
+ end-list
+```
+
+`AP-LOCAL-ORIGIN` casa AS-path vazio, ou seja, rota originada localmente. `AP-PATH-TOO-LONG` é filtro de leak barato: path com 40 ou mais hops é quase sempre vazamento ou loop de configuração.
+
+`AP-IX-CDN-A` merece destaque. Como o route server é transparente e não insere o próprio ASN no path, `peer-is` identifica o membro que realmente anunciou. Isso dá política por membro no ingress do IX, com uma única sessão BGP contra o RS e sem precisar de bilateral.
+
+### Communities
+
+```
+xpl community-list CL-BLACKHOLE
+ 65535:666,
+ 64512:666
+ end-list
+
+xpl community-list CL-BLACKHOLE-PROPAGATE
+ 64512:667
+ end-list
+
+xpl community-list CL-GSHUT
+ 65535:0
+ end-list
+
+xpl community-list CL-ORIGEM-ANUNCIAVEL
+ 64512:1000,
+ 64512:1100,
+ 64512:1110,
+ 64512:1120,
+ 64512:1130
+ end-list
+
+!- um set agregado por peer: evita cadeia de OR na condicao
+xpl community-list CL-NOADV-UP1
+ 64512:200,
+ 64512:201,
+ 64512:4010
+ end-list
+
+xpl community-list CL-NOADV-IX-SP
+ 64512:200,
+ 64512:203,
+ 64512:4100
+ end-list
+
+xpl community-list CL-NOADV-PNI-CDNA
+ 64512:200,
+ 64512:202,
+ 64512:4200
+ end-list
+
+!- as 21x que excluem cada peer
+xpl community-list CL-ONLY-NOT-UP
+ 64512:211,
+ 64512:212,
+ 64512:213
+ end-list
+
+xpl community-list CL-ONLY-NOT-IX
+ 64512:210,
+ 64512:212,
+ 64512:213
+ end-list
+
+xpl community-list CL-ONLY-NOT-PNI
+ 64512:210,
+ 64512:211,
+ 64512:213
+ end-list
+
+!- CL-OWN-ALL serve apenas para matches-any, nunca para apply:
+!- em route-filter nao existe "apply community <lista> delete"
+xpl community-list CL-OWN-ALL
+ 64512:*
+ end-list
+```
+
+`CL-ORIGEM-ANUNCIAVEL` é a peça central do anti-leak: só sai do AS o que for prefixo próprio ou de cliente.
+
+Os dois sets de limpeza têm escopos diferentes de propósito. `CL-OWN-INFO` casa apenas as informativas de 4 dígitos e é usado no ingress, deixando as ações do cliente atravessarem a RIB para serem consumidas no egress. `CL-OWN-ALL` casa tudo e é usado só na saída para peer externo.
+
+O coringa `*` no VRP substitui **um campo inteiro**, não parte dele. Verificado no F1A: `64512:*` é aceito, `64512:1*` retorna erro de sintaxe apontando para o asterisco. Por isso `CL-OWN-INFO` enumera as informativas em vez de usar prefixo com coringa.
+
+A enumeração acopla este set à tabela de informativas: toda informativa nova precisa entrar aqui também. Como ambos saem do mesmo YAML na geração por template, o acoplamento não custa nada na prática.
+
+Há uma alternativa a verificar: a documentação do VRP menciona expressão regular em community-list, com exemplo `regular ^1:1$`. Se a cláusula `regular` existir na sua release, `regular ^64512:[1239][0-9][0-9][0-9]$` substitui a enumeração inteira. Confirme com `?` dentro da view do community-list. A enumeração é mais barata em CPU de qualquer forma, então só troque se a manutenção pesar.
+
+### Large communities
+
+```
+xpl large-community-list LC-NOADV-14840
+ 64512:0:14840
+ end-list
+
+xpl large-community-list LC-PREP1-14840
+ 64512:1:14840
+ end-list
+
+xpl large-community-list LC-PREP2-14840
+ 64512:2:14840
+ end-list
+
+xpl large-community-list LC-PREP3-14840
+ 64512:3:14840
+ end-list
+
+xpl large-community-list LC-ONLY-14840
+ 64512:4:14840
+ end-list
+```
+
+### Prefixos de cliente
+
+Cada cliente recebe **dois** sets: um para anúncio normal com `le 24`, outro só para blackhole com `ge 32 le 32`.
+
+```
+xpl ip-prefix-list PL-CUST-268127-V4
+ 45.169.232.0 22 le 24
+ end-list
+
+xpl ip-prefix-list PL-CUST-268127-BH-V4
+ 45.169.232.0 22 ge 32 le 32
+ end-list
+
+!- soma de todos os blocos proprios e de cliente, gerada por template.
+!- e o anti-leak de verdade: o cliente nao consegue forjar prefixo aqui.
+xpl ip-prefix-list PL-ANNOUNCEABLE-V4
+ 45.169.232.0 22 le 24,
+ 45.178.120.0 22 le 24,
+ 45.180.180.0 22 le 24,
+ 45.185.216.0 22 le 24,
+ 45.190.72.0 22 le 24,
+ 45.238.36.0 22 le 24,
+ 138.97.60.0 22 le 24,
+ 177.200.224.0 22 le 24,
+ 181.191.192.0 22 le 24,
+ 200.219.24.0 22 le 24
+ end-list
+```
+
+O motivo da separação é duplo. Primeiro, `le 32` no anúncio normal deixa o cliente picar um `/22` em 1024 `/32`, inflando RIB e FIB sem que nada disso saia para o upstream. Segundo, e mais grave, com `le 32` genérico não há como distinguir um `/32` de blackhole de um anúncio comum, e a lógica de RTBH fica ambígua.
+
+O equivalente v6 usa `le 48` no normal e `ge 128 le 128` no blackhole.
+
+## Route-filters reutilizáveis
+
+Quatro filtros concentram a lógica comum. Todo filtro de sessão os chama em vez de repetir regras.
+
+```mermaid
+flowchart TD
+  A[Rota recebida] --> B[IMPORT-SANITY]
+  B --> C[STRIP-EXTERNAL]
+  C --> D[Filtro da sessão]
+  D --> E[Rota na RIB]
+  E --> F[Filtro de egress]
+  F --> G[EXPORT-SANITY]
+  G --> H[STRIP-INTERNAL]
+  H --> I[Rota anunciada]
+```
+
+### IMPORT-SANITY
+
+```
+xpl route-filter IMPORT-SANITY
+ if ip route-destination in PL-BOGONS-V4 then
+  refuse
+ endif
+ if as-path matches-any AP-BOGON-ASN then
+  refuse
+ endif
+ if as-path matches-any AP-PATH-TOO-LONG then
+  refuse
+ endif
+ end-filter
+```
+
+Sem `approve` no fim, de propósito. O filtro só recusa; quem aprova é o chamador.
+
+**O `finish` no final não é opcional.** A documentação da Huawei é explícita: se ao fim do processamento nem `finish`, nem `refuse`, nem `apply` tiverem executado, a rota é **negada por padrão**. Um filtro de sanidade que só contém `refuse` condicional, sem esse `finish` de fechamento, recusa toda rota que não caiu em nenhuma das condições de bloqueio — exatamente o oposto do que se pretende ao chamá-lo.
+
+### STRIP-EXTERNAL
+
+```
+!- NAO EXISTE. Mantido como registro do que nao funciona:
+!- em route-filter so ha overwrite e additive, nunca delete.
+xpl route-filter STRIP-EXTERNAL
+ apply community CL-OWN-INFO delete
+ end-filter
+```
+
+Este filtro não existe e não pode existir. A ideia era apagar o que viesse de fora escrito no namespace `64512:`, mas `apply community` em route-filter aceita apenas `overwrite` e `additive`. Não há remoção seletiva: ou se substitui o conjunto inteiro, ou se acrescenta a ele.
+
+Sobrescrever no ingress apagaria junto as ações do cliente, que só são consumidas no egress. Por isso o desenho muda: **nada é apagado no ingress**. O anti-leak passa a testar prefixo em vez de community, e a limpeza acontece só na saída, onde `overwrite` resolve.
+
+### EXPORT-SANITY
+
+```
+xpl route-filter EXPORT-SANITY
+ !- 100% community: exige marca de origem propria ou de cliente.
+ !- so e seguro porque o ingress de upstream/IX/PNI usa overwrite,
+ !- entao nenhuma community forjada por eles sobrevive ate aqui.
+ if not community matches-any CL-ORIGEM-ANUNCIAVEL then
+  refuse
+ endif
+ !- finish incondicional: mesma regra do IMPORT-SANITY
+ finish
+ end-filter
+```
+
+Este é o anti-leak, e ele é 100% baseado em community: exportar só o que carrega `64512:1000` (próprio) ou uma das variantes de cliente (`1100`–`1130`).
+
+Essa checagem só é segura porque cada tipo de sessão trata as communities recebidas de forma diferente:
+
+| Sessão            | Ingress                            | Por quê                                                                                                                                                                                                                                                                                                                                    |
+| ----------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cliente           | `additive`, sem tocar em community | O `PL-CUST-<ID>-V4` no próprio import já restringe estruturalmente quais prefixos aquela sessão pode anunciar. O cliente não tem como fazer sua sessão anunciar um prefixo que não é dele, então a community que aplicamos sobre esse prefixo é confiável — checar o prefixo de novo no export seria repetir um teste que o import já fez. |
+| Upstream, IX, PNI | `overwrite`                        | Essas sessões aceitam qualquer prefixo da internet, sem prefix-list próprio por cliente. Sem `overwrite`, uma community forjada por eles — por exemplo um `64512:1100` malicioso tentando se passar por rota de cliente — sobreviveria intacta até o export e passaria no `matches-any CL-ORIGEM-ANUNCIAVEL`.                              |
+
+Ou seja: o `EXPORT-SANITY` não verifica prefixo porque a garantia já foi dada na ponta certa — no import de cada tipo de sessão, com a ferramenta certa para cada uma (prefix-list para cliente, `overwrite` para peer).
+
+O custo é manter o set atualizado a cada cliente novo. Como sai do mesmo YAML que gera as prefix-lists individuais, não é trabalho adicional.
+
+### STRIP-INTERNAL
+
+```
+!- no egress o overwrite resolve: substitui o conjunto inteiro
+!- por exatamente o que se quer enviar. Chamar como ULTIMA acao.
+xpl route-filter STRIP-INTERNAL-UP1
+ apply community {14840:9133} overwrite
+ end-filter
+```
+
+Diferente do `STRIP-EXTERNAL`, que só apaga as informativas de 4 dígitos, este apaga o namespace inteiro, inclusive as ações que o cliente enviou. Roda no egress para peers externos, nunca no egress para cliente — o cliente deve receber as informativas.
+
+Atenção: este strip apagaria também o `64512:667` usado para propagar blackhole. Por isso, no filtro de upstream, o ramo de blackhole aprova **antes** de o strip rodar.
+
+## Exemplo: cliente de trânsito
+
+Sessão com o AS268127, prefixo `45.169.232.0/22`, IP de peering `198.51.100.2`.
+
+### Import
+
+```
+xpl route-filter CUST-IMPORT-268127
+ call route-filter IMPORT-SANITY
+
+ !- blackhole: /32 dentro do bloco do cliente, com a community certa
+ if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in PL-CUST-268127-BH-V4 then
+  apply ip next-hop 192.0.2.1
+  apply local-preference 400
+  apply community {64512:9666, 64512:200} additive
+  apply large-community {64512:1000:268127} additive
+  finish
+ endif
+
+ !- anuncio normal: so o bloco autorizado
+ if not ip route-destination in PL-CUST-268127-V4 then
+  refuse
+ endif
+
+ if not as-path matches-any AP-CUST-268127 then
+  refuse
+ endif
+
+
+ call route-filter APPLY-CUSTOMER-LP
+ apply community {64512:1100, 64512:2001} additive
+ apply large-community {64512:1000:268127} additive
+ finish
+ end-filter
+```
+
+A ordem importa em dois pontos. O blackhole vem antes do teste de prefixo normal, porque um `/32` não passaria em `PL-CUST-268127-V4`. E a escada de local preference agora vive em `APPLY-CUSTOMER-LP` (seção de route-filters reutilizáveis), chamada com `call`: qualquer cliente novo usa o mesmo filtro sem duplicar o `if/elseif`.
+
+As ações do cliente (`101`–`105`, `2xx`, `6CA`, `5PPA`, `666`/`667`) **sobrevivem** ao ingress e isso é proposital. O prepend e o no-export só são consumidos no egress, então precisam atravessar a RIB. É lá, no `apply community {...} overwrite` de cada filtro de egress, que elas desaparecem — não há remoção seletiva no ingress, conforme visto na seção sobre `overwrite` e `additive`.
+
+É exatamente para isso que serve a convenção "ação tem 3 dígitos, informativa tem 4": o strip de import casa apenas as de 4 dígitos, e as de ação passam intactas sem precisar de lista de exceções.
+
+### Export
+
+```
+xpl route-filter CUST-EXPORT-268127
+ if community matches-any CL-NOEXP-ALL then
+  refuse
+ endif
+ if community matches-any {64512:204} then
+  refuse
+ endif
+ if large-community matches-any {64512:0:268127} then
+  refuse
+ endif
+
+ !- cliente recebe full table: proprias, de cliente, de peer e de upstream
+ if community matches-any {64512:1900} then
+  refuse
+ endif
+
+ !- prepend no que enviamos a este cliente, se ele pedir via large ou 5PPA proprio
+ if large-community matches-any {64512:3:268127} then
+  apply as-path 64512 3 additive
+ elseif large-community matches-any {64512:2:268127} then
+  apply as-path 64512 2 additive
+ elseif large-community matches-any {64512:1:268127} then
+  apply as-path 64512 1 additive
+ endif
+
+ finish
+ end-filter
+```
+
+No egress para cliente **não** roda `STRIP-INTERNAL`: o cliente precisa das informativas para tomar decisões próprias. É o que transforma o plano de communities em produto.
+
+### Aplicação
+
+```
+bgp 64512
+ peer 198.51.100.2 as-number 268127
+ peer 198.51.100.2 description CLIENTE-AS268127
+ peer 198.51.100.2 route-limit 50 alert-only
+
+ ipv4-family unicast
+  peer 198.51.100.2 enable
+  peer 198.51.100.2 route-filter CUST-IMPORT-268127 import
+  peer 198.51.100.2 route-filter CUST-EXPORT-268127 export
+  peer 198.51.100.2 advertise-community
+  peer 198.51.100.2 advertise-large-community
+```
+
+## Exemplo: upstream
+
+Sessão com o AS14840, peer de ID `01`. Este é o filtro que substitui o `ASN14840-V4-IMPORT` e o `XPL-UPSTREAM-AS14840-V4-EXPORT` do legado.
+
+### Import
+
+```
+xpl route-filter UP-IMPORT-14840($lp_base)
+ call route-filter IMPORT-SANITY
+
+ if as-path matches-any AP-BLOCK-14840 then
+  refuse
+ endif
+
+ apply local-preference $lp_base
+ apply community {64512:1400, 64512:3100} additive
+ apply large-community {64512:1000:14840} additive
+
+ !- excecoes de TE, aplicadas depois do carimbo base
+ if ip route-destination in PL-TE-PREFER-14840 or as-path matches-any AP-TE-PREFER-14840 then
+  apply local-preference 250
+ endif
+
+ approve
+ end-filter
+```
+
+O valor 250 nas exceções de TE é deliberado: fica acima dos demais upstreams mas **abaixo** do LP 300 de cliente. O legado usava 1000 aqui, o que fazia o anúncio do upstream ganhar do anúncio do próprio cliente. Se algum desses prefixos for de cliente, o tráfego saía pela internet e voltava — tromboning caro e difícil de diagnosticar.
+
+### Export
+
+```php
+xpl route-filter UP-EXPORT-14840($prepend_base)
+ !- 1. blackhole primeiro: finish para nao cair no EXPORT-SANITY
+ if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in {0.0.0.0 0 ge 32 le 32} then
+  if community matches-any CL-BLACKHOLE-PROPAGATE then
+   apply community {14840:666} overwrite
+   finish
+  else
+   refuse
+  endif
+ endif
+
+ !- 2. sanidade antes de liberar a rota
+ call route-filter EXPORT-SANITY
+
+ !- 3. nao vazar full table para outro upstream
+ if community matches-any {64512:2000} then
+  refuse
+ endif
+
+ !- 4. nao anunciar (escopo explicito do cliente)
+ if community matches-any CL-NOADV-UP1 or large-community matches-any LC-NOADV-14840 then
+  refuse
+ endif
+
+ !- 5. somente para outro peer
+ if community matches-any CL-ONLY-NOT-UP then
+  refuse
+ endif
+
+ !- 6. 5PPA por peer especifico (peer 01): A=1 e P1 (0 prepends), A=2 e P2 (1x), A=3 e P3 (2x), A=4 e P4 (3x)
+ if community matches-any {64512:5014} or large-community matches-any LC-PREP3-14840 then
+  apply as-path 64512 3 additive
+ elseif community matches-any {64512:5013} or large-community matches-any LC-PREP2-14840 then
+  apply as-path 64512 2 additive
+ elseif community matches-any {64512:5012} or large-community matches-any LC-PREP1-14840 then
+  apply as-path 64512 1 additive
+ elseif community matches-any {64512:5011} then
+  !- P1: anuncia sem prepend, mesmo que a classe abaixo pedisse prepend
+  finish
+ !- 7. 6CA por classe (classe 1 = upstream): mesma escala, so roda se nao veio 5PPA
+ elseif community matches-any {64512:614} then
+  apply as-path 64512 3 additive
+ elseif community matches-any {64512:613} then
+  apply as-path 64512 2 additive
+ elseif community matches-any {64512:612} then
+  apply as-path 64512 1 additive
+ endif
+
+ !- 8. prepend base de engenharia: o parametro JA E o numero de prepends
+ !- (0 a 6, escala P1-P7 menos 1). Sem if: parametro nao funciona
+ !- como condicao, so como valor substituido dentro da clausula.
+ apply as-path 64512 $prepend_base additive
+
+ !- 9. saida comum, termina com finish
+ apply med 0
+ !- overwrite como ULTIMA acao: substitui tudo pelo que sai de fato
+ apply community {14840:9133} overwrite
+ finish
+ end-filter
+```
+
+### Os cinco bugs do legado que isto corrige
+
+| Bug no legado                       | Consequência                                                                                                   | Correção                          |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `A or B and C` sem parênteses       | Prefixo de qualquer tamanho com tag de blackhole recebe next-hop de descarte e sai ao upstream com `14840:666` | Parênteses e `ge 32 le 32`        |
+| `overwrite` no fim do import        | Apaga as large communities aplicadas nos ramos anteriores                                                      | Strip primeiro, `additive` depois |
+| `{64512:14840:4}`                   | Ordem de campo invertida; nunca casa nada, então o "não prependar" nunca funciona                              | `{64512:4:14840}`                 |
+| `{666:101}` no refuse               | Aparenta ser `64512` truncado                                                                                  | Verificar a intenção original     |
+| _(item retirado — ver nota abaixo)_ | —                                                                                                              | —                                 |
+
+**Correção sobre este documento:** a linha "injeta AS1/AS2/AS3" desta tabela estava errada e foi removida. `apply as-path 64512 $prepend additive` em XPL usa o segundo campo como **contador de repetições**, não como ASN adicional — confirmado no equipamento. O seu filtro original já fazia o prepend correto; a suspeita levantada nesta análise não se confirmou.
+
+O `/31` no ramo de blackhole também merece revisão: a RFC 7999 especifica `/32`, e a maioria dos upstreams recusa `/31` de qualquer forma.
+
+Dois erros de digitação menores também: `{64512:14840:4}` com a ordem de campo invertida, que nunca casava nada, e `66:101` que parece ser `64512` truncado.
+
+### Aplicação
+
+```
+bgp 64512
+ peer 203.0.113.1 as-number 14840
+ peer 203.0.113.1 description UPSTREAM-01-AS14840
+ peer 203.0.113.1 route-limit 1000000 alert-only
+
+ ipv4-family unicast
+  peer 203.0.113.1 enable
+  peer 203.0.113.1 route-filter UP-IMPORT-14840(100) import
+  peer 203.0.113.1 route-filter UP-EXPORT-14840(0) export
+  peer 203.0.113.1 advertise-community
+  peer 203.0.113.1 advertise-large-community
+```
+
+A parametrização é o principal ganho do XPL sobre `route-policy`. O mesmo par de filtros serve os três upstreams, variando apenas `$lp_base` e `$prepend_base` na chamada — este último já como número de prepends (o `(0)` acima significa zero prepends de engenharia, não "desligado"). Confirme na sua release se a substituição de parâmetro funciona dentro de set literal — se `{64512:1:$peer_asn}` for aceito, os filtros per-peer colapsam num único filtro genérico.
+
+## Exemplo: IX e PNI
+
+### IX via route server
+
+O route server é transparente: não insere o próprio ASN no AS-path. Isso tem duas consequências opostas.
+
+No **ingress**, `peer-is` identifica o membro que realmente anunciou, dando política por membro com uma única sessão BGP.
+
+```
+xpl route-filter IX-IMPORT-SP
+ call route-filter IMPORT-SANITY
+
+ !- anti-leak de IX: membro nao deve anunciar rota de transito
+ if as-path length ge 4 then
+  refuse
+ endif
+
+ apply community {64512:1300, 64512:3010} additive
+ apply large-community {64512:1001:26162} additive
+
+ if as-path matches-any AP-IX-CDN-A then
+  apply local-preference 195
+ else
+  apply local-preference 190
+ endif
+
+ finish
+ end-filter
+```
+
+No **egress**, o prepend entra no AS-path do anúncio enviado ao RS, e o RS repassa o mesmo path a todos os membros. Prepend por membro não existe via route server.
+
+```
+xpl route-filter IX-EXPORT-SP
+ call route-filter EXPORT-SANITY
+
+ !- nao vazar full table no IX
+ if community matches-any {64512:2000} then
+  refuse
+ endif
+
+ if community matches-any CL-NOADV-IX-SP or large-community matches-any {64512:0:26162} then
+  refuse
+ endif
+
+ if community matches-any CL-ONLY-NOT-IX then
+  refuse
+ endif
+
+ !- 6CA classe 2 = IX publico; P2=1x, P3=2x, P4=3x
+ if community matches-any {64512:624} then
+  apply as-path 64512 3 additive
+ elseif community matches-any {64512:623} then
+  apply as-path 64512 2 additive
+ elseif community matches-any {64512:622} then
+  apply as-path 64512 1 additive
+ endif
+
+ !- limpa tudo antes de sair; verificar se conjunto vazio e aceito
+ apply community {} overwrite
+ finish
+ end-filter
+```
+
+Esta limitação precisa constar na tabela publicada ao cliente. "Prepend só para o AS X no IX" só funciona se houver sessão bilateral com o X, e é reclamação garantida se não estiver documentado.
+
+O `as-path length ge 4` no import é um anti-leak simples para IX: um membro anunciando rota com path longo está repassando trânsito que não deveria. Ajuste o limiar conforme a topologia do IX — alguns membros legítimos têm downstreams.
+
+### PNI de CDN
+
+Sessão bilateral, onde prepend por peer funciona normalmente.
+
+```
+xpl route-filter PNI-IMPORT-CDNA
+ call route-filter IMPORT-SANITY
+
+ if not as-path matches-any AP-CDNA-ALLOWED then
+  refuse
+ endif
+
+ apply local-preference 200
+ apply community {64512:1500, 64512:1200} additive
+ apply large-community {64512:1000:64510} additive
+ finish
+ end-filter
+
+xpl route-filter PNI-EXPORT-CDNA
+ call route-filter EXPORT-SANITY
+
+ !- nao vazar full table no PNI
+ if community matches-any {64512:2000} then
+  refuse
+ endif
+
+ if community matches-any CL-NOADV-PNI-CDNA or large-community matches-any {64512:0:64510} then
+  refuse
+ endif
+
+ if community matches-any CL-ONLY-NOT-PNI then
+  refuse
+ endif
+
+ !- 6CA classe 4 = CDN; P2=1x, P3=2x, P4=3x
+ if community matches-any {64512:644} then
+  apply as-path 64512 3 additive
+ elseif community matches-any {64512:643} then
+  apply as-path 64512 2 additive
+ elseif community matches-any {64512:642} then
+  apply as-path 64512 1 additive
+ endif
+
+ apply community {} overwrite
+ finish
+ end-filter
+```
+
+## Originação dos próprios prefixos
+
+Os prefixos do AS64512 não devem depender de um filtro genérico para serem carimbados. Cada agregado recebe a própria política de originação, com o conjunto exato de communities de export.
+
+### O padrão
+
+Três peças por prefixo originado:
+
+```mermaid
+flowchart LR
+  A[ip route-static<br/>NULL0 preference 1] --> B[network X<br/>route-policy ORIGIN-X]
+  B --> C[LP 900 + communities<br/>de export do prefixo]
+  C --> D[BGP anuncia]
+```
+
+A rota estática para `NULL0` com `preference 1` garante que o `network` sempre tenha o que originar, mesmo que nenhum componente mais específico esteja ativo. Sem ela, o agregado some da tabela quando o último cliente cai.
+
+```
+ip route-static 170.80.32.0 255.255.252.0 NULL0 preference 1 description BGP-BLACKHOLE-IPV4
+ip route-static 170.80.32.0 255.255.254.0 NULL0 preference 1 description BGP-BLACKHOLE-IPV4
+ip route-static 170.80.32.0 255.255.255.0 NULL0 preference 1 description BGP-BLACKHOLE-IPV4
+```
+
+Repare que o agregado e cada desagregado ganham a própria estática. Isso permite anunciar `/22`, `/23` e `/24` do mesmo bloco com políticas de TE diferentes.
+
+### Originação com política por prefixo
+
+```
+ network 170.80.32.0 255.255.252.0 route-policy ORIGIN-170-80-32-0m22
+ network 170.80.32.0 255.255.254.0 route-policy ORIGIN-170-80-32-0m23
+ network 170.80.32.0 255.255.255.0 route-policy ORIGIN-170-80-32-0m24
+```
+
+O nome codifica prefixo e máscara, então a política é localizável sem consultar índice. Cada uma aplica LP alto e o conjunto de communities que define para onde aquele prefixo específico vai:
+
+```
+route-policy ORIGIN-170-80-32-0m22 permit node 100
+ apply local-preference 900
+ apply community 64512:1000 64512:673 64512:621
+```
+
+No exemplo, o `/22` sai com P3 para todos (`673`) e P1 no IX público (`621`). O `/24` da mesma família pode sair só no IX, sem ir para upstream, mudando apenas o conjunto de communities da sua própria política.
+
+### Por que não fazer isso em XPL
+
+A cláusula `network` aceita `route-policy`, não `route-filter`. Este é o único ponto do desenho que permanece em `route-policy` mesmo numa configuração inteiramente XPL. Não é limitação prática: essas políticas são lineares, sem condição, e nunca precisam de `if`.
+
+Confirme na sua release se `network ... route-filter` existe como alternativa antes de assumir.
+
+## RTBH fim a fim
+
+Blackhole é o recurso de maior retorno imediato do plano: é o chamado que o NOC mais abre de madrugada.
+
+```mermaid
+flowchart LR
+  A[Cliente anuncia /32<br/>com 65535:666] --> B[Import valida<br/>bloco e tamanho]
+  B --> C[next-hop 192.0.2.1<br/>LP 400]
+  C --> D[Descarte no<br/>Null0 local]
+  C --> E{tem 64512:667?}
+  E -->|sim| F[Propaga ao upstream<br/>com a tag dele]
+  E -->|nao| G[Fica local]
+```
+
+### Regras de aceitação
+
+| Regra      | Valor                                 | Por quê                                               |
+| ---------- | ------------------------------------- | ----------------------------------------------------- |
+| Tamanho    | `/32` em v4, `/128` em v6             | RFC 7999; evita descartar bloco inteiro por engano    |
+| Escopo     | Dentro do bloco autorizado do cliente | Impede blackhole de prefixo de terceiro               |
+| Gatilho    | `65535:666` ou `64512:666`            | O primeiro é o padrão; o segundo é alias              |
+| Propagação | Só com `64512:667`                    | Default é conter na própria rede                      |
+| Limite     | `route-limit` próprio, separado       | Blackhole em massa é sintoma de problema, não solução |
+
+### Rota de descarte
+
+```
+ip route-static 192.0.2.1 255.255.255.255 NULL0 tag 666
+ipv6 route-static 100:: 64 NULL0 tag 666
+```
+
+O next-hop v4 usa `192.0.2.1`, dentro do bloco de documentação TEST-NET-1 da RFC 5737. O v6 usa `100::/64`, o bloco de descarte da RFC 6666.
+
+### Propagação ao upstream
+
+Cada upstream tem a própria community de blackhole. A tabela abaixo precisa ser preenchida com os valores reais dos seus contratos.
+
+| Upstream    | ASN   | Community de blackhole |
+| ----------- | ----- | ---------------------- |
+| Upstream #1 | 14840 | `14840:666`            |
+| Upstream #2 | 64501 | a confirmar            |
+| Upstream #3 | 64502 | a confirmar            |
+
+O ramo de propagação usa `finish`, não `approve`. Com `approve` a rota seguiria para o `EXPORT-SANITY`, que tem limite `le 24` e recusaria o `/32`.
+
+### Graceful Shutdown
+
+`65535:0` (RFC 8326) aplica LP 0 no ingress, drenando a sessão antes de manutenção sem derrubar o BGP. Custa três linhas e evita janela de perda de pacote:
+
+```
+ if community matches-any CL-GSHUT then
+  apply local-preference 0
+ endif
+```
+
+## RPKI, IRR e anti-leak
+
+O plano de communities não resolve segurança de roteamento sozinho. Estes quatro itens fecham na mesma janela.
+
+### RPKI
+
+Valide origem com RPKI-to-Router, usando Routinator ou rpki-client como validador local. Carimbe o resultado com `64512:9001`, `9002` e `9003`, rode **30 dias em observação** medindo quanto tráfego seria descartado, e só então passe a recusar Invalid.
+
+Publique ROA para todos os seus blocos no LACNIC. Sem ROA próprio, seus prefixos aparecem como NotFound e ficam vulneráveis a sequestro por prefixo mais específico.
+
+### IRR
+
+Mantenha `AS-64512` e um as-set por cliente no LACNIC ou no RADB. Gere as prefix-lists com `bgpq4` em cron, nunca à mão.
+
+A geração automática resolve dois problemas concretos encontrados no legado: um `/22` autorizado simultaneamente para dois ASNs diferentes, e um prefixo na lista agregada sem cliente correspondente. Ambos são inevitáveis quando há duas fontes de verdade digitadas separadamente.
+
+```
+bgpq4 -4 -X -A -h whois.radb.net -l PL-CUST-268127-V4 AS268127
+```
+
+### Anti-leak
+
+A defesa em camadas:
+
+1. **`EXPORT-SANITY`** testa o prefixo contra `PL-ANNOUNCEABLE-V4`. É a camada que impede reanunciar rota de upstream para outro upstream, e não depende de community, que o cliente poderia forjar.
+2. **`as-path length`** recusa path absurdamente longo no import.
+3. **RFC 9234 (BGP Roles / OTC)** mata leak na origem, negociando o papel de cada sessão. Verifique se sua release do F1A suporta; se sim, configure `peer <ip> role provider` nas sessões de cliente e `role customer` nas de upstream.
+4. **`route-limit` em toda sessão**, sem exceção, inclusive cliente pequeno. Um cliente com 10 prefixos e limite de 50 é um alarme que dispara antes do estrago.
+
+### Máximo de prefixos sugerido
+
+| Tipo de sessão      | `route-limit`            | Ação         |
+| ------------------- | ------------------------ | ------------ |
+| Cliente de trânsito | 2x o esperado, mínimo 50 | `alert-only` |
+| IX route server     | 500000                   | `alert-only` |
+| PNI de CDN          | 10000                    | `alert-only` |
+| Upstream            | 1500000                  | `alert-only` |
+
+Use `alert-only` em vez de derrubar a sessão. Sessão caída por limite atingido transforma um incidente pequeno em queda total.
+
+## Migração do plano legado
+
+### De-para
+
+| Legado                            | Novo                         | Observação                                            |
+| --------------------------------- | ---------------------------- | ----------------------------------------------------- |
+| `65000:3001` / `65000:3101`       | `64512:1100`                 | Refinar para `1110`, `1120` ou `1130` conforme o tipo |
+| `65000:4001` / `65000:4101`       | `64512:1200` ou `64512:1300` | PNI ou route server                                   |
+| `64512:4:1010` / `64512:6:1010`   | `64512:1400`                 | Sem split v4/v6                                       |
+| `64512:4:XXXXX` / `64512:6:XXXXX` | `64512:1000:<ASN>`           | ASN literal em vez de índice                          |
+| `64512:8167`                      | `64512:0:8167`               | ASN sai dos 16 bits baixos                            |
+| `64512:3001` (export upstream)    | `64512:210`                  | Muda de faixa; `3xxx` vira informativa                |
+| `64512:4001` (export CDN)         | `64512:212`                  | Muda de faixa; `4xxx` vira ação per-peer              |
+| `64512:7002` / `64512:7102`       | a definir                    | Não documentado no legado                             |
+| `65000:991`                       | `64512:200`                  | Escopo de anúncio                                     |
+| `37468:666` como gatilho          | remover                      | Community de terceiro se propaga, não se obedece      |
+| `65001:666`                       | `65535:666`                  | Padrão RFC 7999                                       |
+
+Os dois últimos são correções de segurança, não de estilo.
+
+### Colisões a resolver antes de começar
+
+Duas communities do legado batem de frente com as faixas novas. A diferença não é só numérica, é de **polaridade**: `com-EXPORT-UPSTREAM-v4` e `com-EXPORT-CDN-v4` são positivas (default não exporta, tag manda exportar), enquanto o plano novo é negativo (default exporta, tag restringe).
+
+A polaridade positiva é mais segura, a negativa é mais prática. O que não pode é misturar: é assim que nasce leak, quando uma rota escapa por um caminho sem tag nenhuma e o filtro daquele lado era negativo. A faixa `21x` existe para acomodar a positiva num bloco isolado.
+
+### Fases
+
+1. **Semanas 1 a 2 — preparação.** Montar o YAML fonte, gerar os sets por template, resolver o `/22` duplicado e o prefixo órfão, publicar ROA.
+2. **Semanas 3 a 10 — carimbo duplo.** Aplicar as informativas antiga e nova em paralelo. Nada quebra, nada muda de comportamento. Publicar a tabela nova e avisar os clientes.
+3. **Semana 11 — corte do carimbo.** Parar de aplicar as informativas antigas, continuar **aceitando** as ações antigas.
+4. **Semana 15 — remoção.** Retirar o suporte às ações antigas e limpar os sets órfãos.
+
+O carimbo duplo da fase 2 é o que torna a migração reversível. Um cliente que ainda usa a community velha continua funcionando enquanto ajusta.
+
+## Validação e checklist
+
+### `xpl simulate`
+
+O VRP oferece `xpl simulate`, que roda a política contra rotas e mostra o resultado **sem aplicar em sessão nenhuma**. É a ferramenta certa antes de tocar em produção, especialmente para as três ambiguidades de sintaxe ainda abertas.
+
+Rode `simulate ?` para ver os parâmetros de entrada na sua release.
+
+### Três itens a confirmar antes de subir
+
+| Item                                      | Pergunta                                                                                             | Como resolver                                                                                |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `apply as-path` em XPL vs. `route-policy` | Resolvido: em XPL é ASN + contador (`64512 3` = três prepends), diferente do `route-policy` clássico | Ainda vale um `display bgp routing-table` numa rota prependada para confirmar na sua release |
+| `regular` em community-list               | A cláusula existe na sua release?                                                                    | `?` dentro da view do community-list                                                         |
+| Parâmetro em set literal                  | `{64512:1:$peer_asn}` é aceito?                                                                      | `xpl simulate`; se sim, os filtros per-peer colapsam num só                                  |
+
+O primeiro é o mais urgente. Se o segundo campo de `apply as-path` for ASN e não contador, você está injetando AS de terceiro na tabela global agora.
+
+### Comandos de verificação
+
+```
+display xpl as-path-list <nome>
+display xpl community-list <nome>
+display xpl large-community-list <nome>
+display xpl ip-prefix-list <nome>
+display xpl route-filter <nome>
+
+display bgp routing-table <prefixo>
+display bgp routing-table peer <ip> advertised-routes
+display bgp routing-table peer <ip> received-routes
+display bgp peer <ip> verbose
+```
+
+O `advertised-routes` é o que prova que o egress está fazendo o que você acha que faz. Confira o AS-path e as communities de uma rota prependada antes e depois de cada mudança.
+
+### Checklist de produção
+
+- [ ] `/22` duplicado entre dois clientes resolvido no LACNIC
+- [ ] `65535:666` adicionado ao set de blackhole
+- [ ] `37468:666` removido como gatilho local
+- [ ] Prefixos de cliente com `le 24`, blackhole em set separado com `ge 32 le 32`
+- [ ] Sets v6 criados para todos os v4 existentes
+- [ ] `advertise-community` e `advertise-large-community` em todas as sessões, inclusive iBGP
+- [ ] `route-limit` em todas as sessões
+- [ ] Ordem de campo das large communities conferida (`64512:4:14840`, não `64512:14840:4`)
+- [ ] Parênteses em todas as condições que misturam `and` e `or`
+- [ ] `finish` nos ramos que devem encerrar o filtro
+  - [ ] Nenhum `apply community ... delete` restante (não existe em route-filter)
+  - [ ] `apply community {...} overwrite` como última ação de todo egress externo
+  - [ ] `PL-ANNOUNCEABLE-V4` gerado e atualizado a cada cliente novo
+  - [ ] Conjunto vazio `{}` testado em `apply community`
+- [ ] Comentários usando `!-`, não `#`
+- [ ] ROA publicado para todos os blocos próprios
+- [ ] Tabela pública no ar e apontada no PeeringDB
+- [ ] Configuração gerada por template a partir de um YAML único
+
+## Tabela pública para clientes
+
+O texto abaixo é para publicar em `as64512.net.br/bgp`, apontar no campo _Policy URL_ do PeeringDB e referenciar nos `remarks` do objeto aut-num no LACNIC. Community que o cliente não descobre sozinho não é usada.
+
+---
+
+### Política de BGP Communities — AS64512
+
+O AS64512 aceita as communities abaixo de clientes de trânsito. Envie-as junto com seus anúncios para controlar como suas rotas são propagadas.
+
+**Controle de preferência**
+
+| Envie       | Efeito                                  |
+| ----------- | --------------------------------------- |
+| `64512:101` | Suas rotas viram último recurso         |
+| `64512:102` | Preferência abaixo dos nossos upstreams |
+| `64512:103` | Preferência abaixo do nosso peering     |
+| `64512:104` | Preferência abaixo dos demais clientes  |
+| `64512:105` | Preferência acima dos demais clientes   |
+
+**Controle de anúncio**
+
+| Envie       | Efeito                             |
+| ----------- | ---------------------------------- |
+| `64512:200` | Não anunciar para ninguém          |
+| `64512:201` | Não anunciar para nossos upstreams |
+| `64512:202` | Não anunciar para nossos peers     |
+| `64512:203` | Não anunciar nos IXs               |
+| `64512:204` | Não anunciar para outros clientes  |
+
+**Prepend**
+
+| Envie                       | Efeito                                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------------- |
+| `64512:612` / `613` / `614` | Prepend 1x / 2x / 3x para todos os destinos (classe 7: `672`/`673`/`674`)              |
+| `64512:612` / `613` / `614` | Prepend 1x / 2x / 3x para upstreams (classe 1). `64512:611` = P1, anunciar sem prepend |
+| `64512:622` / `623` / `624` | Prepend 1x / 2x / 3x nos IXs (classe 2)                                                |
+
+**Controle por ASN específico** (large community)
+
+| Envie           | Efeito                        |
+| --------------- | ----------------------------- |
+| `64512:0:<ASN>` | Não anunciar para `<ASN>`     |
+| `64512:1:<ASN>` | Prepend 1x para `<ASN>`       |
+| `64512:2:<ASN>` | Prepend 2x para `<ASN>`       |
+| `64512:3:<ASN>` | Prepend 3x para `<ASN>`       |
+| `64512:4:<ASN>` | Anunciar somente para `<ASN>` |
+
+Se seu equipamento não suporta large community, use o alias em standard: `64512:4` + ID do peer + dígito de ação. Consulte a tabela de IDs nesta mesma página.
+
+**Blackhole**
+
+Envie `65535:666` num `/32` (ou `/128` em IPv6) dentro do seu bloco autorizado. O prefixo será descartado na nossa borda. Para propagar aos nossos upstreams, adicione também `64512:667`.
+
+**Manutenção**
+
+Envie `65535:0` (RFC 8326) para drenar suas rotas antes de manutenção programada, sem derrubar a sessão BGP.
+
+**Informativas que você recebe de nós**
+
+Suas rotas aprendidas do AS64512 vêm carimbadas com origem (`64512:1xxx`), geografia (`64512:2xxx`) e ponto de aprendizado (`64512:3xxx`). Use-as para suas próprias decisões de engenharia de tráfego. A tabela completa está nesta página.
+
+**Limitações conhecidas**
+
+Prepend por membro individual de IX não é possível via route server: o RS repassa o mesmo AS-path a todos os membros. Prepend por ASN só funciona onde temos sessão bilateral.
+
+---
+
+### Onde mais publicar
+
+| Local               | Campo                               |
+| ------------------- | ----------------------------------- |
+| PeeringDB           | _Policy URL_ no registro do AS64512 |
+| LACNIC              | `remarks` do objeto aut-num         |
+| IRR                 | `remarks` do objeto `AS-64512`      |
+| Contrato de cliente | Anexo técnico                       |

@@ -1,0 +1,295 @@
+# Exemplo ficticio: nomes e identificadores de operadores foram substituidos.
+# ASNs privados; IPv4 de documentacao nas sessoes e privados nos blocos.
+# IPv6 de documentacao dentro de 2001:db8::/32.
+# Mantidos os campos, IDs, vinculos e parametros de politica do modelo original.
+# O parceiro usa o mesmo ASN local, como no original (sessao iBGP).
+# Prefixos IPv6 e TE ajustados para redes validas neste exemplo.
+# Communities sao ilustrativas e nao representam politicas de operadoras reais.
+
+asn: 64512
+asn_politica: 65532
+peers:
+- id: 0
+  apelido: TRANSITO-ALFA
+  nome: TRANSITO-ALFA-20G
+  tipo: upstream
+  asn: 64513
+  classe: transito
+  lp_base: 100
+  origem: 1120
+  pop: 2001
+  aprendizado: 3100
+  ix_id: null
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  prepend_base: 0
+  bh_upstream: 64513:666
+  default_route: false
+  bfd: true
+  graceful_restart: true
+  timer_keepalive: 10
+  timer_hold: 30
+  prefixos:
+    v4:
+    - 10.20.128.0/17
+    - 10.20.128.0/20
+    - 10.20.144.0/21
+    - 10.20.160.0/21
+    - 10.20.176.0/21
+    - 10.20.192.0/21
+    - 10.20.228.0/22
+    - 10.20.248.0/22
+    - 10.21.96.0/19
+    - 10.21.96.0/21
+    - 10.21.120.0/21
+    - 10.22.64.0/18
+    - 10.23.208.0/20
+    - 10.24.0.0/17
+    v6:
+    - 2001:db8:1000::/36
+  te_prefixos:
+    v4: []
+    v6: []
+  communities:
+  - 64513:9133
+  large_communities:
+  - 64513:1:3333
+  descricao: TRANSITO-ALFA-20G
+  route_limit: 1500000
+  sessoes:
+    v4:
+      local: 192.0.2.1
+      remoto: 192.0.2.0
+    v6: {}
+  grupo_id: null
+- id: 10
+  apelido: PARCEIRO-EXEMPLO
+  nome: PARCEIRO-EXEMPLO
+  tipo: parceiro
+  asn: 64512
+  classe: transito
+  lp_base: 300
+  origem: 1100
+  pop: 2001
+  aprendizado: null
+  ix_id: null
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  prepend_base: 0
+  bh_upstream: ''
+  default_route: true
+  bfd: true
+  graceful_restart: true
+  timer_keepalive: null
+  timer_hold: null
+  prefixos:
+    v4:
+    - 10.100.0.0/22
+    v6:
+    - 2001:db8:2000::/36
+  te_prefixos:
+    v4:
+    - 10.100.0.0/24
+    v6: []
+  communities: []
+  large_communities: []
+  descricao: PARCEIRO-EXEMPLO
+  route_limit: 50
+  sessoes:
+    v4:
+      local: 192.0.2.5
+      remoto: 192.0.2.6
+    v6:
+      local: 2001:db8:ffff:1::1
+      remoto: 2001:db8:ffff:1::2
+  grupo_id: 1
+- id: 3
+  apelido: TRANSITO-BETA
+  nome: TRANSITO-BETA
+  tipo: upstream
+  asn: 64514
+  classe: null
+  lp_base: 100
+  origem: 1100
+  pop: 2001
+  aprendizado: 3100
+  ix_id: null
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  prepend_base: 0
+  bh_upstream: ''
+  default_route: false
+  bfd: true
+  graceful_restart: true
+  timer_keepalive: 10
+  timer_hold: 30
+  prefixos:
+    v4: []
+    v6: []
+  te_prefixos:
+    v4: []
+    v6: []
+  communities: []
+  large_communities: []
+  descricao: TRANSITO-BETA
+  route_limit: 1500000
+  sessoes:
+    v4:
+      local: 192.0.2.9
+      remoto: 192.0.2.10
+    v6:
+      local: 2001:db8:ffff:2::1
+      remoto: 2001:db8:ffff:2::2
+  grupo_id: 2
+- id: 5
+  apelido: TRANSITO-GAMA
+  nome: TRANSITO-GAMA
+  tipo: upstream
+  asn: 64515
+  classe: null
+  lp_base: 300
+  origem: 1100
+  pop: 2001
+  aprendizado: 3100
+  ix_id: null
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  prepend_base: 0
+  bh_upstream: ''
+  default_route: false
+  bfd: true
+  graceful_restart: true
+  timer_keepalive: 10
+  timer_hold: 30
+  prefixos:
+    v4: []
+    v6: []
+  te_prefixos:
+    v4: []
+    v6: []
+  communities: []
+  large_communities: []
+  descricao: TRANSITO-GAMA
+  route_limit: 1500000
+  sessoes:
+    v4:
+      local: 192.0.2.13
+      remoto: 192.0.2.14
+    v6: {}
+  grupo_id: 4
+grupos:
+- id: 1
+  nome: PARCEIROS
+  tipo: parceiro
+  asn: null
+  classe: transito
+  lp_base: 300
+  origem: 1100
+  pop: 2001
+  aprendizado: null
+  ix_id: null
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  prepend_base: 0
+  bh_upstream: ''
+  default_route: false
+  bfd: true
+  graceful_restart: true
+  timer_keepalive: null
+  timer_hold: null
+  prefixos:
+    v4: []
+    v6: []
+  te_prefixos:
+    v4: []
+    v6: []
+  communities: []
+  large_communities: []
+- id: 2
+  nome: TRANSITO_BETA_64514
+  tipo: upstream
+  asn: 64514
+  classe: null
+  lp_base: 100
+  origem: 1400
+  pop: null
+  aprendizado: 3101
+  ix_id: null
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  prepend_base: 0
+  bh_upstream: ''
+  default_route: false
+  bfd: true
+  graceful_restart: true
+  timer_keepalive: 10
+  timer_hold: 30
+  prefixos:
+    v4: []
+    v6: []
+  te_prefixos:
+    v4: []
+    v6: []
+  communities: []
+  large_communities: []
+- id: 4
+  nome: TRANSITO_GAMA_64515
+  tipo: upstream
+  asn: 64515
+  classe: null
+  lp_base: 100
+  origem: 1400
+  pop: null
+  aprendizado: 3102
+  ix_id: null
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  prepend_base: 0
+  bh_upstream: ''
+  default_route: false
+  bfd: true
+  graceful_restart: true
+  timer_keepalive: 10
+  timer_hold: 30
+  prefixos:
+    v4: []
+    v6: []
+  te_prefixos:
+    v4: []
+    v6: []
+  communities: []
+  large_communities: []
+blocos:
+  v4:
+  - prefixo: 10.100.0.0/22
+    communities: []
+  - prefixo: 10.100.0.0/23
+    communities:
+    - 64516:2:3333
+  - prefixo: 10.100.0.0/24
+    communities: []
+  - prefixo: 10.100.1.0/24
+    communities: []
+  - prefixo: 10.100.2.0/23
+    communities: []
+  - prefixo: 10.100.2.0/24
+    communities: []
+  - prefixo: 10.100.3.0/24
+    communities: []
+  v6:
+  - prefixo: 2001:db8:2000::/36
+    communities: []

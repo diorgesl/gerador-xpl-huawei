@@ -1,0 +1,131 @@
+# gerado por bgpgen - nao editar a mao
+# peer 1 - upstream - AS14840 - token 14840
+# pressupoe o bloco base ja aplicado neste equipamento
+
+!- conteudo de EXEMPLO no PLANO: troque pelos prefixos reais antes de subir
+xpl ip-prefix-list PL-TE-PREFER-14840-V4
+ 198.51.100.0 24 le 24
+end-list
+
+xpl route-filter UP-14840-IMPORT-V4
+ call route-filter IMPORT-SANITY-V4
+ if as-path matches-any AP-BLOCK-14840 then
+  refuse
+ endif
+ apply local-preference 100
+ apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+ apply large-community {64512:1000:14840} overwrite
+ if ip route-destination in PL-TE-PREFER-14840-V4 or as-path matches-any AP-TE-PREFER-14840 then
+  apply local-preference 250
+ endif
+ approve
+end-filter
+
+xpl route-filter UP-14840-EXPORT-V4
+ if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in {0.0.0.0 0 ge 32 le 32} then
+  if community matches-any CL-BLACKHOLE-PROPAGATE then
+   apply community {14840:666} overwrite
+   finish
+  else
+   refuse
+  endif
+ endif
+ call route-filter EXPORT-SANITY
+ if community matches-any {64512:2000} then
+  refuse
+ endif
+ if community matches-any CL-NOADV-14840 or large-community matches-any LC-NOADV-14840 then
+  refuse
+ endif
+ if community matches-any CL-ONLY-NOT-UP then
+  refuse
+ endif
+ if community matches-any CL-5PPA-01 or large-community matches-any LC-5PPA-14840 then
+  if community matches-any {64512:5014} or large-community matches-any LC-PREP3-14840 then
+   apply as-path 64512 3 additive
+  elseif community matches-any {64512:5013} or large-community matches-any LC-PREP2-14840 then
+   apply as-path 64512 2 additive
+  elseif community matches-any {64512:5012} or large-community matches-any LC-PREP1-14840 then
+   apply as-path 64512 1 additive
+  endif
+ else
+  if community matches-any {64512:614} then
+   apply as-path 64512 3 additive
+  elseif community matches-any {64512:613} then
+   apply as-path 64512 2 additive
+  elseif community matches-any {64512:612} then
+   apply as-path 64512 1 additive
+  endif
+ endif
+ apply as-path 64512 1 additive
+ apply med 0
+ call route-filter APPLY-PEER-14840
+ finish
+end-filter
+
+xpl community-list CL-NOADV-14840
+ 64512:200,
+ 64512:201,
+ 64512:5010
+end-list
+
+xpl large-community-list LC-NOADV-14840
+ 64512:0:14840
+end-list
+
+xpl community-list CL-5PPA-01
+ 64512:5010,
+ 64512:5011,
+ 64512:5012,
+ 64512:5013,
+ 64512:5014
+end-list
+
+xpl large-community-list LC-5PPA-14840
+ 64512:0:14840,
+ 64512:1:14840,
+ 64512:2:14840,
+ 64512:3:14840,
+ 64512:4:14840
+end-list
+
+xpl large-community-list LC-PREP1-14840
+ 64512:1:14840
+end-list
+
+xpl large-community-list LC-PREP2-14840
+ 64512:2:14840
+end-list
+
+xpl large-community-list LC-PREP3-14840
+ 64512:3:14840
+end-list
+
+xpl as-path-list AP-BLOCK-14840
+ pass '270814'
+end-list
+
+xpl as-path-list AP-TE-PREFER-14840
+ origin '264381'
+end-list
+
+xpl route-filter APPLY-PEER-14840
+ apply community community-list CL-PEER-14840 additive
+ break
+end-filter
+
+bgp 64512
+ peer 203.0.113.1 as-number 14840
+ peer 203.0.113.1 description UPSTREAM-01-AS14840
+ peer 203.0.113.1 route-limit 1500000 alert-only
+ peer 203.0.113.1 public-as-only force
+ peer 203.0.113.1 timer keepalive 10 hold 30
+ peer 203.0.113.1 capability-advertise graceful-restart
+ peer 203.0.113.1 bfd enable
+
+ ipv4-family unicast
+  peer 203.0.113.1 enable
+  peer 203.0.113.1 route-filter UP-14840-IMPORT-V4 import
+  peer 203.0.113.1 route-filter UP-14840-EXPORT-V4 export
+  peer 203.0.113.1 advertise-community
+  peer 203.0.113.1 advertise-large-community

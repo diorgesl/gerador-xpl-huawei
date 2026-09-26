@@ -1,0 +1,78 @@
+# gerado por bgpgen - nao editar a mao
+# peer 10 - ix - AS26162 - token IX-SP
+# pressupoe o bloco base ja aplicado neste equipamento
+
+xpl route-filter IX-IX-SP-IMPORT-V4
+ call route-filter IMPORT-SANITY-V4
+
+ if as-path length ge 4 then
+  refuse
+ endif
+
+ apply community {64512:1300, 64512:3010, 64512:2000} overwrite
+ apply large-community {64512:1001:9999} overwrite
+
+ if as-path matches-any AP-IX-IX-SP then
+  apply local-preference 195
+ else
+  apply local-preference 190
+ endif
+
+ finish
+ end-filter
+
+xpl route-filter IX-IX-SP-EXPORT-V4
+ call route-filter EXPORT-SANITY
+
+ if community matches-any {64512:2000} then
+  refuse
+ endif
+
+ if community matches-any CL-NOADV-IX-SP or large-community matches-any LC-NOADV-IX-SP then
+  refuse
+ endif
+
+ if community matches-any CL-ONLY-NOT-IX then
+  refuse
+ endif
+
+ if community matches-any {64512:624} then
+  apply as-path 64512 3 additive
+ elseif community matches-any {64512:623} then
+  apply as-path 64512 2 additive
+ elseif community matches-any {64512:622} then
+  apply as-path 64512 1 additive
+ endif
+
+ finish
+ end-filter
+
+xpl community-list CL-NOADV-IX-SP
+ 64512:200,
+ 64512:203,
+ 64512:5100
+ end-list
+
+xpl large-community-list LC-NOADV-IX-SP
+ 64512:0:26162
+ end-list
+
+xpl as-path-list AP-IX-IX-SP
+ peer-is '15169'
+ end-list
+
+bgp 64512
+ peer 187.16.192.2 as-number 26162
+ peer 187.16.192.2 description IX-SP-AS26162
+ peer 187.16.192.2 route-limit 500000 alert-only
+ peer 187.16.192.2 public-as-only force
+ undo peer 187.16.192.2 check-first-as enable
+ peer 187.16.192.2 capability-advertise graceful-restart
+ peer 187.16.192.2 bfd enable
+
+ ipv4-family unicast
+  peer 187.16.192.2 enable
+  peer 187.16.192.2 route-filter IX-IX-SP-IMPORT-V4 import
+  peer 187.16.192.2 route-filter IX-IX-SP-EXPORT-V4 export
+  peer 187.16.192.2 advertise-community
+  peer 187.16.192.2 advertise-large-community

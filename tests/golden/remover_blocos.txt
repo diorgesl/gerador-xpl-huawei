@@ -1,0 +1,25 @@
+!- gerado por bgpgen - nao editar a mao
+!- remocao dos blocos proprios do AS64512
+!- Desligar o prefixo e o que sai abaixo. O bloco cobre o cadastro
+!- inteiro, inclusive o prefixo fora de servico, que na tela e a linha
+!- comecada por !-: ele nao sai em configuracao nenhuma, mas o
+!- equipamento pode ainda te-lo, e e por este bloco que ele sai de la.
+!- Para tirar apenas o tratamento manual e deixar o prefixo anunciado,
+!- esvazie a lista dele na tela e cole o bloco de originacao de novo: o
+!- filtro continua existindo com o 1000 e mais nada.
+!- A ordem importa: o filtro nao pode ser apagado enquanto o network o
+!- referencia, e a estatica sai por ultimo para o prefixo nao sumir da
+!- tabela com o network ainda apontando para ela.
+
+undo network 38.252.64.0 255.255.252.0
+undo xpl route-filter ORIGEM-38-252-64-0_22
+undo ip route-static 38.252.64.0 255.255.252.0 NULL0
+
+undo network 38.252.64.0 255.255.255.0
+undo xpl route-filter ORIGEM-38-252-64-0_24
+undo ip route-static 38.252.64.0 255.255.255.0 NULL0
+
+undo network 2804:36b4:: 32
+undo xpl route-filter ORIGEM-2804-36b4_32
+undo ipv6 route-static 2804:36b4:: 32 NULL0
+

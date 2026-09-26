@@ -1,0 +1,81 @@
+# gerado por bgpgen - nao editar a mao
+# peer 9 - parceiro - AS64500 - token 64500
+# pressupoe o bloco base ja aplicado neste equipamento
+
+xpl ip-prefix-list PL-CUST-64500-V4
+ 45.169.236.0 22 le 24
+end-list
+
+xpl ip-prefix-list PL-CUST-64500-BH-V4
+ 45.169.236.0 22 ge 32 le 32
+end-list
+
+# Filtro XPL Import
+xpl route-filter CUST-64500-IMPORT-V4
+ call route-filter IMPORT-SANITY-V4
+ if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in PL-CUST-64500-BH-V4 then
+  apply ip next-hop 192.0.2.1
+  apply local-preference 400
+  apply community {64512:9666, 64512:200} additive
+  apply large-community {64512:1000:64500} additive
+  finish
+ endif
+ if not ip route-destination in PL-CUST-64500-V4 then
+  refuse
+ endif
+ if not as-path matches-any AP-CUST-64500 then
+  refuse
+ endif
+ call route-filter APPLY-CUSTOMER-LP
+ apply community {64512:1120, 64512:2001, 64512:2091} additive
+ apply large-community {64512:1000:64500} additive
+ call route-filter APPLY-PEER-64500
+ finish
+end-filter
+
+xpl route-filter CUST-64500-EXPORT-V4
+ if community matches-any CL-NOADV-CUST then
+  refuse
+ endif
+ if community matches-any CL-ONLY-NOT-CLIENT then
+  refuse
+ endif
+ if large-community matches-any {64512:0:64500} then
+  refuse
+ endif
+ if community matches-any {64512:1900, 64512:1901} then
+  refuse
+ endif
+ if large-community matches-any {64512:3:64500} then
+  apply as-path 64512 3 additive
+ elseif large-community matches-any {64512:2:64500} then
+  apply as-path 64512 2 additive
+ elseif large-community matches-any {64512:1:64500} then
+  apply as-path 64512 1 additive
+ endif
+ finish
+end-filter
+
+xpl as-path-list AP-CUST-64500
+ origin '64500'
+end-list
+
+xpl route-filter APPLY-PEER-64500
+ apply community community-list CL-PEER-64500 additive
+ break
+end-filter
+
+bgp 64512
+ peer 198.51.100.2 as-number 64500
+ peer 198.51.100.2 description PARCEIRO-AS64500
+ peer 198.51.100.2 route-limit 50 alert-only
+ peer 198.51.100.2 public-as-only force
+ peer 198.51.100.2 capability-advertise graceful-restart
+ peer 198.51.100.2 bfd enable
+
+ ipv4-family unicast
+  peer 198.51.100.2 enable
+  peer 198.51.100.2 route-filter CUST-64500-IMPORT-V4 import
+  peer 198.51.100.2 route-filter CUST-64500-EXPORT-V4 export
+  peer 198.51.100.2 advertise-community
+  peer 198.51.100.2 advertise-large-community

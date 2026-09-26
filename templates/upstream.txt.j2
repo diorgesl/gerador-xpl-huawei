@@ -1,0 +1,78 @@
+{% import "_macros.j2" as m %}
+{{ m.cabecalho(peer) }}
+
+{% if grupo %}
+{# membro de grupo: quem carrega a politica e o arquivo do grupo. Este ramo
+   nao chama sessao_do_peer/familia_bgp: essas macros sao do peer avulso e
+   reemitiriam AS_ONLY/timers/graceful-restart/bfd/advertise-community por
+   membro, coisa que so deve existir uma vez, no arquivo do grupo. #}
+{% if peer.tem_filtro_proprio() %}
+{% for fam in peer.familias() %}
+{#- a mesma guarda do ramo de baixo, pelo mesmo motivo: sem ela o newline da
+    chamada vira um branco a mais quando a familia nao tem lista de TE, e o
+    membro com filtro proprio mas sem excecao de TE sai com dois brancos
+    depois do cabecalho. #}
+{% if peer.te_prefixos[fam] %}
+{{ m.te_prefix_list(peer, fam) }}
+{% endif %}
+{{ m.filtro_upstream_import(peer, fam) }}
+
+{{ m.filtro_upstream_export(peer, fam, true) }}
+{% endfor %}
+{{ m.listas_upstream(peer) }}
+
+{{ m.apply_peer(peer) }}
+
+{% endif %}
+bgp {{ plan.ASN }}
+{% for fam in peer.familias() %}
+ peer {{ peer.sessoes[fam].remoto }} description {{ peer.descricao }}
+{% if not grupo.asn %}
+ peer {{ peer.sessoes[fam].remoto }} as-number {{ peer.asn }}
+{% endif %}
+ peer {{ peer.sessoes[fam].remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
+ peer {{ peer.sessoes[fam].remoto }} group {{ grupo.nome }}
+{% endfor %}
+{% for fam in peer.familias() %}
+{% set U = fam|upper %}
+{% set s = peer.sessoes[fam] %}
+ {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
+  peer {{ s.remoto }} enable
+  peer {{ s.remoto }} group {{ grupo.nome }}
+{% if peer.tem_filtro_proprio() %}
+  peer {{ s.remoto }} route-filter UP-{{ peer.token }}-IMPORT-{{ U }} import
+  peer {{ s.remoto }} route-filter UP-{{ peer.token }}-EXPORT-{{ U }} export
+{% endif %}
+{% endfor %}
+{% else %}
+{% for fam in peer.familias() %}
+{#- o if repete a guarda de dentro da macro de proposito: sem ele o newline da
+    chamada vira uma linha em branco a mais quando a familia nao tem lista de
+    TE - o peer sem excecao de TE ganhava um branco depois do cabecalho e outro
+    antes de cada IMPORT. A macro nao pode retirar esse newline: ele e texto do
+    template, nao da macro. #}
+{% if peer.te_prefixos[fam] %}
+{{ m.te_prefix_list(peer, fam) }}
+{% endif %}
+{{ m.filtro_upstream_import(peer, fam) }}
+
+{{ m.filtro_upstream_export(peer, fam, true) }}
+{% endfor %}
+{{ m.listas_upstream(peer) }}
+
+{{ m.apply_peer(peer) }}
+
+bgp {{ plan.ASN }}
+{# o grupo de sessao termina em newline e familia_bgp ja abre com a linha em
+   branco. Sem o corte abaixo a emenda sai com duas. O separador fica entre
+   grupos, nunca depois do ultimo. #}
+{% for fam in peer.familias() %}
+{{ m.sessao_do_peer(peer, fam) }}{{ "\n" if not loop.last -}}
+{% endfor %}
+{% for fam in peer.familias() %}
+{% set U = fam|upper %}
+{{ m.familia_bgp(peer, fam,
+     "UP-" ~ peer.token ~ "-IMPORT-" ~ U,
+     "UP-" ~ peer.token ~ "-EXPORT-" ~ U) }}
+{% endfor %}
+{% endif %}

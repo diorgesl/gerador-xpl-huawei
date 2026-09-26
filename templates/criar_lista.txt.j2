@@ -1,0 +1,29 @@
+{% import "_macros.j2" as m %}
+{# O alvo e o peer avulso ou o membro com filtro proprio, num tipo com
+   APPLY-PEER, e o grupo de upstream: a CL-PEER de um upstream descreve a REDE
+   REMOTA, nao o link, entao ela mora no grupo e o quadro sai uma vez para os
+   dois links em vez de uma por membro. #}
+{% set alvo = grupo if grupo else peer %}
+{% if plan.quadro_ao_criar(alvo, de_grupo=grupo is not none) %}
+# gerado por bgpgen - nao editar a mao
+# ao criar o {{ "grupo" if grupo else "peer" }} {{ alvo.id }} - {{ alvo.tipo }}{{ (" - AS" ~ alvo.asn) if not grupo else "" }}
+# Cole este quadro na primeira vez que a sessao subir, e de novo quando a
+# lista mudar: re-colar troca o conteudo pelo que esta no cadastro.
+# O bloco do {{ "grupo" if grupo else "peer" }} so chama o filtro, entao reaplicar o bloco do {{ "grupo" if grupo else "peer" }}
+# nunca mexe no que voce escreveu aqui.
+
+xpl community-list CL-PEER-{{ alvo.token }}
+{% for c in alvo.communities %}
+ {{ c }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+
+{% if alvo.large_communities %}
+xpl large-community-list LC-PEER-{{ alvo.token }}
+{% for c in alvo.large_communities %}
+ {{ c }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+{% endif %}
+{{ m.apply_peer(alvo) }}
+{% endif %}

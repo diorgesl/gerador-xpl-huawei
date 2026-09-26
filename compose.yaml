@@ -1,0 +1,22 @@
+# bgpgen em container. Sobe com "docker compose up --build" e a tela fica em
+# http://127.0.0.1:8765/.
+services:
+  bgpgen:
+    build: .
+    image: bgpgen
+    ports:
+      # 8765 na maquina, 8000 dentro do container. Nao da para usar a 8000 do
+      # host: ela e da stack do geronet, que ja respondeu no lugar deste app
+      # uma vez com um {"detail":"Not Found"}.
+      - "127.0.0.1:8765:8000"
+    volumes:
+      # O checkout inteiro entra no lugar do que a imagem copiou. Assim o
+      # peers.yaml e o out/ sao os mesmos do repositorio, editar template vale
+      # na hora (o Jinja recarrega sozinho) e o bloco gerado aparece no disco
+      # da maquina para colar no F1A. Apagar esta linha congela a imagem.
+      - .:/app
+    # uid do dono dos arquivos que o app escreve. Em macOS o padrao 1000 ja
+    # escreve no bind mount; num servidor Linux vale exportar o uid do
+    # operador: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose up
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    restart: unless-stopped

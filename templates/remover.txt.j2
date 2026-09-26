@@ -1,0 +1,84 @@
+!- gerado por bgpgen - nao editar a mao
+!- remocao do peer {{ peer.id }} - {{ peer.tipo }} - AS{{ peer.asn }}
+!- cole so isto para excluir a sessao do equipamento
+
+{% for fam in peer.familias() %}
+{% set s = peer.sessoes[fam] %}
+undo peer {{ s.remoto }}
+{% endfor %}
+
+{#- o que tem eixo de familia sai do laco; o que nao tem sai depois dele,
+    uma vez so. E a mesma divisao dos blocos de peer: dentro do laco, um
+    objeto sem a familia no nome seria derrubado duas vezes num peer
+    dual-stack. #}
+{% for fam in peer.familias() %}
+{% set U = fam|upper %}
+{% set kw = "ipv6-prefix-list" if fam == "v6" else "ip-prefix-list" %}
+{% if peer.tipo in plan.TIPOS_DOWNSTREAM and not grupo %}
+undo xpl route-filter CUST-{{ peer.token }}-EXPORT-{{ U }}
+undo xpl route-filter CUST-{{ peer.token }}-IMPORT-{{ U }}
+undo xpl {{ kw }} PL-CUST-{{ peer.token }}-BH-{{ U }}
+undo xpl {{ kw }} PL-CUST-{{ peer.token }}-{{ U }}
+{% elif peer.tipo in plan.TIPOS_DOWNSTREAM and grupo and peer.tem_filtro_proprio() %}
+undo xpl route-filter CUST-{{ peer.token }}-IMPORT-{{ U }}
+undo xpl {{ kw }} PL-CUST-{{ peer.token }}-BH-{{ U }}
+undo xpl {{ kw }} PL-CUST-{{ peer.token }}-{{ U }}
+{% elif peer.tipo == "upstream" and (not grupo or peer.tem_filtro_proprio()) %}
+undo xpl route-filter UP-{{ peer.token }}-EXPORT-{{ U }}
+undo xpl route-filter UP-{{ peer.token }}-IMPORT-{{ U }}
+{% if peer.te_prefixos[fam] %}
+undo xpl {{ kw }} PL-TE-PREFER-{{ peer.token }}-{{ U }}
+{% endif %}
+{% elif peer.tipo == "ix" and (not grupo or peer.tem_filtro_proprio()) %}
+undo xpl route-filter IX-{{ peer.token }}-EXPORT-{{ U }}
+undo xpl route-filter IX-{{ peer.token }}-IMPORT-{{ U }}
+{% elif peer.tipo == "pni" and (not grupo or peer.tem_filtro_proprio()) %}
+undo xpl route-filter PNI-{{ peer.token }}-EXPORT-{{ U }}
+undo xpl route-filter PNI-{{ peer.token }}-IMPORT-{{ U }}
+{% endif %}
+{% endfor %}
+
+{#- os sem eixo de familia, na ordem em que o bloco do peer os define. O que
+    o bloco emite so as vezes (o block list e a excecao de TE do upstream, a
+    lista de membros do IX) sai daqui pelo mesmo portao: derrubar objeto que
+    nao existe e erro no equipamento. #}
+{% if peer.tipo in plan.TIPOS_DOWNSTREAM and (not grupo or peer.tem_filtro_proprio()) %}
+undo xpl as-path-list AP-CUST-{{ peer.token }}
+undo xpl route-filter APPLY-PEER-{{ peer.token }}
+{% elif peer.tipo == "upstream" and (not grupo or peer.tem_filtro_proprio()) %}
+undo xpl community-list CL-5PPA-{{ "%02d"|format(peer.id) }}
+undo xpl large-community-list LC-5PPA-{{ peer.token }}
+undo xpl large-community-list LC-PREP1-{{ peer.token }}
+undo xpl large-community-list LC-PREP2-{{ peer.token }}
+undo xpl large-community-list LC-PREP3-{{ peer.token }}
+{% if peer.ap_block %}
+undo xpl as-path-list AP-BLOCK-{{ peer.token }}
+{% endif %}
+{% if peer.ap_te %}
+undo xpl as-path-list AP-TE-PREFER-{{ peer.token }}
+{% endif %}
+undo xpl community-list CL-NOADV-{{ peer.token }}
+undo xpl large-community-list LC-NOADV-{{ peer.token }}
+undo xpl route-filter APPLY-PEER-{{ peer.token }}
+{% elif peer.tipo == "ix" and (not grupo or peer.tem_filtro_proprio()) %}
+{% if peer.ap_prefer %}
+undo xpl as-path-list AP-IX-{{ peer.token }}
+{% endif %}
+undo xpl community-list CL-NOADV-{{ peer.token }}
+undo xpl large-community-list LC-NOADV-{{ peer.token }}
+{% elif peer.tipo == "pni" and (not grupo or peer.tem_filtro_proprio()) %}
+undo xpl as-path-list AP-{{ peer.token }}-ALLOWED
+undo xpl community-list CL-NOADV-{{ peer.token }}
+undo xpl large-community-list LC-NOADV-{{ peer.token }}
+{% endif %}
+
+{% if peer.tipo in plan.TIPOS_COM_APPLY_PEER %}
+!- ATENCAO: CL-PEER-{{ peer.token }} tem o conteudo no cadastro do peer,
+!- entao da para recriar pelo quadro "ao criar o peer". O undo segue
+!- comentado porque derrubar a sessao nao exige apagar a lista, e um
+!- descomente sem querer leva embora o que esta la.
+!- undo xpl community-list CL-PEER-{{ peer.token }}
+{% if peer.large_communities %}
+!- undo xpl large-community-list LC-PEER-{{ peer.token }}
+{% endif %}
+{% endif %}

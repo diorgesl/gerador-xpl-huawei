@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bgpgen - sessoes BGP do AS{{ plan.ASN }}</title>
+{% include "_copiar.html" %}
+
+
+{# As tabelas do plan.py chegam aqui inteiras, e o JS abaixo so as le. Nenhum
+   valor de politica e reescrito na tela: trocar o LP do cliente no plan.py
+   muda este bloco junto, sem ninguem lembrar de mexer no JavaScript. #}
+<script id="padroes" type="application/json">{{ PADROES|tojson }}</script>
+<script>
+(function () {
+ "use strict";
+ var blob = document.getElementById("padroes");
+ if (!blob) return;
+ var p = JSON.parse(blob.textContent);
+
+ function campo(nome) { return document.querySelector('[name="' + nome + '"]'); }
+ function texto(nome) { var c = campo(nome); return c ? c.value : null; }
+ function poe(nome, v) {
+  var c = campo(nome);
+  if (c && v !== null && v !== undefined) c.value = String(v);
+ }
+
+ // mesma regra do _origem_padrao: no downstream quem manda e a classe, nos
+ // outros tipos e a marca do proprio tipo. A lista de tipos vem do plan.py
+ // pelo blob, entao o parceiro entrou aqui sem esta funcao saber que existe
+ function origemEsperada(tipo, classe) {
+  if (p.downstream.indexOf(tipo) >= 0 && p.origem_classe[classe]) return p.origem_classe[classe];
+  return p.origem_tipo[tipo] || p.origem_tipo.cliente;
+ }
+
+ // a lista de origem muda com o tipo - o cliente so aceita as quatro da
+ // classe - entao trocar o tipo obriga a redesenhar as opcoes
+ function redesenhaOrigens(tipo, manter) {
+  var sel = campo("origem");
+  if (!sel) return;
+  var lista = p.origens_por_tipo[tipo] || p.origens_por_tipo.cliente;
+  var escolhido = lista.indexOf(manter) >= 0 ? manter : origemEsperada(tipo, texto("classe"));
+  sel.innerHTML = "";
+  for (var i = 0; i < lista.length; i++) {
+   var o = document.createElement("option");
+   o.value = String(lista[i]);
+   o.textContent = " " + lista[i] + " - " + p.origem_nome[String(lista[i])];
+   o.selected = lista[i] === escolhido;
+   sel.appendChild(o);
+  }
+ }
+
+ var tipoAnterior = texto("tipo");
+ var classeAnterior = texto("classe");
+
+ function cascata() {
+  var tipo = texto("tipo");
+  var classe = texto("classe");
+  var antes = p.tipos[tipoAnterior];
+  var agora = p.tipos[tipo];
+
+  // so reescreve o campo que ainda esta no default do tipo anterior: o que
+  // o operador ja digitou por cima fica onde esta
+  if (tipo !== tipoAnterior && antes && agora) {
+   if (texto("lp_base") === String(antes.lp_base)) poe("lp_base", agora.lp_base);
+   if (texto("route_limit") === String(antes.route_limit)) poe("route_limit", agora.route_limit);
+   if (texto("timer_keepalive") === String(antes.timer_keepalive)) poe("timer_keepalive", agora.timer_keepalive);
+   if (texto("timer_hold") === String(antes.timer_hold)) poe("timer_hold", agora.timer_hold);
+  }
+
+  if (tipo !== tipoAnterior) {
+   redesenhaOrigens(tipo, Number(texto("origem")));
+  } else if (p.downstream.indexOf(tipo) >= 0 && classe !== classeAnterior) {
+   // a classe do downstream carrega a origem junto, mas so se a origem ainda
+   // for a da classe anterior
+   var sel = campo("origem");
+   if (sel && String(p.origem_classe[classeAnterior] || "") === sel.value) {
+    sel.value = String(origemEsperada(tipo, classe));
+   }
+  }
+
+  tipoAnterior = tipo;
+  classeAnterior = classe;
+ }
+
+ var st = campo("tipo");
+ if (st) st.addEventListener("change", cascata);
+ var sc = campo("classe");
+ if (sc) sc.addEventListener("change", cascata);
+})();
+</script>
+{% include "_estilo.html" %}
+
+</head>
+<body>
+
+<header class="topo">
+ <div class="marca">
+  <span class="marca-nome">bgpgen</span>
+  <span class="marca-sub">sessoes BGP do AS{{ plan.ASN }}</span>
+ </div>
+
+ {# O AS da rede: e ele que da o namespace de toda community do plano e o
+    numero do `bgp` de cada sessao. O campo grava no topo do peers.yaml e
+    depois disso a pagina inteira sai no AS novo, sem reiniciar o app.
+
+    O namespace das standard fica em branco quando e o proprio ASN, que e o
+    caso de todo ASN de ate 16 bits: em branco a chave nem vai para o
+    arquivo, e o que a tela mostra e o que a config vai escrever. So um ASN
+    de 32 bits precisa dele, porque nao cabe nos 16 bits da RFC 1997 - e o
+    que entra ali e um numero de 16 bits que a rede escolhe, nunca o ASN de
+    32 bits, que fica so no campo do lado.
+
+    Recusando, os dois campos voltam com o que foi digitado: o erro e do
+    valor que esta na tela, e nao do que ja esta gravado. #}
+ <form class="topo-asn" method="post" action="/asn">
+  {# o campo mostra o que o operador digitou enquanto a recusa esta na tela,
+     e o que esta gravado em todo o resto #}
+  {% set asn_valor = asn_form.asn if asn_form else plan.ASN %}
+  {% set ns_valor = asn_form.politica if asn_form
+     else (plan.politica if plan.politica != plan.asn else '') %}
+  <label class="campo{{ ' campo-com-erro' if erros.get('asn_rede') }}" id="f-asn_rede">
+   <span class="rotulo">AS da rede</span>
+   <input name="asn_rede" value="{{ asn_valor }}" inputmode="numeric" size="10">
+   {% if erros.get('asn_rede') %}<span class="msg-erro">{{ erros.get('asn_rede') }}</span>{% endif %}
+  </label>
+  <label class="campo{{ ' campo-com-erro' if erros.get('asn_politica') }}" id="f-asn_politica">
+   <span class="rotulo">namespace das standard <span class="tag">so com ASN de 32 bits</span></span>
+   <input name="asn_politica" value="{{ ns_valor }}" inputmode="numeric" size="10"
+          placeholder="= AS da rede">
+   {% if erros.get('asn_politica') %}<span class="msg-erro">{{ erros.get('asn_politica') }}</span>{% endif %}
+  </label>
+  <button class="btn" type="submit">gravar AS</button>
+ </form>
+
+ <div class="topo-estado">
+  {# O base nao tem aviso: ele e montado no momento do download, entao o
+     arquivo que o operador recebe e sempre o que o plan.py diz agora. Nao
+     ha o que comparar com um estado anterior. #}
+  <a class="btn btn-fantasma" href="/base.txt">baixar bloco base</a>
+ </div>
+</header>
+
+<div class="linha{{ ' com-saida' if saida or saida_remover }}">
+
+ <aside id="lista" class="painel">
+  <div class="painel-pe"><a class="btn btn-fantasma" href="/grupo/novo">+ novo grupo</a></div>
+  <h2>Peers</h2>
+  <div class="painel-corpo">
+   {% if peers %}
+   <table class="tabela-peers">
+    <thead>
+     {# O token e o ASN, entao a coluna ASN ja o mostra. A coluna do apelido
+        so aparece quando algum peer tem um: so o IX e o PNI usam, e ela
+        ficaria em branco na lista inteira do resto. A celula mostra o ID e
+        leva para /peer/<token>, que e a URL do registro. #}
+     {% set tem_apelido = peers|selectattr('apelido')|list %}
+     <tr>
+      <th>ID</th><th>tipo</th><th>ASN</th>
+      {% if tem_apelido %}<th>apelido</th>{% endif %}
+     </tr>
+    </thead>
+    <tbody>
+     {% for p in peers %}
+     <tr{% if peer and p.token == peer.token %} aria-current="true"{% endif %}>
+      <td class="mono"><a href="/peer/{{ p.token }}">{{ "%02d"|format(p.id) }}</a></td>
+      <td>{{ p.tipo }}</td>
+      <td class="mono">{{ p.asn }}</td>
+      {% if tem_apelido %}<td class="mono">{{ p.apelido }}</td>{% endif %}
+     </tr>
+     {% endfor %}
+    </tbody>
+   </table>
+   {% else %}
+   <p class="vazio">nenhum peer cadastrado</p>
+   {% endif %}
+  </div>
+  <div class="painel-pe">
+   <a class="btn btn-fantasma" href="/peer/novo">criar peer</a>
+  </div>
+ </aside>
+
+ <main id="formulario" class="painel">
+  <h2>{{ "editar " ~ peer.token if peer and peer.token else "novo peer" }}</h2>
+  <div class="painel-corpo">
+  {# O validate.py devolve o campo de cada erro de proposito, para o
+     formulario marcar o campo e nao so avisar no topo. Nem todo erro tem
+     campo: os do bgpq4 saem da consulta ao IRR e nao pertencem a nenhum
+     input. Estes ficam so no resumo, em texto, porque uma ancora para um
+     alvo que nao existe nao leva a lugar nenhum. O asn_rede e o
+     asn_politica sao os dois do cabecalho. #}
+  {% set ancoraveis = ['apelido', 'id', 'nome', 'tipo', 'grupo_id', 'asn', 'descricao',
+                       'classe', 'lp_base', 'origem', 'pop', 'aprendizado',
+                       'ix_id', 'route_limit', 'prepend_base',
+                       'timer_keepalive', 'timer_hold', 'bh_upstream',
+                       'default_route',
+                       'prefixos', 'prefixos_v4', 'prefixos_v6',
+                       'te_prefixos', 'te_prefixos_v4', 'te_prefixos_v6',
+                       'ap_block', 'ap_te', 'ap_allowed', 'ap_prefer',
+                       'communities', 'large_communities',
+                       'sessoes', 'sessoes.v4.local', 'sessoes.v4.remoto',
+                       'sessoes.v6.local', 'sessoes.v6.remoto',
+                       'asn_rede', 'asn_politica',
+                       'blocos_v4', 'blocos_v6',
+                       'confirmado'] %}
+  {% if erros %}
+  <div class="noticia erro" role="alert">
+   <div>
+    <strong>{{ erros|length }} campo(s) para corrigir</strong>
+    <ul>
+     {% for campo, msg in erros.items() %}
+     <li>{% if campo in ancoraveis %}<a href="#f-{{ campo|replace('.', '_') }}">{{ msg }}</a>{% else %}{{ msg }}{% endif %}</li>
+     {% endfor %}
+    </ul>
+   </div>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/peer">
+   {# o id vai escondido porque e a identidade do registro: o token muda
+      junto com o ASN, entao quem diz qual entrada esta por baixo e o id.
+      Criando nao ha entrada por baixo, e o campo nao sai: escondido ali
+      ele apontaria para o peer que por acaso ocupasse aquele id #}
+   {% if peer and not criando %}
+   <input type="hidden" name="id_original" value="{{ peer.id }}">
+   {% endif %}
+
+   <fieldset class="secao">
+    <legend>identificacao</legend>
+    <div class="campos">
+     {# O token nao tem campo: ele e o ASN. O apelido existe so para o IX e
+        o PNI, onde o ASN da sessao e o do route server e se repete. Como o
+        ix_id, o campo aparece sempre e o rotulo diz de quem ele e. #}
+     <label class="campo{{ ' campo-com-erro' if erros.get('apelido') }}" id="f-apelido">
+      <span class="rotulo">apelido <span class="tag">IX e PNI</span></span>
+      <input name="apelido" value="{{ peer.apelido if peer else '' }}"
+             placeholder="{{ peer.token if peer and peer.asn else '' }}">
+      <span class="ajuda">entra no lugar do ASN no nome dos objetos</span>
+      {% if erros.get('apelido') %}<span class="msg-erro">{{ erros.get('apelido') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('id') }}" id="f-id">
+      <span class="rotulo">ID <span class="tag">0-99</span></span>
+      <input name="id" value="{{ peer.id if peer else '' }}">
+      {% if erros.get('id') %}<span class="msg-erro">{{ erros.get('id') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('nome') }}" id="f-nome">
+      <span class="rotulo">nome</span>
+      <input name="nome" value="{{ peer.nome if peer else '' }}">
+      {% if erros.get('nome') %}<span class="msg-erro">{{ erros.get('nome') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('tipo') }}" id="f-tipo">
+      <span class="rotulo">tipo</span>
+      <select name="tipo">
+       {% for t in tipos %}
+       <option value="{{ t }}"{{ " selected" if peer and peer.tipo == t }}>{{ t }}</option>
+       {% endfor %}
+      </select>
+      {% if erros.get('tipo') %}<span class="msg-erro">{{ erros.get('tipo') }}</span>{% endif %}
+     </label>
+     {# a lista nao filtra por tipo (isso e polimento futuro, via JS): o select
+        mostra todos os grupos e o tipo de cada um ao lado, para o operador
+        escolher com cuidado o que bate com o tipo do peer acima #}
+     <label class="campo{{ ' campo-com-erro' if erros.get('grupo_id') }}" id="f-grupo_id">
+      <span class="rotulo">grupo BGP <span class="tag">sem filtro proprio, herda do grupo</span></span>
+      <select name="grupo_id">
+       <option value="">&mdash; sem grupo &mdash;</option>
+       {% for g in (grupos or []) %}
+       <option value="{{ g.id }}"{{ " selected" if peer and peer.grupo_id == g.id }}>{{ g.nome }} ({{ g.tipo }})</option>
+       {% endfor %}
+      </select>
+      {% if erros.get('grupo_id') %}<span class="msg-erro">{{ erros.get('grupo_id') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('asn') }}" id="f-asn">
+      <span class="rotulo">ASN</span>
+      <input name="asn" value="{{ peer.asn if peer else '' }}">
+      {% if erros.get('asn') %}<span class="msg-erro">{{ erros.get('asn') }}</span>{% endif %}
+      {% for a in avisos if a.campo == 'asn' %}<span class="msg-aviso">{{ a.mensagem }}</span>{% endfor %}
+     </label>
+     <label class="campo campo-largo{{ ' campo-com-erro' if erros.get('descricao') }}" id="f-descricao">
+      <span class="rotulo">descricao <span class="tag">vai no description da sessao</span></span>
+      <input name="descricao" value="{{ peer.descricao if peer else '' }}">
+      {% if erros.get('descricao') %}<span class="msg-erro">{{ erros.get('descricao') }}</span>{% endif %}
+     </label>
+    </div>
+   </fieldset>
+
+   <fieldset class="secao">
+    <legend>politica <span class="tag">o membro sem filtro proprio nao usa estes campos</span></legend>
+    <div class="campos">
+     <label class="campo{{ ' campo-com-erro' if erros.get('classe') }}" id="f-classe">
+      <span class="rotulo">classe <span class="tag">cliente / parceiro</span></span>
+      <select name="classe">
+       <option value="">-</option>
+       {% for c in CLASSES_CLIENTE %}
+       <option value="{{ c }}"{{ " selected" if peer and peer.classe == c }}>
+        {{ c }} - {{ plan.c(ORIGEM_CLASSE[c]) }}</option>
+       {% endfor %}
+      </select>
+      {% if erros.get('classe') %}<span class="msg-erro">{{ erros.get('classe') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('lp_base') }}" id="f-lp_base">
+      <span class="rotulo">local-preference</span>
+      <input name="lp_base" list="d-lp_base" value="{{ peer.lp_base if peer else '' }}">
+      <datalist id="d-lp_base">
+       {% for t, v in LP_BASE.items() %}<option value="{{ v }}">{{ t }}</option>{% endfor %}
+      </datalist>
+      {% if erros.get('lp_base') %}<span class="msg-erro">{{ erros.get('lp_base') }}</span>{% endif %}
+     </label>
+
+     {# a origem e vocabulario fixo do plano e o validar cobra a tabela do
+        tipo, entao aqui e select e nao datalist. A lista muda com o tipo:
+        o cliente so aceita as quatro da classe, e cada peer externo tem a
+        propria marca. Se o tipo nao estiver na tabela, cai na lista cheia. #}
+     {% set origens = ORIGENS_POR_TIPO.get(peer.tipo if peer else 'cliente', ORIGEM_NOME) %}
+     <label class="campo{{ ' campo-com-erro' if erros.get('origem') }}" id="f-origem">
+      <span class="rotulo">origem (1xxx)</span>
+      <select name="origem">
+       {% for codigo in origens %}
+       <option value="{{ codigo }}"{{ " selected" if peer and peer.origem == codigo }}>
+        {{ codigo }} - {{ ORIGEM_NOME[codigo] }}</option>
+       {% endfor %}
+       {# origem gravada por uma versao anterior pode estar fora da tabela.
+          Sem esta opcao o select cairia no primeiro item e trocaria a origem
+          do peer em silencio, so por abrir a tela. #}
+       {% if peer and peer.origem and peer.origem not in origens %}
+       <option value="{{ peer.origem }}" selected>{{ peer.origem }} - fora da tabela do tipo</option>
+       {% endif %}
+      </select>
+      {% if erros.get('origem') %}<span class="msg-erro">{{ erros.get('origem') }}</span>{% endif %}
+     </label>
+
+     {# POP e ponto de aprendizado sao inventario do operador: o plano da a
+        faixa, nao a lista. Aqui e datalist - sugere o que ja foi cadastrado
+        em outro peer e aceita valor novo, que e o que um select nao faria.
+        O aprendizado ainda nasce no primeiro valor livre do bloco do tipo,
+        porque a validacao o exige em upstream e ix: vazio, o campo obrigava
+        o operador a inventar o numero no meio do cadastro. #}
+     <label class="campo{{ ' campo-com-erro' if erros.get('pop') }}" id="f-pop">
+      <span class="rotulo">POP <span class="tag">{{ POP_MIN }}-{{ POP_MAX }}</span></span>
+      <input name="pop" list="d-pop" value="{{ peer.pop or '' }}"
+             placeholder="{{ POP_MIN }}">
+      <datalist id="d-pop">
+       {% for v in POP_USADOS %}<option value="{{ v }}">ja cadastrado</option>{% endfor %}
+      </datalist>
+      {% if erros.get('pop') %}<span class="msg-erro">{{ erros.get('pop') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('aprendizado') }}" id="f-aprendizado">
+      <span class="rotulo">ponto de aprendizado
+       <span class="tag">{{ APRENDIZADO_MIN }}-{{ APRENDIZADO_MAX }}</span></span>
+      <input name="aprendizado" list="d-aprendizado" value="{{ peer.aprendizado or '' }}"
+             placeholder="{{ APRENDIZADO_MIN }}">
+      <datalist id="d-aprendizado">
+       {% for v in APRENDIZADO_USADOS %}<option value="{{ v }}">ja cadastrado</option>{% endfor %}
+      </datalist>
+      {% if erros.get('aprendizado') %}<span class="msg-erro">{{ erros.get('aprendizado') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('ix_id') }}" id="f-ix_id">
+      <span class="rotulo">ID do IX no PeeringDB <span class="tag">IX</span></span>
+      <input name="ix_id" value="{{ peer.ix_id or '' }}">
+      {% if erros.get('ix_id') %}<span class="msg-erro">{{ erros.get('ix_id') }}</span>{% endif %}
+     </label>
+    </div>
+   </fieldset>
+
+   <fieldset class="secao">
+    <legend>limites e timers</legend>
+    <div class="campos">
+     <label class="campo{{ ' campo-com-erro' if erros.get('route_limit') }}" id="f-route_limit">
+      <span class="rotulo">route-limit</span>
+      <input name="route_limit" list="d-route_limit" value="{{ peer.route_limit if peer else '' }}">
+      <datalist id="d-route_limit">
+       {% for t, v in ROUTE_LIMIT.items() %}<option value="{{ v }}">{{ t }}</option>{% endfor %}
+      </datalist>
+      {% if erros.get('route_limit') %}<span class="msg-erro">{{ erros.get('route_limit') }}</span>{% endif %}
+      {% for a in avisos if a.campo == 'route_limit' %}<span class="msg-aviso">{{ a.mensagem }}</span>{% endfor %}
+      <details class="tabela-plano">
+       <summary>tabela do plano</summary>
+       <table>
+        <tbody>
+         {% for t, v in ROUTE_LIMIT.items() %}
+         <tr><td>{{ t }}</td><td>{{ v }}</td></tr>
+         {% endfor %}
+        </tbody>
+       </table>
+       <table>
+        <tbody>
+         {% for t, v in ROUTE_LIMIT_EXEMPLO.items() %}
+         <tr><td>{{ t }}</td><td>exemplo: {{ v }}</td></tr>
+         {% endfor %}
+        </tbody>
+       </table>
+      </details>
+     </label>
+     {# a escala do PLANO vai de P1 (sem prepend) a P7 (seis prepends), e o
+        campo guarda o numero de prepends, nao o P. So ate P4 tem ramo nos
+        filtros deste plano; de 5 a 7 o proprio documento marca como
+        reservado, e a opcao diz isso em vez de sumir com o valor. #}
+     <label class="campo{{ ' campo-com-erro' if erros.get('prepend_base') }}" id="f-prepend_base">
+      <span class="rotulo">prepend base <span class="tag">0 a {{ PREPEND_MAX }}</span></span>
+      <select name="prepend_base">
+       {% for n in range(0, PREPEND_MAX + 1) %}
+       <option value="{{ n }}"{{ " selected" if (peer.prepend_base if peer else 0) == n }}>
+        {%- if n == 0 %}0 - sem prepend (P1)
+        {%- else %}{{ n }} - {{ n }} prepend{{ "s" if n > 1 }} (P{{ n + 1 }})
+        {%- endif %}{{ " - reservado, sem ramo nos filtros" if n > PREPEND_IMPLEMENTADO }}</option>
+       {% endfor %}
+      </select>
+      {% if erros.get('prepend_base') %}<span class="msg-erro">{{ erros.get('prepend_base') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('timer_keepalive') }}" id="f-timer_keepalive">
+      <span class="rotulo">timer keepalive</span>
+      <input name="timer_keepalive" value="{{ peer.timer_keepalive or '' }}">
+      {% if erros.get('timer_keepalive') %}<span class="msg-erro">{{ erros.get('timer_keepalive') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('timer_hold') }}" id="f-timer_hold">
+      <span class="rotulo">timer hold</span>
+      <input name="timer_hold" value="{{ peer.timer_hold or '' }}">
+      <span class="ajuda">em branco = default do equipamento</span>
+      {% if erros.get('timer_hold') %}<span class="msg-erro">{{ erros.get('timer_hold') }}</span>{% endif %}
+     </label>
+     <label class="campo campo-caixa">
+      <input type="checkbox" name="bfd"{{ " checked" if not peer or peer.bfd }}>
+      <span class="rotulo">bfd enable</span>
+     </label>
+     <label class="campo campo-caixa">
+      <input type="checkbox" name="graceful_restart"{{ " checked" if not peer or peer.graceful_restart }}>
+      <span class="rotulo">capability-advertise graceful-restart</span>
+     </label>
+     {# a default route e servico de downstream: a caixa aparece em todo tipo,
+        como o apelido, e o rotulo diz de quem ela e. Nasce desmarcada, ao
+        contrario do bfd e do graceful-restart, porque anunciar a default e um
+        pedido do cliente e nao o estado natural da sessao. #}
+     <label class="campo campo-caixa{{ ' campo-com-erro' if erros.get('default_route') }}" id="f-default_route">
+      <input type="checkbox" name="default_route"{{ " checked" if peer and peer.default_route }}>
+      <span class="rotulo">default-route-advertise <span class="tag">cliente / parceiro</span></span>
+      {% if erros.get('default_route') %}<span class="msg-erro">{{ erros.get('default_route') }}</span>{% endif %}
+     </label>
+     <label class="campo campo-largo{{ ' campo-com-erro' if erros.get('bh_upstream') }}" id="f-bh_upstream">
+      <span class="rotulo">community de blackhole
+       <span class="tag">so no tipo upstream</span></span>
+      <input name="bh_upstream" value="{{ peer.bh_upstream if peer else '' }}">
+      {% if erros.get('bh_upstream') %}<span class="msg-erro">{{ erros.get('bh_upstream') }}</span>{% endif %}
+     </label>
+    </div>
+   </fieldset>
+
+   <fieldset class="secao{{ ' campo-com-erro' if erros.get('prefixos') }}" id="f-prefixos">
+    <legend>prefixos anunciados, um por linha</legend>
+    <div class="campos">
+     <label class="campo campo-largo">
+      <span class="rotulo">v4</span>
+      <textarea name="prefixos_v4" rows="5">{{ peer.prefixos['v4']|join("\n") if peer else "" }}</textarea>
+     </label>
+     <label class="campo campo-largo">
+      <span class="rotulo">v6</span>
+      <textarea name="prefixos_v6" rows="5">{{ peer.prefixos['v6']|join("\n") if peer else "" }}</textarea>
+     </label>
+    </div>
+    {% if erros.get('prefixos') %}
+    <p class="msg-erro">{{ erros.get('prefixos') }}</p>
+    {% endif %}
+    <div class="acoes">
+     <button class="btn" type="submit" formaction="/bgpq4">consultar IRR</button>
+     <button class="btn" type="submit" formaction="/bgpq4?forcar=1">atualizar (ignora o cache)</button>
+     <span class="ajuda">preenche v4 e v6 a partir do ASN</span>
+    </div>
+   </fieldset>
+
+   {# o erro de prefixo sai por lista e nao por familia: a mensagem ja nomeia
+      o CIDR, entao a marcacao e no quadro inteiro, ao contrario do que
+      acontece nos campos de um valor so #}
+   <fieldset class="secao{{ ' campo-com-erro' if erros.get('te_prefixos') }}" id="f-te_prefixos">
+    <legend>prefixos de excecao de TE, um por linha</legend>
+    <div class="campos">
+     <label class="campo campo-largo">
+      <span class="rotulo">v4</span>
+      <textarea name="te_prefixos_v4" rows="3">{{ peer.te_prefixos['v4']|join("\n") if peer else "" }}</textarea>
+     </label>
+     <label class="campo campo-largo">
+      <span class="rotulo">v6</span>
+      <textarea name="te_prefixos_v6" rows="3">{{ peer.te_prefixos['v6']|join("\n") if peer else "" }}</textarea>
+     </label>
+    </div>
+    {% if erros.get('te_prefixos') %}
+    <p class="msg-erro">{{ erros.get('te_prefixos') }}</p>
+    {% endif %}
+   </fieldset>
+
+   <fieldset class="secao">
+    <legend>AS-path, um por linha</legend>
+    <div class="campos">
+     <label class="campo campo-largo{{ ' campo-com-erro' if erros.get('ap_block') }}" id="f-ap_block">
+      <span class="rotulo">ASNs bloqueados <span class="tag">upstream</span></span>
+      <textarea name="ap_block" rows="3">{{ peer.ap_block|join("\n") if peer else "" }}</textarea>
+      {% if erros.get('ap_block') %}<span class="msg-erro">{{ erros.get('ap_block') }}</span>{% endif %}
+     </label>
+     <label class="campo campo-largo{{ ' campo-com-erro' if erros.get('ap_te') }}" id="f-ap_te">
+      <span class="rotulo">ASNs com TE preferencial <span class="tag">upstream</span></span>
+      <textarea name="ap_te" rows="3">{{ peer.ap_te|join("\n") if peer else "" }}</textarea>
+      {% if erros.get('ap_te') %}<span class="msg-erro">{{ erros.get('ap_te') }}</span>{% endif %}
+     </label>
+     <label class="campo campo-largo{{ ' campo-com-erro' if erros.get('ap_allowed') }}" id="f-ap_allowed">
+      <span class="rotulo">ASNs permitidos <span class="tag">PNI</span></span>
+      <textarea name="ap_allowed" rows="3">{{ peer.ap_allowed|join("\n") if peer else "" }}</textarea>
+      {% if erros.get('ap_allowed') %}<span class="msg-erro">{{ erros.get('ap_allowed') }}</span>{% endif %}
+     </label>
+     <label class="campo campo-largo{{ ' campo-com-erro' if erros.get('ap_prefer') }}" id="f-ap_prefer">
+      <span class="rotulo">membros com LP 195 <span class="tag">IX</span></span>
+      <textarea name="ap_prefer" rows="3">{{ peer.ap_prefer|join("\n") if peer else "" }}</textarea>
+      {% if erros.get('ap_prefer') %}<span class="msg-erro">{{ erros.get('ap_prefer') }}</span>{% endif %}
+     </label>
+    </div>
+   </fieldset>
+
+   <fieldset class="secao">
+    <legend>CL-PEER, uma por linha</legend>
+    {# as communities que a operadora aplica na sessao deste peer. Saem no
+       quadro "ao criar o peer", colado a parte; o bloco do peer so chama o
+       filtro, entao reaplicar o bloco nunca reescreve esta lista. #}
+    <div class="campos">
+     <label class="campo campo-largo{{ ' campo-com-erro' if erros.get('communities') }}" id="f-communities">
+      <span class="rotulo">communities <span class="tag">cliente / upstream / parceiro</span></span>
+      <textarea name="communities" rows="3" placeholder="{{ plan.c(1500) }}">{{ peer.communities|join("\n") if peer else "" }}</textarea>
+      {% if erros.get('communities') %}<span class="msg-erro">{{ erros.get('communities') }}</span>{% endif %}
+      {% for a in avisos if a.campo == 'communities' %}<span class="msg-aviso">{{ a.mensagem }}</span>{% endfor %}
+     </label>
+     <label class="campo campo-largo{{ ' campo-com-erro' if erros.get('large_communities') }}" id="f-large_communities">
+      <span class="rotulo">large communities <span class="tag">cliente / upstream / parceiro</span></span>
+      <textarea name="large_communities" rows="3" placeholder="{{ plan.c_large(4, 264130) }}">{{ peer.large_communities|join("\n") if peer else "" }}</textarea>
+      {% if erros.get('large_communities') %}<span class="msg-erro">{{ erros.get('large_communities') }}</span>{% endif %}
+      {% for a in avisos if a.campo == 'large_communities' %}<span class="msg-aviso">{{ a.mensagem }}</span>{% endfor %}
+     </label>
+    </div>
+   </fieldset>
+
+   <fieldset class="secao{{ ' campo-com-erro' if erros.get('sessoes') }}" id="f-sessoes">
+    <legend>sessoes</legend>
+    <div class="campos">
+     <label class="campo{{ ' campo-com-erro' if erros.get('sessoes.v4.local') }}" id="f-sessoes_v4_local">
+      <span class="rotulo">v4 local</span>
+      <input name="sessao_v4_local" value="{{ peer.sessoes['v4'].get('local','') if peer else '' }}">
+      {% if erros.get('sessoes.v4.local') %}<span class="msg-erro">{{ erros.get('sessoes.v4.local') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('sessoes.v4.remoto') }}" id="f-sessoes_v4_remoto">
+      <span class="rotulo">v4 remoto</span>
+      <input name="sessao_v4_remoto" value="{{ peer.sessoes['v4'].get('remoto','') if peer else '' }}">
+      {% if erros.get('sessoes.v4.remoto') %}<span class="msg-erro">{{ erros.get('sessoes.v4.remoto') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('sessoes.v6.local') }}" id="f-sessoes_v6_local">
+      <span class="rotulo">v6 local</span>
+      <input name="sessao_v6_local" value="{{ peer.sessoes['v6'].get('local','') if peer else '' }}">
+      {% if erros.get('sessoes.v6.local') %}<span class="msg-erro">{{ erros.get('sessoes.v6.local') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('sessoes.v6.remoto') }}" id="f-sessoes_v6_remoto">
+      <span class="rotulo">v6 remoto</span>
+      <input name="sessao_v6_remoto" value="{{ peer.sessoes['v6'].get('remoto','') if peer else '' }}">
+      {% if erros.get('sessoes.v6.remoto') %}<span class="msg-erro">{{ erros.get('sessoes.v6.remoto') }}</span>{% endif %}
+     </label>
+    </div>
+    {% if erros.get('sessoes') %}
+    <p class="msg-erro">{{ erros.get('sessoes') }}</p>
+    {% endif %}
+   </fieldset>
+
+   <div class="acoes acoes-fim">
+    <button class="btn btn-primario" type="submit">salvar</button>
+   </div>
+  </form>
+
+  {% if peer and peer.token %}
+  <fieldset class="secao secao-perigo">
+   <legend>zona de perigo</legend>
+   <form method="post" action="/peer/{{ peer.token }}/excluir">
+    <div class="acoes">
+     <label class="campo campo-caixa" id="f-confirmado">
+      <input type="checkbox" name="confirmado" value="sim">
+      <span class="rotulo">confirmar exclusao</span>
+     </label>
+     {% if erros.get('confirmado') %}
+     <span class="msg-erro">{{ erros.get('confirmado') }}</span>
+     {% endif %}
+     <button class="btn btn-perigo" type="submit">excluir</button>
+    </div>
+   </form>
+  </fieldset>
+  {% endif %}
+  </div>
+ </main>
+
+ {% if peer and peer.token and (saida or saida_remover) %}
+ <section id="saida" class="painel">
+  <h2>saida de {{ peer.token }}</h2>
+  <div class="painel-corpo">
+   <div class="abas">
+    <a class="btn btn-fantasma" href="/saida/{{ peer.token }}">bloco do peer</a>
+    {% if peer.tipo in plan.TIPOS_COM_APPLY_PEER %}
+    <a class="btn btn-fantasma" href="/saida/{{ peer.token }}/criar-lista">ao criar o peer</a>
+    {% endif %}
+    <a class="btn btn-fantasma" href="/base.txt">bloco base</a>
+   </div>
+   {% if saida %}
+   <div class="bloco">
+    <div class="bloco-topo">
+     <span class="bloco-nome">bloco do peer</span>
+     <button class="btn" type="button" onclick="copiar('saida-criar')">copiar bloco do peer</button>
+    </div>
+    <pre id="saida-criar" data-aba="criar">{{ saida }}</pre>
+   </div>
+   {% endif %}
+   {% if saida_remover %}
+   <div class="bloco">
+    <div class="bloco-topo">
+     <span class="bloco-nome">bloco de remocao</span>
+     <button class="btn" type="button" onclick="copiar('saida-remover')">copiar bloco de remocao</button>
+    </div>
+    <pre id="saida-remover" data-aba="remover">{{ saida_remover }}</pre>
+   </div>
+   {% endif %}
+  </div>
+ </section>
+ {% endif %}
+
+ <section id="blocos" class="painel">
+  <h2>prefixos proprios de AS{{ plan.ASN }}</h2>
+  <div class="painel-corpo">
+   <p>Uma linha por prefixo, no formato <code>&lt;cidr&gt; community community ...</code>. Linha que comeca com <code>!-</code> e um prefixo fora de servico: ele fica no cadastro com o tratamento, e nao sai em configuracao nenhuma.</p>
+   <form method="post" action="/blocos">
+    {% for fam in ["v4", "v6"] %}
+    <label id="f-blocos_{{ fam }}" for="blocos_{{ fam }}">{{ fam }}</label>
+    <textarea id="blocos_{{ fam }}" name="blocos_{{ fam }}" rows="6" spellcheck="false">{{ texto_blocos[fam] }}</textarea>
+    {% endfor %}
+    <div class="acoes">
+     <button class="btn" type="submit">salvar blocos</button>
+     <button class="btn btn-fantasma" type="submit" formaction="/blocos/bgpq4">consultar o IRR</button>
+     <button class="btn btn-fantasma" type="submit" formaction="/blocos/bgpq4?forcar=1">reconsultar</button>
+    </div>
+    {% if erros.blocos_v4 %}<p class="msg-erro">{{ erros.blocos_v4 }}</p>{% endif %}
+    {% if erros.blocos_v6 %}<p class="msg-erro">{{ erros.blocos_v6 }}</p>{% endif %}
+   </form>
+   {% if saida_blocos %}
+   <div class="bloco">
+    <div class="bloco-topo">
+     <span class="bloco-nome">bloco de originacao</span>
+     <button class="btn" type="button" onclick="copiar('saida-blocos')">copiar</button>
+    </div>
+    <pre id="saida-blocos">{{ saida_blocos }}</pre>
+   </div>
+   {% endif %}
+   {% if saida_blocos_remover %}
+   <div class="bloco">
+    <div class="bloco-topo">
+     <span class="bloco-nome">remocao dos blocos (network na view da familia, o resto fora dela)</span>
+     <button class="btn" type="button" onclick="copiar('saida-blocos-remover')">copiar</button>
+    </div>
+    <pre id="saida-blocos-remover">{{ saida_blocos_remover }}</pre>
+   </div>
+   {% endif %}
+  </div>
+ </section>
+</div>
+</body>
+</html>

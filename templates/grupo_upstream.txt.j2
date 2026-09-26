@@ -1,0 +1,35 @@
+{% import "_macros.j2" as m %}
+{{ m.cabecalho_grupo(grupo) }}
+
+{# grupo nao tem sessao, entao nao ha familias() a consultar: as duas familias
+   saem sempre, como no grupo_cliente.txt.j2. O miolo e o mesmo do peer avulso,
+   pelas mesmas macros de alvo duplo. #}
+{% for fam in ("v4", "v6") %}
+{#- o if repete a guarda de dentro da macro de proposito: sem ele o newline da
+    chamada vira uma linha em branco a mais quando a familia nao tem lista de
+    TE - o grupo sem excecao de TE, que e o caso comum, ganharia um branco
+    depois do cabecalho e outro antes do IMPORT de cada familia. A macro nao
+    pode retirar esse newline: ele e texto do template, nao da macro. #}
+{% if grupo.te_prefixos[fam] %}
+{{ m.te_prefix_list(grupo, fam) }}
+{% endif %}
+{{ m.filtro_upstream_import(grupo, fam) }}
+
+{{ m.filtro_upstream_export(grupo, fam, true) }}
+{% endfor %}
+{{ m.listas_upstream(grupo) }}
+
+{# o bloco do grupo so CHAMA o APPLY-PEER-<G>, pelo EXPORT acima, e nao o
+   define: quem escreve o objeto e o quadro "ao criar o grupo", junto com o
+   CL-PEER-<G> do cadastro. E a diferenca para o bloco do peer avulso, que
+   define o dele - reaplicar este bloco nao pode reescrever a lista que o
+   operador escreveu na tela. #}
+bgp {{ plan.ASN }}
+ group {{ grupo.nome }} external
+{{ m.sessao_do_grupo(grupo) }}
+{% for fam in ("v4", "v6") %}
+{% set U = fam|upper %}
+{{ m.familia_grupo(grupo, fam,
+     "UP-" ~ grupo.nome ~ "-IMPORT-" ~ U,
+     "UP-" ~ grupo.nome ~ "-EXPORT-" ~ U) }}
+{% endfor %}

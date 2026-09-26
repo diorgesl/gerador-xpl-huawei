@@ -1,0 +1,23 @@
+{% import "_macros.j2" as m %}
+{{ m.cabecalho_grupo(grupo) }}
+
+{% for fam in ("v4", "v6") %}
+{% if grupo.prefixos[fam] %}
+{{ m.prefix_lists_downstream(grupo, fam) }}
+{% endif %}
+# Filtro XPL Import
+{{ m.filtro_downstream_import(grupo, fam, false, grupo.prefixos[fam]) }}
+
+{{ m.filtro_downstream_export(grupo, fam) }}
+{% endfor %}
+{{ m.ap_cust_downstream(grupo) }}
+
+bgp {{ plan.ASN }}
+ group {{ grupo.nome }} external
+{{ m.sessao_do_grupo(grupo) }}
+{% for fam in ("v4", "v6") %}
+{% set U = fam|upper %}
+{{ m.familia_grupo(grupo, fam,
+     "CUST-" ~ grupo.nome ~ "-IMPORT-" ~ U,
+     "CUST-" ~ grupo.nome ~ "-EXPORT-" ~ U) }}
+{% endfor %}

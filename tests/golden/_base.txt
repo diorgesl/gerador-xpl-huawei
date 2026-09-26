@@ -1,0 +1,188 @@
+# gerado por bgpgen - nao editar a mao
+# bloco base: sets e filtros compartilhados do AS64512
+# cole isto no F1A antes do bloco de qualquer peer
+# fonte: PLANO.md, secoes "Sets XPL" e "Route-filters reutilizaveis"
+
+xpl ip-prefix-list PL-BOGONS-V4
+ 0.0.0.0 8 le 32,
+ 10.0.0.0 8 le 32,
+ 100.64.0.0 10 le 32,
+ 127.0.0.0 8 le 32,
+ 169.254.0.0 16 le 32,
+ 172.16.0.0 12 le 32,
+ 192.0.0.0 24 le 32,
+ 192.0.2.0 24 le 32,
+ 192.88.99.0 24 le 32,
+ 192.168.0.0 16 le 32,
+ 198.18.0.0 15 le 32,
+ 198.51.100.0 24 le 32,
+ 203.0.113.0 24 le 32,
+ 224.0.0.0 3 le 32
+end-list
+
+xpl ipv6-prefix-list PL-BOGONS-V6
+ :: 0 le 0,
+ :: 128,
+ ::1 128,
+ ::ffff:0:0 96 le 128,
+ 64:ff9b:1:: 48 le 128,
+ 100:: 64 le 128,
+ 2001:: 32 le 128,
+ 2001:2:: 48 le 128,
+ 2001:db8:: 32 le 128,
+ 2002:: 16 le 128,
+ 3fff:: 20 le 128,
+ fc00:: 7 le 128,
+ fe80:: 10 le 128,
+ ff00:: 8 le 128
+end-list
+
+xpl as-path-list AP-BOGON-ASN
+ regular _0_,
+ pass '23456',
+ pass '[64496..64511]',
+ pass '[64512..65534]',
+ pass '65535',
+ pass '[65536..65551]',
+ pass '[65552..131071]',
+ pass '[4200000000..4294967294]',
+ pass '4294967295'
+end-list
+
+xpl as-path-list AP-LOCAL-ORIGIN
+ regular ^$
+end-list
+
+xpl as-path-list AP-PATH-TOO-LONG
+ length ge 40
+end-list
+
+xpl community-list CL-BLACKHOLE
+ 65535:666,
+ 64512:666
+end-list
+
+xpl community-list CL-BLACKHOLE-PROPAGATE
+ 64512:667
+end-list
+
+xpl community-list CL-GSHUT
+ 65535:0
+end-list
+
+xpl community-list CL-ORIGEM-ANUNCIAVEL
+ 64512:1000,
+ 64512:1100,
+ 64512:1110,
+ 64512:1120,
+ 64512:1130
+end-list
+
+xpl community-list CL-NOADV-CUST
+ 64512:200,
+ 64512:204
+end-list
+
+xpl community-list CL-ONLY-NOT-UP
+ 64512:211,
+ 64512:212,
+ 64512:213
+ end-list
+
+xpl community-list CL-ONLY-NOT-IX
+ 64512:210,
+ 64512:212,
+ 64512:213
+end-list
+
+xpl community-list CL-ONLY-NOT-PNI
+ 64512:210,
+ 64512:211,
+ 64512:213
+end-list
+
+xpl community-list CL-ONLY-NOT-CLIENT
+ 64512:210,
+ 64512:211,
+ 64512:212
+end-list
+
+xpl community-list CL-OWN-ALL
+ 64512:*
+end-list
+
+xpl route-filter IMPORT-SANITY-V4
+ if ip route-destination in PL-BOGONS-V4 then
+  refuse
+ endif
+ if as-path matches-any AP-BOGON-ASN then
+  refuse
+ endif
+ if as-path matches-any AP-PATH-TOO-LONG then
+  refuse
+ endif
+ if as-path matches-any AP-LOCAL-ORIGIN then
+  refuse
+ endif
+ break
+end-filter
+
+xpl route-filter IMPORT-SANITY-V6
+ if ip route-destination in PL-BOGONS-V6 then
+  refuse
+ endif
+ if as-path matches-any AP-BOGON-ASN then
+  refuse
+ endif
+ if as-path matches-any AP-PATH-TOO-LONG then
+  refuse
+ endif
+ if as-path matches-any AP-LOCAL-ORIGIN then
+  refuse
+ endif
+ break
+end-filter
+
+xpl route-filter EXPORT-SANITY
+ if community matches-any {64512:1900, 64512:1901} then
+  refuse
+ endif
+ if not as-path matches-any AP-LOCAL-ORIGIN then
+  if not community matches-any CL-ORIGEM-ANUNCIAVEL then
+   refuse
+  endif
+ endif
+ break
+end-filter
+
+xpl route-filter APPLY-CUSTOMER-LP
+ if community matches-any CL-GSHUT then
+  apply local-preference 0
+  break
+ endif
+ if community matches-any {64512:101} then
+  apply local-preference 50
+  break
+ endif
+ if community matches-any {64512:102} then
+  apply local-preference 80
+  break
+ endif
+ if community matches-any {64512:103} then
+  apply local-preference 150
+  break
+ endif
+ if community matches-any {64512:104} then
+  apply local-preference 250
+  break
+ endif
+ if community matches-any {64512:105} then
+  apply local-preference 350
+  break
+ endif
+ apply local-preference 300
+ break
+end-filter
+
+ip route-static 192.0.2.1 255.255.255.255 NULL0 tag 666
+ipv6 route-static 100:: 64 NULL0 tag 666

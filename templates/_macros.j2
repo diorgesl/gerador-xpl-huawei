@@ -1,0 +1,614 @@
+{% macro cabecalho(peer) -%}
+# gerado por bgpgen - nao editar a mao
+# peer {{ peer.id }} - {{ peer.tipo }} - AS{{ peer.asn }} - token {{ peer.token }}
+{# o aviso da default route nao cabe no bloco bgp: nenhum tipo tem comentario
+   renderizado dentro do grupo de sessao nem da familia. Ele fica aqui, que e
+   o que o operador le antes de colar. #}
+{% if peer.default_route %}
+# a default route vai para este cliente: confirme que ha um default na tabela
+{% endif %}
+# pressupoe o bloco base ja aplicado neste equipamento
+{%- endmacro %}
+
+{# O filtro que aplica a CL-PEER-<T> no import. Ele sai em dois lugares, o
+   bloco do peer e o quadro "ao criar o peer", e os dois precisam sair
+   identicos: o segundo a ser colado sobrescreve o primeiro. Por isso mora
+   aqui, e nao copiado em cada template. #}
+{% macro apply_peer(peer) -%}
+xpl route-filter APPLY-PEER-{{ peer.token }}
+{# confirmar com "?" se o "community-list" do meio e obrigatorio: o legado
+   usa "apply community community-list <nome>", mas la e route-policy, e as
+   duas views divergem em outros pontos. A mesma duvida vale para a linha de
+   large-community, que nem o legado tem como referencia. #}
+ apply community community-list CL-PEER-{{ peer.token }} additive
+{% if peer.large_communities %}
+ apply large-community large-community-list LC-PEER-{{ peer.token }} additive
+{% endif %}
+ break
+end-filter
+{%- endmacro %}
+
+{% macro sessao_do_peer(peer, fam) -%}
+{% set s = peer.sessoes[fam] %}
+ peer {{ s.remoto }} as-number {{ peer.asn }}
+ peer {{ s.remoto }} description {{ peer.descricao }}
+ peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
+ peer {{ s.remoto }} {{ plan.AS_ONLY }}
+{% if peer.tipo == "ix" %}
+{# motivo: o route server e transparente e nao insere o proprio ASN no path,
+   entao o ASN na frente do path e o de quem anunciou, nao o do vizinho, e o
+   check no default descarta a rota antes de ela alcancar o filtro. O undo
+   abre o path vazio, que fica a cargo do AP-LOCAL-ORIGIN do IMPORT-SANITY.
+   O comentario e do Jinja e nao uma linha !- de proposito: o grupo de sessao
+   nao tem comentario renderizado em tipo nenhum. #}
+ undo peer {{ s.remoto }} check-first-as enable
+{% endif %}
+{% if peer.timer_keepalive and peer.timer_hold %}
+ peer {{ s.remoto }} timer keepalive {{ peer.timer_keepalive }} hold {{ peer.timer_hold }}
+{% endif %}
+{% if peer.graceful_restart %}
+ peer {{ s.remoto }} capability-advertise graceful-restart
+{% endif %}
+{% if peer.bfd %}
+ peer {{ s.remoto }} bfd enable
+{% endif %}
+{%- endmacro %}
+
+{% macro familia_bgp(peer, fam, import_nome, export_nome) -%}
+{% set s = peer.sessoes[fam] %}
+{# A default route sai pelo comando, sem ramo nenhum no export: quem quiser
+   bloquea-la do lado dele. A quebra vai dentro do valor porque o Jinja come a
+   quebra que segue um bloco, e o {%- do endmacro cola na ultima linha: com um
+   {% if %} solto, o peer sem a flag terminava com uma linha em branco. #}
+{% set linha_default = "\n  peer " ~ s.remoto ~ " default-route-advertise" if peer.default_route else "" %}
+
+ {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
+  peer {{ s.remoto }} enable
+  peer {{ s.remoto }} route-filter {{ import_nome }} import
+  peer {{ s.remoto }} route-filter {{ export_nome }} export
+  peer {{ s.remoto }} advertise-community
+  peer {{ s.remoto }} advertise-large-community{{ linha_default }}
+{%- endmacro %}
+
+{# Sem guarda em alvo.prefixos[fam]: o header/end-list saem sempre, mesmo
+   com a lista de cidr vazia, porque e assim que o template original e o
+   undo em remover.txt.j2 (sem guarda tambem) sempre se comportaram - um
+   guard aqui tiraria da simetria criado/derrubado no peer dual-stack com
+   uma familia sem prefixo (ver test_o_bloco_de_remocao_derruba_...). #}
+{% macro prefix_lists_downstream(alvo, fam) -%}
+{% set U = fam|upper %}
+{% set kw = "ipv6-prefix-list" if fam == "v6" else "ip-prefix-list" %}
+{% set maxlen = 48 if fam == "v6" else 24 %}
+{% set hostlen = 128 if fam == "v6" else 32 %}
+xpl {{ kw }} PL-CUST-{{ alvo.token }}-{{ U }}
+{% for cidr in alvo.prefixos[fam] %}
+ {{ plan.cidr_para_xpl(cidr) }} le {{ maxlen }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+
+xpl {{ kw }} PL-CUST-{{ alvo.token }}-BH-{{ U }}
+{% for cidr in alvo.prefixos[fam] %}
+ {{ plan.cidr_para_xpl(cidr) }} ge {{ hostlen }} le {{ hostlen }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+
+{% endmacro %}
+
+{# Os "{% if alvo.asn %}" deste macro e dos dois seguintes
+   (filtro_downstream_import e filtro_downstream_export) sao intencionais,
+   nao um guard novo que precisa virar parametro do jeito que
+   confinar_prefixo virou. O Peer que chega aqui sempre tem asn truthy:
+   app/validate.py trava ASN_MIN=1, entao alvo.asn=0/None so acontece
+   construindo Peer(...) direto, pulando a validacao (e o que um teste faz
+   de proposito, ver test_filtro_com_asn_falsy_pula_confinamento_por_as_path
+   em tests/test_render.py). O unico chamador legitimo onde alvo.asn e
+   falsy de verdade e o GRUPO (task 5), que pode nao ter ASN compartilhado
+   (grupo de parceiros com ASNs distintos) - pular o confinamento por
+   as-path, a linha de large-community enderecada ao ASN e o
+   AP-CUST-<token> e o comportamento certo pra ele, nao um workaround. Os
+   dois chamadores legitimos (Peer e Grupo) querem o mesmo do guard, entao
+   nao precisa de parametro explicito: seria over-engineering pra um caso
+   que nao e ambiguo. #}
+{% macro ap_cust_downstream(alvo) -%}
+{% if alvo.asn %}
+xpl as-path-list AP-CUST-{{ alvo.token }}
+ origin '{{ alvo.asn }}'
+end-list
+{% endif -%}
+{%- endmacro %}
+
+{# chamar_apply_peer=true: o caller de sempre, cliente/parceiro avulso e
+   membro de grupo com filtro proprio, ambos tem CL-PEER-<token> deles
+   mesmos. chamar_apply_peer=false: o filtro do grupo de cliente/parceiro
+   (grupo_cliente.txt.j2), que nao tem CL-PEER proprio - isso e por sessao,
+   nao por grupo (ver spec).
+
+   confinar_prefixo=true: peer avulso (Peer) - o comportamento original,
+   sempre confina ao PL-CUST e testa blackhole, mesmo com prefixos[fam]
+   vazio (um cliente dual-stack sem prefixo v6 autorizado tem que RECUSAR
+   tudo em v6, nao aceitar por falta de guarda). confinar_prefixo=false:
+   reservado para o GRUPO (task 5), onde prefixos[fam] vazio significa "sem
+   confinamento compartilhado", nao "recuse tudo" - por isso o sinal tem
+   que vir explicito do caller, nao inferido de alvo.prefixos[fam]. #}
+{% macro filtro_downstream_import(alvo, fam, chamar_apply_peer, confinar_prefixo) -%}
+{% set U = fam|upper %}
+{% set nexthop = "100::" if fam == "v6" else "192.0.2.1" %}
+xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
+ call route-filter IMPORT-SANITY-{{ U }}
+{% if confinar_prefixo %}
+ if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in PL-CUST-{{ alvo.token }}-BH-{{ U }} then
+  apply {{ "ipv6" if fam == "v6" else "ip" }} next-hop {{ nexthop }}
+  apply local-preference {{ plan.LP_BLACKHOLE }}
+  apply community {{ plan.conjunto(plan.BLACKHOLE_INFO, plan.c(200)) }} additive
+  apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} additive
+  finish
+ endif
+ if not ip route-destination in PL-CUST-{{ alvo.token }}-{{ U }} then
+  refuse
+ endif
+{% endif %}
+{% if alvo.asn %}
+ if not as-path matches-any AP-CUST-{{ alvo.token }} then
+  refuse
+ endif
+{% endif %}
+ call route-filter APPLY-CUSTOMER-LP
+ apply community {{ plan.c_downstream(alvo.tipo, alvo.origem, alvo.pop) }} additive
+{% if alvo.asn %}
+ apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} additive
+{% endif %}
+{% if chamar_apply_peer %}
+ call route-filter APPLY-PEER-{{ alvo.token }}
+{% endif %}
+ finish
+end-filter
+{%- endmacro %}
+
+{% macro cabecalho_grupo(grupo) -%}
+# gerado por bgpgen - nao editar a mao
+# grupo {{ grupo.id }} - {{ grupo.tipo }} - nome {{ grupo.nome }}
+{% if grupo.default_route %}
+# a default route vai para este cliente: confirme que ha um default na tabela
+{% endif %}
+# pressupoe o bloco base ja aplicado neste equipamento
+{%- endmacro %}
+
+{% macro sessao_do_grupo(grupo) -%}
+{% if grupo.asn %}
+ peer {{ grupo.nome }} as-number {{ grupo.asn }}
+{% endif %}
+ peer {{ grupo.nome }} {{ plan.AS_ONLY }}
+{% if grupo.timer_keepalive and grupo.timer_hold %}
+ peer {{ grupo.nome }} timer keepalive {{ grupo.timer_keepalive }} hold {{ grupo.timer_hold }}
+{% endif %}
+{% if grupo.graceful_restart %}
+ peer {{ grupo.nome }} capability-advertise graceful-restart
+{% endif %}
+{% if grupo.bfd %}
+ peer {{ grupo.nome }} bfd enable
+{% endif %}
+{%- endmacro %}
+
+{% macro familia_grupo(grupo, fam, import_nome, export_nome) -%}
+{% set linha_default = "\n  peer " ~ grupo.nome ~ " default-route-advertise" if grupo.default_route else "" %}
+ {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
+  peer {{ grupo.nome }} enable
+  peer {{ grupo.nome }} route-filter {{ import_nome }} import
+  peer {{ grupo.nome }} route-filter {{ export_nome }} export
+  peer {{ grupo.nome }} advertise-community
+  peer {{ grupo.nome }} advertise-large-community{{ linha_default }}
+{%- endmacro %}
+
+{% macro filtro_downstream_export(alvo, fam) -%}
+{% set U = fam|upper %}
+xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
+ if community matches-any CL-NOADV-CUST then
+  refuse
+ endif
+ if community matches-any CL-ONLY-NOT-CLIENT then
+  refuse
+ endif
+{% if alvo.asn %}
+ if large-community matches-any {{ plan.conjunto(plan.c_large(0, alvo.asn)) }} then
+  refuse
+ endif
+{% endif %}
+ if community matches-any {{ plan.conjunto(plan.c(1900), plan.c(1901)) }} then
+  refuse
+ endif
+{% if alvo.asn %}
+ if large-community matches-any {{ plan.conjunto(plan.c_large(3, alvo.asn)) }} then
+  apply as-path {{ plan.ASN }} 3 additive
+ elseif large-community matches-any {{ plan.conjunto(plan.c_large(2, alvo.asn)) }} then
+  apply as-path {{ plan.ASN }} 2 additive
+ elseif large-community matches-any {{ plan.conjunto(plan.c_large(1, alvo.asn)) }} then
+  apply as-path {{ plan.ASN }} 1 additive
+ endif
+{% endif %}
+ finish
+end-filter
+{%- endmacro %}
+
+{# O miolo do bloco de upstream, em macro de alvo duplo: o Peer avulso e o
+   Grupo passam os dois, porque o grupo de upstream existe justamente para
+   que dois links do mesmo transito nao guardem a mesma politica em dois
+   lugares. So o que os dois tem pode aparecer aqui: token, id, asn, origem,
+   lp_base, aprendizado, te_prefixos, ap_block, ap_te, bh_upstream e
+   prepend_base. sessoes, familias(), route_limit e descricao sao do peer e
+   ficam de fora - o StrictUndefined do render estoura no teste se algum
+   entrar. #}
+{% macro te_prefix_list(alvo, fam) -%}
+{% set U = fam|upper %}
+{% set kw = "ipv6-prefix-list" if fam == "v6" else "ip-prefix-list" %}
+{% set maxlen = 48 if fam == "v6" else 24 %}
+{% if alvo.te_prefixos[fam] %}
+!- conteudo de EXEMPLO no PLANO: troque pelos prefixos reais antes de subir
+xpl {{ kw }} PL-TE-PREFER-{{ alvo.token }}-{{ U }}
+{% for cidr in alvo.te_prefixos[fam] %}
+ {{ plan.cidr_para_xpl(cidr) }} le {{ maxlen }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+{% endif %}
+{%- endmacro %}
+
+{% macro filtro_upstream_import(alvo, fam) -%}
+{% set U = fam|upper %}
+xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
+ call route-filter IMPORT-SANITY-{{ U }}
+{% if alvo.ap_block %}
+ if as-path matches-any AP-BLOCK-{{ alvo.token }} then
+  refuse
+ endif
+{% endif %}
+ apply local-preference {{ alvo.lp_base }}
+ {# overwrite: nada do que o upstream escreveu em community sobrevive. e o que
+    torna seguro o matches-any CL-ORIGEM-ANUNCIAVEL no export. 2000 marca
+    "aprendida de fora", e o export de outro upstream recusa. #}
+ apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
+ apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
+{% if alvo.te_prefixos[fam] or alvo.ap_te %}
+ {# excecoes de TE, aplicadas depois do carimbo base. Se a lista ficar vazia a
+    excecao simplesmente nao existe; o risco e o oposto, prefixo errado faz o
+    trafego sair e voltar. #}
+ if{% if alvo.te_prefixos[fam] %} ip route-destination in PL-TE-PREFER-{{ alvo.token }}-{{ U }}{% endif %}{% if alvo.te_prefixos[fam] and alvo.ap_te %} or{% endif %}{% if alvo.ap_te %} as-path matches-any AP-TE-PREFER-{{ alvo.token }}{% endif %} then
+  apply local-preference {{ plan.LP_TE_PREFER }}
+ endif
+{% endif %}
+ approve
+end-filter
+{%- endmacro %}
+
+{% macro filtro_upstream_export(alvo, fam, chamar_apply_peer) -%}
+{% set U = fam|upper %}
+xpl route-filter UP-{{ alvo.token }}-EXPORT-{{ U }}
+ {# 1. blackhole primeiro: finish para nao cair no EXPORT-SANITY. O overwrite
+    aqui nao e limpeza: e a definicao do anuncio de blackhole. Durante ataque
+    o host sai com a community de blackhole deste upstream e nada mais, para
+    que nenhuma community escrita pelo cliente a neutralize. #}
+ if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in {{ "{0.0.0.0 0 ge 32 le 32}" if fam == "v4" else "{:: 0 ge 128 le 128}" }} then
+  if community matches-any CL-BLACKHOLE-PROPAGATE then
+{% if alvo.bh_upstream %}
+   apply community {{ plan.conjunto(alvo.bh_upstream) }} overwrite
+{% endif %}
+   finish
+  else
+   refuse
+  endif
+ endif
+ {# 2. sanidade antes de liberar a rota #}
+ call route-filter EXPORT-SANITY
+ {# 3. rede de seguranca do 2000: rota aprendida de fora ja caiu acima, entao
+    isto so alcanca rota de cliente que escreveu o 2000 sozinha. #}
+ if community matches-any {{ plan.conjunto(plan.c(2000)) }} then
+  refuse
+ endif
+ {# 4. escopo pedido pelo cliente para este peer #}
+ if community matches-any CL-NOADV-{{ alvo.token }} or large-community matches-any LC-NOADV-{{ alvo.token }} then
+  refuse
+ endif
+ {# 5. somente para outro peer #}
+ if community matches-any CL-ONLY-NOT-UP then
+  refuse
+ endif
+ {# 6. 5PPA por peer especifico: P4=3x, P3=2x, P2=1x. Se veio QUALQUER 5PPA do
+    peer, a classe 6CA nao entra: especifico vence generico. O P1 explicito so
+    impede a classe, e por isso o aninhamento e if/elseif e nao finish, que
+    saltaria os passos 8 e 9. #}
+ if community matches-any CL-5PPA-{{ "%02d"|format(alvo.id) }} or large-community matches-any LC-5PPA-{{ alvo.token }} then
+  if community matches-any {{ plan.conjunto(plan.c5ppa(alvo.id, 4)) }} or large-community matches-any LC-PREP3-{{ alvo.token }} then
+   apply as-path {{ plan.ASN }} 3 additive
+  elseif community matches-any {{ plan.conjunto(plan.c5ppa(alvo.id, 3)) }} or large-community matches-any LC-PREP2-{{ alvo.token }} then
+   apply as-path {{ plan.ASN }} 2 additive
+  elseif community matches-any {{ plan.conjunto(plan.c5ppa(alvo.id, 2)) }} or large-community matches-any LC-PREP1-{{ alvo.token }} then
+   apply as-path {{ plan.ASN }} 1 additive
+  endif
+ else
+  {# 7. sem 5PPA, vale a classe 6CA (plan.CLASSE_6CA["upstream"] = upstream) #}
+  if community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["upstream"], 4)) }} then
+   apply as-path {{ plan.ASN }} 3 additive
+  elseif community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["upstream"], 3)) }} then
+   apply as-path {{ plan.ASN }} 2 additive
+  elseif community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["upstream"], 2)) }} then
+   apply as-path {{ plan.ASN }} 1 additive
+  endif
+ endif
+{% if alvo.prepend_base %}
+ {# 8. prepend base de engenharia: o valor JA E o numero de prepends, entao a
+    linha nao sai quando ele e zero. #}
+ apply as-path {{ plan.ASN }} {{ alvo.prepend_base }} additive
+{% endif %}
+ {# 9. saida comum #}
+ apply med 0
+{# chamar_apply_peer=false e o sinal do grupo de downstream
+   (grupo_cliente.txt.j2): ali a community descreve o LINK, cada membro tem a
+   sua, e o APPLY-PEER e por sessao, nunca do grupo. Num upstream e o
+   contrario - a community descreve a REDE REMOTA, um objeto so vale para os
+   dois links, e o grupo passa true, porque e o export dele que chama o
+   APPLY-PEER-<G> (grupo_upstream.txt.j2). #}
+{% if chamar_apply_peer %}
+ {# ULTIMA acao: as communities do cadastro deste upstream, para tudo que sai
+    por ele. O quadro "ao criar" - do peer avulso ou do grupo de upstream,
+    os dois alvos de criar_lista.txt.j2 - traz o conteudo da lista; aqui so a
+    chamada. #}
+ call route-filter APPLY-PEER-{{ alvo.token }}
+{% endif %}
+ finish
+end-filter
+{%- endmacro %}
+
+{% macro listas_upstream(alvo) %}
+{#- o branco abaixo e de proposito, e o newline da chamada no template e o da
+    ultima linha do EXPORT: sem ele a linha em branco que separa o ultimo
+    filtro da primeira lista some. #}
+
+{# um set por peer: evita cadeia de OR na condicao. o 5xx aqui e o alias 5PPA
+   do "nao anunciar para o peer". #}
+xpl community-list CL-NOADV-{{ alvo.token }}
+{% for c in plan.noadv("upstream", alvo.id) %}
+ {{ c }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+
+xpl large-community-list LC-NOADV-{{ alvo.token }}
+ {{ plan.c_large(0, alvo.asn) }}
+end-list
+
+{# qualquer 5PPA do peer, inclusive o digito 0. Nao carrega acao: serve para o
+   egress saber que o cliente falou deste peer e para barrar a classe 6CA, que
+   perderia para o especifico. #}
+xpl community-list CL-5PPA-{{ "%02d"|format(alvo.id) }}
+{% for d in range(5) %}
+ {{ plan.c5ppa(alvo.id, d) }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+
+{# espelho do CL-5PPA no eixo de 32 bits. #}
+xpl large-community-list LC-5PPA-{{ alvo.token }}
+{% for f in range(5) %}
+ {{ plan.c_large(f, alvo.asn) }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+
+xpl large-community-list LC-PREP1-{{ alvo.token }}
+ {{ plan.c_large(1, alvo.asn) }}
+end-list
+
+xpl large-community-list LC-PREP2-{{ alvo.token }}
+ {{ plan.c_large(2, alvo.asn) }}
+end-list
+
+xpl large-community-list LC-PREP3-{{ alvo.token }}
+ {{ plan.c_large(3, alvo.asn) }}
+end-list
+{%- if alvo.ap_block %}
+{#- o - deste if come o newline da lista de cima, e o {{ "\n" }} abaixo repoe
+    o branco de separacao. Os dois sao o ajuste de espaco da emenda: sem eles a
+    ULTIMA lista emitida levaria um newline proprio para a emenda com o
+    APPLY-PEER, que o template ja abre com uma linha em branco. #}
+{{ "\n" }}
+{# PLANO.md / AS-path por peer. Fora do laco de familia: a lista nao tem eixo
+   de familia, e num peer dual-stack ela sairia definida duas vezes. Sem block
+   list a excecao nao existe, e o import ja so consulta esta lista quando ela
+   tem conteudo: a definicao segue a referencia. #}
+xpl as-path-list AP-BLOCK-{{ alvo.token }}
+{% for asn in alvo.ap_block %}
+ pass '{{ asn }}'{{ "," if not loop.last }}
+{% endfor %}
+end-list
+{%- endif %}
+{%- if alvo.ap_te %}
+{{ "\n" }}
+{# ASNs que se alcanca melhor pela borda deste upstream. origin, como no
+   PLANO: o que interessa e quem originou, nao por onde passou. #}
+xpl as-path-list AP-TE-PREFER-{{ alvo.token }}
+{% for asn in alvo.ap_te %}
+ origin '{{ asn }}'{{ "," if not loop.last }}
+{% endfor %}
+end-list
+{%- endif %}
+{%- endmacro %}
+
+{# O miolo do IX. Tudo do IX sem eixo de familia cabe em listas_ix: nem o
+   AP-IX nem os CL/LC-NOADV mudam com a familia. #}
+{% macro filtro_ix_import(alvo, fam) -%}
+{% set U = fam|upper %}
+xpl route-filter IX-{{ alvo.token }}-IMPORT-{{ U }}
+ call route-filter IMPORT-SANITY-{{ U }}
+
+ {# anti-leak de IX: membro nao deve anunciar rota de transito #}
+ if as-path length ge 4 then
+  refuse
+ endif
+
+ {# overwrite: nada do que o membro do IX escreveu sobrevive. 1001:<ix_id> e a
+    informativa de IX; o id e o do PeeringDB, nao o ASN do route server. #}
+ apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
+ apply large-community {{ plan.conjunto(plan.c_large(1001, alvo.ix_id)) }} overwrite
+
+{% if alvo.ap_prefer %}
+ if as-path matches-any AP-IX-{{ alvo.token }} then
+  apply local-preference {{ plan.LP_IX_CDN }}
+ else
+  apply local-preference {{ alvo.lp_base }}
+ endif
+{% else %}
+ apply local-preference {{ alvo.lp_base }}
+{% endif %}
+
+ finish
+ end-filter
+{%- endmacro %}
+
+{% macro filtro_ix_export(alvo, fam) -%}
+{% set U = fam|upper %}
+xpl route-filter IX-{{ alvo.token }}-EXPORT-{{ U }}
+ call route-filter EXPORT-SANITY
+
+ {# rede de seguranca do 2000, igual ao egress de upstream: rota aprendida de
+    fora ja caiu no EXPORT-SANITY acima. #}
+ if community matches-any {{ plan.conjunto(plan.c(2000)) }} then
+  refuse
+ endif
+
+ if community matches-any CL-NOADV-{{ alvo.token }} or large-community matches-any LC-NOADV-{{ alvo.token }} then
+  refuse
+ endif
+
+ if community matches-any CL-ONLY-NOT-IX then
+  refuse
+ endif
+
+ {# 6CA da classe plan.CLASSE_6CA["ix"] = IX publico; P2=1x, P3=2x, P4=3x. Sem
+    ramo 5PPA: o route server repassa o mesmo AS-path a todos os membros,
+    entao prepend no egress da sessao com o RS prependa para todo mundo.
+    Prepend por membro so com sessao bilateral. #}
+ if community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["ix"], 4)) }} then
+  apply as-path {{ plan.ASN }} 3 additive
+ elseif community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["ix"], 3)) }} then
+  apply as-path {{ plan.ASN }} 2 additive
+ elseif community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["ix"], 2)) }} then
+  apply as-path {{ plan.ASN }} 1 additive
+ endif
+
+ {# sem limpeza no fecho: a rota sai com tudo o que carrega, e o que decide o
+    anuncio sao os matches-any acima. #}
+ finish
+ end-filter
+{%- endmacro %}
+
+{% macro listas_ix(alvo) %}
+{#- o branco abaixo e de proposito, e o newline da chamada no template e o da
+    ultima linha do EXPORT: sem ele a linha em branco que separa o ultimo
+    filtro da primeira lista some. #}
+
+{# um set por peer: evita cadeia de OR na condicao. #}
+xpl community-list CL-NOADV-{{ alvo.token }}
+{% for c in plan.noadv("ix", alvo.id) %}
+ {{ c }}{{ "," if not loop.last }}
+{% endfor %}
+ end-list
+
+xpl large-community-list LC-NOADV-{{ alvo.token }}
+ {{ plan.c_large(0, alvo.asn) }}
+ end-list
+{%- if alvo.ap_prefer %}
+{#- o - deste if come o newline da lista de cima, e o {{ "\n" }} abaixo repoe
+    o branco de separacao. O branco fica no comeco do bloco opcional, e nao no
+    fim: senao a ULTIMA lista emitida levaria um newline proprio para a emenda
+    com o bgp, que o template ja abre com uma linha em branco. #}
+{{ "\n" }}
+{# membros deste IX que recebem LP plan.LP_IX_CDN em vez de alvo.lp_base.
+   peer-is, nao pass: o route server e transparente e nao insere o proprio
+   ASN no path, entao peer-is identifica quem realmente anunciou, e da
+   politica por membro com uma unica sessao contra o RS. #}
+xpl as-path-list AP-IX-{{ alvo.token }}
+{% for asn in alvo.ap_prefer %}
+ peer-is '{{ asn }}'{{ "," if not loop.last }}
+{% endfor %}
+ end-list
+{%- endif %}
+{%- endmacro %}
+
+{# O miolo do PNI. #}
+{% macro filtro_pni_import(alvo, fam) -%}
+{% set U = fam|upper %}
+xpl route-filter PNI-{{ alvo.token }}-IMPORT-{{ U }}
+ call route-filter IMPORT-SANITY-{{ U }}
+
+ {# sessao bilateral: so entra o que a CDN pode anunciar #}
+ if not as-path matches-any AP-{{ alvo.token }}-ALLOWED then
+  refuse
+ endif
+
+ apply local-preference {{ alvo.lp_base }}
+ {# overwrite: a CDN nao escreve no nosso namespace. plan.GEO_PNI e a
+    geografia fixa do PNI. 2000 porque a rota vem de fora: nao e propria nem
+    de cliente. #}
+ apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(plan.GEO_PNI), plan.c(2000)) }} overwrite
+ apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
+
+ finish
+ end-filter
+{%- endmacro %}
+
+{% macro filtro_pni_export(alvo, fam) -%}
+{% set U = fam|upper %}
+xpl route-filter PNI-{{ alvo.token }}-EXPORT-{{ U }}
+ call route-filter EXPORT-SANITY
+
+ {# rede de seguranca do 2000, igual aos demais egress externos. #}
+ if community matches-any {{ plan.conjunto(plan.c(2000)) }} then
+  refuse
+ endif
+
+ if community matches-any CL-NOADV-{{ alvo.token }} or large-community matches-any LC-NOADV-{{ alvo.token }} then
+  refuse
+ endif
+
+ if community matches-any CL-ONLY-NOT-PNI then
+  refuse
+ endif
+
+ {# 6CA da classe plan.CLASSE_6CA["pni"] = CDN; P2=1x, P3=2x, P4=3x. O PNI e
+    bilateral e o ramo 5PPA funcionaria aqui, mas o exemplo do PLANO nao o
+    traz; fica na lista de pendencias, nao como decisao. #}
+ if community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["pni"], 4)) }} then
+  apply as-path {{ plan.ASN }} 3 additive
+ elseif community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["pni"], 3)) }} then
+  apply as-path {{ plan.ASN }} 2 additive
+ elseif community matches-any {{ plan.conjunto(plan.c6ca(plan.CLASSE_6CA["pni"], 2)) }} then
+  apply as-path {{ plan.ASN }} 1 additive
+ endif
+
+ {# igual ao egress do IX: sem limpeza no fecho. A CDN nao tem community
+    propria hoje; se tiver, entra a mesma montagem de APPLY-PEER-<T> usada no
+    upstream. #}
+ finish
+ end-filter
+{%- endmacro %}
+
+{% macro listas_pni(alvo) %}
+{#- o branco abaixo e de proposito, e o newline da chamada no template e o da
+    ultima linha do EXPORT: sem ele a linha em branco que separa o ultimo
+    filtro da primeira lista some. #}
+
+{# CDN via PNI: so estes ASNs podem chegar por esta sessao. pass, nao origin:
+   o que se quer e aceitar path que passe pelo ASN da CDN, que costuma
+   anunciar por tras do transito dela. #}
+xpl as-path-list AP-{{ alvo.token }}-ALLOWED
+{% for asn in alvo.ap_allowed %}
+ pass '{{ asn }}'{{ "," if not loop.last }}
+{% endfor %}
+ end-list
+
+{# um set por peer: evita cadeia de OR na condicao. #}
+xpl community-list CL-NOADV-{{ alvo.token }}
+{% for c in plan.noadv("pni", alvo.id) %}
+ {{ c }}{{ "," if not loop.last }}
+{% endfor %}
+ end-list
+
+xpl large-community-list LC-NOADV-{{ alvo.token }}
+ {{ plan.c_large(0, alvo.asn) }}
+ end-list
+{%- endmacro %}

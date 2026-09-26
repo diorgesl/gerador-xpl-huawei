@@ -1,0 +1,34 @@
+# gerado por bgpgen - nao editar a mao
+# blocos proprios do AS{{ plan.ASN }}
+# fonte: peers.yaml, secao blocos
+# fora da view do bgp: estaticas de ancoragem e filtros de originacao.
+# as linhas "network" de cada familia vao no fim deste arquivo.
+
+{% for fam in plan.FAMILIAS %}
+{% for b in blocos[fam] %}
+{% set nome = plan.nome_origem(b.prefixo) %}
+{% set std, lg = plan.separa_communities(b.communities) %}
+{% set kw = "ipv6 route-static" if fam == "v6" else "ip route-static" %}
+{{ kw }} {{ plan.endereco(b.prefixo) }} {{ plan.mascara(b.prefixo) }} NULL0 preference {{ plan.PREFERENCE_ORIGEM }}
+
+xpl route-filter {{ nome }}
+ apply local-preference {{ plan.LP_ORIGEM }}
+ apply community {{ plan.conjunto_de([plan.c(1000)] + std) }} overwrite
+{% if lg %}
+ apply large-community {{ plan.conjunto_de(lg) }} overwrite
+{% endif %}
+ break
+end-filter
+
+{% endfor %}
+{% endfor %}
+{%- for fam in plan.FAMILIAS if blocos[fam] %}
+# --- dentro de {{ "ipv6-family unicast" if fam == "v6" else "ipv4-family unicast" }} ---
+{% for b in blocos[fam] %}
+ network {{ plan.endereco(b.prefixo) }} {{ plan.mascara(b.prefixo) }} route-filter {{ plan.nome_origem(b.prefixo) }}
+{% endfor %}
+{#- o branco entre as secoes de familia, como o que separa os blocos de
+    cima: sem ele o comentario que abre a familia seguinte encosta na
+    ultima linha network da anterior #}
+{{ "\n" if not loop.last -}}
+{% endfor %}

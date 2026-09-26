@@ -1,0 +1,22 @@
+!- gerado por bgpgen - nao editar a mao
+!- remocao dos blocos proprios do AS{{ plan.ASN }}
+!- Desligar o prefixo e o que sai abaixo. O bloco cobre o cadastro
+!- inteiro, inclusive o prefixo fora de servico, que na tela e a linha
+!- comecada por !-: ele nao sai em configuracao nenhuma, mas o
+!- equipamento pode ainda te-lo, e e por este bloco que ele sai de la.
+!- Para tirar apenas o tratamento manual e deixar o prefixo anunciado,
+!- esvazie a lista dele na tela e cole o bloco de originacao de novo: o
+!- filtro continua existindo com o 1000 e mais nada.
+!- A ordem importa: o filtro nao pode ser apagado enquanto o network o
+!- referencia, e a estatica sai por ultimo para o prefixo nao sumir da
+!- tabela com o network ainda apontando para ela.
+
+{% for fam in plan.FAMILIAS %}
+{% for b in blocos[fam] %}
+{% set kw = "ipv6 route-static" if fam == "v6" else "ip route-static" %}
+undo network {{ plan.endereco(b.prefixo) }} {{ plan.mascara(b.prefixo) }}
+undo xpl route-filter {{ plan.nome_origem(b.prefixo) }}
+undo {{ kw }} {{ plan.endereco(b.prefixo) }} {{ plan.mascara(b.prefixo) }} NULL0
+
+{% endfor %}
+{% endfor %}

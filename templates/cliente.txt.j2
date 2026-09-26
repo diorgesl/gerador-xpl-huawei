@@ -1,0 +1,79 @@
+{# Este bloco serve o cliente e o parceiro, e o render mapeia os dois para
+   este arquivo: a regra de downstream e uma so, e um arquivo copiado seria
+   o segundo lugar para esquecer quando ela mudar. A diferenca entre os dois
+   e a marca de 2091, que entra pelo plan.c_downstream. #}
+{% import "_macros.j2" as m %}
+{{ m.cabecalho(peer) }}
+
+{% if grupo %}
+{% if peer.tem_filtro_proprio() %}
+{% for fam in peer.familias() %}
+{{ m.prefix_lists_downstream(peer, fam) -}}
+# Filtro XPL Import (override deste membro - o export continua do grupo)
+{{ m.filtro_downstream_import(peer, fam, true, true) }}
+{% endfor %}
+{{ m.ap_cust_downstream(peer) }}
+{{ m.apply_peer(peer) }}
+
+{% endif %}
+{# Este ramo nao chama m.sessao_do_peer/m.familia_bgp: essas macros sao do
+   peer avulso e reemitiriam AS_ONLY/timers/graceful-restart/bfd/
+   advertise-community por membro, coisa que so deve existir uma vez, no
+   arquivo do grupo (sessao_do_grupo/familia_grupo, task 5). O membro so
+   referencia o group aqui; quem "limpar a duplicacao aparente" reusando as
+   macros do peer quebra a heranca do grupo em silencio. #}
+bgp {{ plan.ASN }}
+{% for fam in peer.familias() %}
+ peer {{ peer.sessoes[fam].remoto }} description {{ peer.descricao }}
+{% if not grupo.asn %}
+ peer {{ peer.sessoes[fam].remoto }} as-number {{ peer.asn }}
+{% endif %}
+{# o limite e da sessao, nao do grupo, e por isso ele sai aqui e nao no arquivo
+   do grupo: a spec o deixa no Peer mesmo dentro de um grupo, o PLANO manda
+   route-limit em toda sessao, sem excecao, inclusive cliente pequeno - e no
+   grupo o limite seria um so para todos os membros, e o do membro sumiria.
+   A linha tambem nao tem guarda de tipo: o plan.ROUTE_LIMIT tem valor nos
+   cinco, e condicionar a "cliente" deixava um membro parceiro sem limite
+   nenhum, porque o ramo de membro nao chama sessao_do_peer. #}
+ peer {{ peer.sessoes[fam].remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
+ peer {{ peer.sessoes[fam].remoto }} group {{ grupo.nome }}
+{% endfor %}
+{% for fam in peer.familias() %}
+{% set U = fam|upper %}
+{% set s = peer.sessoes[fam] %}
+ {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
+  peer {{ s.remoto }} enable
+  peer {{ s.remoto }} group {{ grupo.nome }}
+{% if peer.tem_filtro_proprio() %}
+  peer {{ s.remoto }} route-filter CUST-{{ peer.token }}-IMPORT-{{ U }} import
+{% endif %}
+{% if peer.default_route %}
+  peer {{ s.remoto }} default-route-advertise
+{% endif %}
+{% endfor %}
+{% else %}
+{% for fam in peer.familias() %}
+{{ m.prefix_lists_downstream(peer, fam) -}}
+# Filtro XPL Import
+{{ m.filtro_downstream_import(peer, fam, true, true) }}
+
+{{ m.filtro_downstream_export(peer, fam) }}
+{% endfor %}
+
+{{ m.ap_cust_downstream(peer) }}
+{{ m.apply_peer(peer) }}
+
+bgp {{ plan.ASN }}
+{# o grupo de sessao termina em newline e familia_bgp ja abre com a linha em
+   branco. Sem o corte abaixo a emenda sai com duas. O separador fica entre
+   grupos, nunca depois do ultimo. #}
+{% for fam in peer.familias() %}
+{{ m.sessao_do_peer(peer, fam) }}{{ "\n" if not loop.last -}}
+{% endfor %}
+{% for fam in peer.familias() %}
+{% set U = fam|upper %}
+{{ m.familia_bgp(peer, fam,
+     "CUST-" ~ peer.token ~ "-IMPORT-" ~ U,
+     "CUST-" ~ peer.token ~ "-EXPORT-" ~ U) }}
+{% endfor %}
+{% endif %}

@@ -1,0 +1,22 @@
+!- gerado por bgpgen - nao editar a mao
+!- remocao do peer 9 - parceiro - AS64500
+!- cole so isto para excluir a sessao do equipamento
+
+undo peer 198.51.100.2
+undo peer 2001:db8:500::2
+undo xpl route-filter CUST-64500-EXPORT-V4
+undo xpl route-filter CUST-64500-IMPORT-V4
+undo xpl ip-prefix-list PL-CUST-64500-BH-V4
+undo xpl ip-prefix-list PL-CUST-64500-V4
+undo xpl route-filter CUST-64500-EXPORT-V6
+undo xpl route-filter CUST-64500-IMPORT-V6
+undo xpl ipv6-prefix-list PL-CUST-64500-BH-V6
+undo xpl ipv6-prefix-list PL-CUST-64500-V6
+undo xpl as-path-list AP-CUST-64500
+undo xpl route-filter APPLY-PEER-64500
+
+!- ATENCAO: CL-PEER-64500 tem o conteudo no cadastro do peer,
+!- entao da para recriar pelo quadro "ao criar o peer". O undo segue
+!- comentado porque derrubar a sessao nao exige apagar a lista, e um
+!- descomente sem querer leva embora o que esta la.
+!- undo xpl community-list CL-PEER-64500

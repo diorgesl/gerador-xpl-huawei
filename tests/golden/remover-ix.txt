@@ -1,0 +1,13 @@
+!- gerado por bgpgen - nao editar a mao
+!- remocao do peer 10 - ix - AS26162
+!- cole so isto para excluir a sessao do equipamento
+
+undo peer 187.16.192.2
+undo peer 2001:db8:300::2
+undo xpl route-filter IX-IX-SP-EXPORT-V4
+undo xpl route-filter IX-IX-SP-IMPORT-V4
+undo xpl route-filter IX-IX-SP-EXPORT-V6
+undo xpl route-filter IX-IX-SP-IMPORT-V6
+undo xpl community-list CL-NOADV-IX-SP
+undo xpl large-community-list LC-NOADV-IX-SP
+

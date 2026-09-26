@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bgpgen - grupo {{ grupo.nome or "novo" }}</title>
+{% include "_copiar.html" %}
+
+
+{% include "_estilo.html" %}
+
+{# As tabelas do plan.py chegam inteiras, e o JS abaixo so as le: nenhum valor
+   de politica e reescrito na tela. E o mesmo blob `PADROES` do _padroes() que
+   a tela do peer ja consome - uma segunda copia da lista de origem seria uma
+   segunda chance de divergir do plan.py. #}
+<script id="padroes" type="application/json">{{ PADROES|tojson }}</script>
+<script>
+(function () {
+ "use strict";
+ var blob = document.getElementById("padroes");
+ if (!blob) return;
+ var p = JSON.parse(blob.textContent);
+
+ function campo(nome) { return document.querySelector('[name="' + nome + '"]'); }
+ function texto(nome) { var c = campo(nome); return c ? c.value : null; }
+ function poe(nome, v) {
+  var c = campo(nome);
+  if (c && v !== null && v !== undefined) c.value = String(v);
+ }
+
+ // os blocos marcados com data-para so aparecem no tipo escolhido. A tela do
+ // peer mostra todos os campos para todos os tipos e deixa a validacao
+ // recusar; aqui sao cinco tipos com campos proprios, e o bloco escondido
+ // esconde da VISTA, nao do POST: `hidden` nao tira o controle do envio, so
+ // `disabled` tiraria. O grupo_do_formulario le esses campos sem gate de
+ // tipo, entao o que o operador preencheu num tipo continua indo junto e e
+ // gravado quando ele troca o tipo - so a leitura, na saida, e que muda com
+ // o tipo. Fechar isso exige decidir campo a campo quem e dono de qual
+ // (ap_block/ap_te de upstream, ap_allowed de pni, ap_prefer de ix, e
+ // communities/large_communities com semantica por tipo); a decisao esta
+ // registrada como pendencia e nao entra neste conserto.
+ function mostraCampos(tipo) {
+  var blocos = document.querySelectorAll("[data-para]");
+  for (var i = 0; i < blocos.length; i++) {
+   var vale = blocos[i].getAttribute("data-para").split(" ");
+   blocos[i].hidden = vale.indexOf(tipo) < 0;
+  }
+ }
+
+ // a lista de origem muda com o tipo, e a origem do upstream nao serve no
+ // cliente: trocar o tipo obriga a redesenhar as opcoes
+ function redesenhaOrigens(tipo, manter) {
+  var sel = campo("origem");
+  if (!sel) return;
+  var lista = p.origens_por_tipo[tipo] || p.origens_por_tipo.cliente;
+  var escolhido = lista.indexOf(manter) >= 0 ? manter : lista[0];
+  sel.innerHTML = "";
+  for (var i = 0; i < lista.length; i++) {
+   var o = document.createElement("option");
+   o.value = String(lista[i]);
+   o.textContent = " " + lista[i] + " - " + p.origem_nome[String(lista[i])];
+   o.selected = lista[i] === escolhido;
+   sel.appendChild(o);
+  }
+ }
+
+ var tipoAnterior = null;
+
+ function cascata() {
+  var tipo = texto("tipo");
+  var antes = p.tipos[tipoAnterior];
+  var agora = p.tipos[tipo];
+
+  // so reescreve o campo que ainda esta no default do tipo anterior: o que
+  // o operador ja digitou por cima fica onde esta
+  if (tipo !== tipoAnterior && antes && agora) {
+   if (texto("lp_base") === String(antes.lp_base)) poe("lp_base", agora.lp_base);
+   if (texto("timer_keepalive") === String(antes.timer_keepalive)) poe("timer_keepalive", agora.timer_keepalive);
+   if (texto("timer_hold") === String(antes.timer_hold)) poe("timer_hold", agora.timer_hold);
+  }
+
+  if (tipo !== tipoAnterior) {
+   mostraCampos(tipo);
+   redesenhaOrigens(tipo, Number(texto("origem")));
+  }
+
+  tipoAnterior = tipo;
+ }
+
+ // o script mora no <head>, e um script classico ali roda antes de o
+ // formulario existir: sem esperar o DOM, o campo("tipo") devolve null, o
+ // listener nao e ligado e o data-tipo do body nem esta no documento ainda.
+ // Nada disso aparece na tela ate alguem trocar o select - e era trocar o
+ // select e nada acontecer. A tela do peer tem o script no mesmo lugar, sem
+ // esta espera.
+ document.addEventListener("DOMContentLoaded", function () {
+  tipoAnterior = document.body.getAttribute("data-tipo");
+  mostraCampos(tipoAnterior);
+  var st = campo("tipo");
+  if (st) st.addEventListener("change", cascata);
+ });
+})();
+</script>
+
+</head>
+<body data-tipo="{{ grupo.tipo }}">
+
+{# A folha e a mesma da tela do peer (_estilo.html): a pagina do grupo nasceu
+   com um punhado de estilos soltos na tag <body> e por isso aparecia com
+   input de largura inteira e botao de fabrica. #}
+
+<header class="topo">
+ <div class="marca">
+  <span class="marca-nome">bgpgen</span>
+  {# o AS e da rede inteira, nao desta tela: quem o troca e o campo do topo
+     da tela de peers, e aqui ele so aparece para o operador saber o que
+     esta olhando #}
+  <span class="marca-sub">grupos BGP do AS{{ plan.ASN }}</span>
+ </div>
+ <div class="topo-estado">
+  <a class="btn btn-fantasma" href="/">&larr; peers</a>
+ </div>
+</header>
+
+<div class="linha{{ ' com-saida' if saida }}">
+
+ {# O mesmo menu da tela do peer, com os grupos no lugar dos peers. A coluna
+    de membros sai dos peers gravados, e nao de um campo do grupo: e ela que
+    diz se o grupo ainda pode ser excluido, porque o excluir recusa enquanto
+    houver membro. #}
+ <aside id="lista" class="painel">
+  <div class="painel-pe"><a class="btn btn-fantasma" href="/grupo/novo">+ novo grupo</a></div>
+  <h2>Grupos</h2>
+  <div class="painel-corpo">
+   {% if grupos %}
+   <table class="tabela-peers">
+    <thead>
+     <tr><th>nome</th><th>tipo</th><th>membros</th></tr>
+    </thead>
+    <tbody>
+     {% for g in grupos %}
+     <tr{% if g.id == grupo.id %} aria-current="true"{% endif %}>
+      <td><a href="/grupo/{{ g.nome }}">{{ g.nome }}</a></td>
+      <td>{{ g.tipo }}</td>
+      <td class="mono">{{ peers|selectattr('grupo_id', 'eq', g.id)|list|length }}</td>
+     </tr>
+     {% endfor %}
+    </tbody>
+   </table>
+   {% else %}
+   <p class="vazio">nenhum grupo cadastrado</p>
+   {% endif %}
+  </div>
+  <div class="painel-pe"><a class="btn btn-fantasma" href="/peer/novo">criar peer</a></div>
+ </aside>
+
+ <main id="formulario" class="painel">
+  <h2>{{ "novo grupo" if criando else "grupo " ~ grupo.nome }}</h2>
+  <div class="painel-corpo">
+  {# Mesmo resumo do peer: o validate.py devolve o campo de cada erro, entao o
+     aviso do topo leva ao input. Os erros que nao pertencem a nenhum campo -
+     o ASN recusado, o grupo ainda com membros - saem so em texto, porque
+     ancora para um alvo que nao existe na tela nao leva a lugar nenhum.
+
+     O aprendizado e campo de dois blocos, upstream e ix, e cada um leva o
+     seu id (f-aprendizado e f-aprendizado_ix): id repetido e HTML invalido,
+     e o erro sai com a chave `aprendizado` nos dois, porque o campo do Grupo
+     e um so. Por isso a ancora e escolhida pelo tipo da tela - o `grupo` do
+     contexto sabe o tipo, o dicionario de erros nao -, senao o erro de um
+     grupo de ix linkaria para o bloco de upstream, que nasce escondido, e o
+     operador clicaria e nao veria campo nenhum. #}
+  {% set ancoraveis = ['nome', 'tipo', 'asn', 'classe', 'origem', 'pop',
+                       'lp_base', 'aprendizado', 'ix_id', 'bh_upstream',
+                       'prepend_base', 'timer_keepalive', 'timer_hold',
+                       'prefixos', 'prefixos_v4', 'prefixos_v6',
+                       'default_route', 'confirmado'] %}
+  {% set ancoras = {'aprendizado': 'f-aprendizado_ix'
+                                 if grupo.tipo == 'ix' else 'f-aprendizado'} %}
+  {% if erros %}
+  <div class="noticia erro" role="alert">
+   <div>
+    <strong>{{ erros|length }} campo(s) para corrigir</strong>
+    <ul>
+     {% for campo, msg in erros.items() %}
+     <li>{% if campo in ancoraveis %}<a href="#{{ ancoras.get(campo, 'f-' ~ campo) }}">{{ msg }}</a>{% else %}{{ msg }}{% endif %}</li>
+     {% endfor %}
+    </ul>
+   </div>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/grupo">
+   {# o id vai escondido porque e a identidade do registro: o nome e a chave
+      que aparece na tela e na URL, mas renomear o grupo nao pode virar um
+      grupo novo com outro id #}
+   <input type="hidden" name="id" value="{{ grupo.id }}">
+
+   <fieldset class="secao">
+    <legend>identificacao</legend>
+    <div class="campos">
+     <label class="campo{{ ' campo-com-erro' if erros.get('nome') }}" id="f-nome">
+      <span class="rotulo">nome <span class="tag">VRP, maiusculo</span></span>
+      <input name="nome" value="{{ grupo.nome }}" required>
+      <span class="ajuda">vira o nome do group no equipamento</span>
+      {% if erros.get('nome') %}<span class="msg-erro">{{ erros.get('nome') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('tipo') }}" id="f-tipo">
+      <span class="rotulo">tipo</span>
+      <select name="tipo">
+       {% for t in TIPOS %}
+       <option value="{{ t }}"{{ " selected" if grupo.tipo == t }}>{{ t }}</option>
+       {% endfor %}
+      </select>
+      {% if erros.get('tipo') %}<span class="msg-erro">{{ erros.get('tipo') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('asn') }}" id="f-asn">
+      <span class="rotulo">ASN do grupo</span>
+      <input name="asn" value="{{ grupo.asn or '' }}">
+      <span class="ajuda">em branco = cada membro declara o proprio</span>
+      {% if erros.get('asn') %}<span class="msg-erro">{{ erros.get('asn') }}</span>{% endif %}
+     </label>
+    </div>
+   </fieldset>
+
+   {# data-para diz ao JS a que tipos o bloco pertence. O JS esconde os
+      blocos do tipo que nao esta no select ao carregar a pagina, e refaz a
+      conta a cada troca de tipo, sem recarregar. Aqui sai so a marcacao,
+      sem `hidden`: e o JS que esconde, e a tela sem ele mostra tudo, como a
+      tela do peer. #}
+   <div data-para="cliente parceiro">
+    <fieldset class="secao">
+     <legend>downstream</legend>
+     <div class="campos">
+      <label class="campo{{ ' campo-com-erro' if erros.get('classe') }}" id="f-classe">
+       <span class="rotulo">classe</span>
+       <select name="classe">
+        <option value="">&mdash; sem classe &mdash;</option>
+        {% for c in CLASSES_CLIENTE %}
+        <option value="{{ c }}"{{ " selected" if grupo.classe == c }}>{{ c }}</option>
+        {% endfor %}
+       </select>
+       {% if erros.get('classe') %}<span class="msg-erro">{{ erros.get('classe') }}</span>{% endif %}
+      </label>
+      <label class="campo{{ ' campo-com-erro' if erros.get('pop') }}" id="f-pop">
+       <span class="rotulo">POP <span class="tag">2001-2999</span></span>
+       <input name="pop" value="{{ grupo.pop if grupo.pop is not none else '' }}">
+       {% if erros.get('pop') %}<span class="msg-erro">{{ erros.get('pop') }}</span>{% endif %}
+      </label>
+     </div>
+    </fieldset>
+   </div>
+
+   <fieldset class="secao">
+    <legend>politica</legend>
+    <div class="campos">
+     {# a origem e vocabulario do plano, nao inventario do operador, e o
+        validar_grupo recusa um grupo com a marca de outro tipo: por isso e
+        um select preso a tabela do tipo, e nao mais um input livre. O `.get`
+        com o ORIGEM_NOME de reserva e o mesmo da tela do peer, e vale para
+        um tipo fora da tabela - yaml editado a mao, POST com tipo torto -,
+        que chega aqui pelo caminho de erro do salvar: o subscrito direto
+        nao estoura (o Undefined do Jinja itera vazio), mas deixaria o select
+        sem opcao nenhuma, com o "tipo desconhecido" ao lado. #}
+     {% set origens = plan.ORIGENS_POR_TIPO.get(grupo.tipo, plan.ORIGEM_NOME) %}
+     <label class="campo{{ ' campo-com-erro' if erros.get('origem') }}" id="f-origem">
+      <span class="rotulo">origem <span class="tag">1xxx</span></span>
+      <select name="origem">
+       {% for o in origens %}
+       <option value="{{ o }}"{{ " selected" if grupo.origem == o }}>{{ o }} - {{ plan.ORIGEM_NOME[o] }}</option>
+       {% endfor %}
+       {# origem gravada por uma versao anterior pode estar fora da tabela do
+          tipo. Sem esta opcao o select cairia na primeira e trocaria a origem
+          do grupo em silencio, so por abrir a tela. #}
+       {% if grupo.origem and grupo.origem not in origens %}
+       <option value="{{ grupo.origem }}" selected>{{ grupo.origem }} - fora da tabela do tipo</option>
+       {% endif %}
+      </select>
+      <span class="ajuda">a lista muda com o tipo</span>
+      {% if erros.get('origem') %}<span class="msg-erro">{{ erros.get('origem') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('lp_base') }}" id="f-lp_base">
+      <span class="rotulo">LP base</span>
+      <input name="lp_base" value="{{ grupo.lp_base }}">
+      <span class="ajuda">o membro sem lp_base proprio usa este</span>
+      {% if erros.get('lp_base') %}<span class="msg-erro">{{ erros.get('lp_base') }}</span>{% endif %}
+     </label>
+     {# a caixa fica visivel nos cinco tipos, como na tela do peer: a
+        validacao e quem recusa o default route fora do downstream. #}
+     <label class="campo campo-caixa{{ ' campo-com-erro' if erros.get('default_route') }}" id="f-default_route">
+      <input type="checkbox" name="default_route"{{ " checked" if grupo.default_route }}>
+      <span class="rotulo">default-route-advertise <span class="tag">cliente / parceiro</span></span>
+      {% if erros.get('default_route') %}<span class="msg-erro">{{ erros.get('default_route') }}</span>{% endif %}
+     </label>
+    </div>
+   </fieldset>
+
+   <fieldset class="secao">
+    <legend>limites e timers</legend>
+    <div class="campos">
+     {# o par keepalive/hold sai na sessao do grupo, que todo membro herda: ao
+        contrario do timer de um peer, um hold curto aqui derruba a sessao de
+        todos os membros de uma vez #}
+     <label class="campo{{ ' campo-com-erro' if erros.get('timer_keepalive') }}" id="f-timer_keepalive">
+      <span class="rotulo">timer keepalive</span>
+      <input name="timer_keepalive" value="{{ grupo.timer_keepalive or '' }}">
+      <span class="ajuda">em branco = default do equipamento</span>
+      {% if erros.get('timer_keepalive') %}<span class="msg-erro">{{ erros.get('timer_keepalive') }}</span>{% endif %}
+     </label>
+     <label class="campo{{ ' campo-com-erro' if erros.get('timer_hold') }}" id="f-timer_hold">
+      <span class="rotulo">timer hold</span>
+      <input name="timer_hold" value="{{ grupo.timer_hold or '' }}">
+      {% if erros.get('timer_hold') %}<span class="msg-erro">{{ erros.get('timer_hold') }}</span>{% endif %}
+     </label>
+     {# as duas caixas sao do dataclass do Grupo, que nasce com bfd e
+        graceful-restart ligados: a tela mostra o estado em que eles estao, e um
+        formulario sem os campos gravaria os dois desligados a cada salvar #}
+     <label class="campo campo-caixa">
+      <input type="checkbox" name="bfd"{{ " checked" if grupo.bfd }}>
+      <span class="rotulo">bfd enable</span>
+     </label>
+     <label class="campo campo-caixa">
+      <input type="checkbox" name="graceful_restart"{{ " checked" if grupo.graceful_restart }}>
+      <span class="rotulo">capability-advertise graceful-restart</span>
+     </label>
+    </div>
+   </fieldset>
+
+   {# Um datalist so para os dois blocos de aprendizado, como o id do label e
+      um so por bloco (f-aprendizado e f-aprendizado_ix): os dois blocos ficam
+      no formulario ao mesmo tempo em qualquer tipo, entao uma lista por bloco
+      repetiria o id. Ele mora fora dos data-para porque nao pertence a bloco
+      nenhum - os dois inputs chegam nele pelo list=, que resolve pelo id no
+      documento -, e o datalist nao desenha nada. A lista chega pronta do
+      _contexto_grupo, que manda peers e grupos juntos para o _usados. #}
+   <datalist id="d-aprendizado">
+    {% for v in APRENDIZADO_USADOS %}<option value="{{ v }}">ja cadastrado</option>{% endfor %}
+   </datalist>
+
+   <div data-para="upstream">
+    <fieldset class="secao">
+     <legend>upstream</legend>
+     <div class="campos">
+      <label class="campo{{ ' campo-com-erro' if erros.get('aprendizado') }}" id="f-aprendizado">
+       <span class="rotulo">aprendizado <span class="tag">3000-3999</span></span>
+       <input name="aprendizado" list="d-aprendizado" value="{{ grupo.aprendizado if grupo.aprendizado is not none else '' }}">
+       {% if erros.get('aprendizado') %}<span class="msg-erro">{{ erros.get('aprendizado') }}</span>{% endif %}
+      </label>
+      <label class="campo{{ ' campo-com-erro' if erros.get('bh_upstream') }}" id="f-bh_upstream">
+       <span class="rotulo">blackhole do upstream</span>
+       <input name="bh_upstream" value="{{ grupo.bh_upstream }}">
+       <span class="ajuda">a community que marca o host atacado, so no RTBH</span>
+       {# o campo esta em `ancoraveis` como os irmaos, e a ancora so leva a
+          algum lugar se o erro tambem aparecer do lado do campo: sem esta
+          linha o resumo linkava para um campo marcado e mudo #}
+       {% if erros.get('bh_upstream') %}<span class="msg-erro">{{ erros.get('bh_upstream') }}</span>{% endif %}
+      </label>
+      <label class="campo{{ ' campo-com-erro' if erros.get('prepend_base') }}" id="f-prepend_base">
+       <span class="rotulo">prepend base</span>
+       <input name="prepend_base" value="{{ grupo.prepend_base }}">
+      </label>
+      <label class="campo campo-largo">
+       <span class="rotulo">ap_block <span class="tag">um ASN por linha</span></span>
+       <textarea name="ap_block" rows="3">{{ grupo.ap_block|join("\n") }}</textarea>
+      </label>
+      <label class="campo campo-largo">
+       <span class="rotulo">ap_te <span class="tag">um ASN por linha</span></span>
+       <textarea name="ap_te" rows="3">{{ grupo.ap_te|join("\n") }}</textarea>
+      </label>
+      <label class="campo campo-largo">
+       <span class="rotulo">PL-TE-PREFER v4 <span class="tag">um CIDR por linha</span></span>
+       <textarea name="te_prefixos_v4" rows="3">{{ grupo.te_prefixos["v4"]|join("\n") }}</textarea>
+      </label>
+      <label class="campo campo-largo">
+       <span class="rotulo">PL-TE-PREFER v6 <span class="tag">um CIDR por linha</span></span>
+       <textarea name="te_prefixos_v6" rows="3">{{ grupo.te_prefixos["v6"]|join("\n") }}</textarea>
+      </label>
+      <label class="campo campo-largo">
+       <span class="rotulo">CL-PEER <span class="tag">a community da rede remota</span></span>
+       <textarea name="communities" rows="3">{{ grupo.communities|join("\n") }}</textarea>
+      </label>
+      <label class="campo campo-largo">
+       <span class="rotulo">LC-PEER <span class="tag">a versao de 32 bits</span></span>
+       <textarea name="large_communities" rows="3">{{ grupo.large_communities|join("\n") }}</textarea>
+      </label>
+     </div>
+    </fieldset>
+   </div>
+
+   <div data-para="ix">
+    <fieldset class="secao">
+     <legend>IX</legend>
+     <div class="campos">
+      {# nome e id proprios, nao os do bloco de upstream: os dois blocos ficam
+         no formulario ao mesmo tempo, e com um nome so para os dois o branco
+         do bloco escondido chegava junto do valor do visivel e tomava o lugar
+         dele no dict(form) - o salvar recusava o campo com o numero na frente
+         do operador. Qual dos dois vale e o tipo que decide, no app.py; e a
+         ancora do erro e o mesmo tipo que decide, no resumo do topo. #}
+      <label class="campo{{ ' campo-com-erro' if erros.get('aprendizado') }}" id="f-aprendizado_ix">
+       <span class="rotulo">aprendizado <span class="tag">3000-3999</span></span>
+       <input name="aprendizado_ix" list="d-aprendizado" value="{{ grupo.aprendizado if grupo.aprendizado is not none else '' }}">
+       {% if erros.get('aprendizado') %}<span class="msg-erro">{{ erros.get('aprendizado') }}</span>{% endif %}
+      </label>
+      <label class="campo{{ ' campo-com-erro' if erros.get('ix_id') }}" id="f-ix_id">
+       <span class="rotulo">ID do IX <span class="tag">PeeringDB</span></span>
+       <input name="ix_id" value="{{ grupo.ix_id if grupo.ix_id is not none else '' }}">
+       {% if erros.get('ix_id') %}<span class="msg-erro">{{ erros.get('ix_id') }}</span>{% endif %}
+      </label>
+      <label class="campo campo-largo">
+       <span class="rotulo">ap_prefer <span class="tag">um ASN por linha</span></span>
+       <textarea name="ap_prefer" rows="3">{{ grupo.ap_prefer|join("\n") }}</textarea>
+       <span class="ajuda">estes membros recebem LP 250 em vez do LP base</span>
+      </label>
+     </div>
+    </fieldset>
+   </div>
+
+   <div data-para="pni">
+    <fieldset class="secao">
+     <legend>PNI</legend>
+     <div class="campos">
+      <label class="campo campo-largo">
+       <span class="rotulo">ap_allowed <span class="tag">um ASN por linha</span></span>
+       <textarea name="ap_allowed" rows="3">{{ grupo.ap_allowed|join("\n") }}</textarea>
+       <span class="ajuda">so estes ASNs podem chegar por esta sessao</span>
+      </label>
+     </div>
+    </fieldset>
+   </div>
+
+   {# o erro de prefixo e da lista inteira, nao de um dos dois campos: o
+      validate marca `prefixos`, entao quem fica com a ancora e o fieldset.
+
+      O bloco nao tem `data-para`: o `_valida_prefixos` roda nos cinco tipos,
+      ai o erro de um grupo de upstream ancora aqui, e um bloco que o JS
+      esconde engoliria o clique. Por isso ele aparece nos cinco: a ancora do
+      erro precisa de um lugar que exista em todo tipo. O validate le o campo
+      nos cinco; na saida, quem le o `grupo.prefixos` e so o
+      `grupo_cliente.txt.j2`, e fora de cliente ou parceiro nao ha recusa por
+      tipo nem mudanca no arquivo gerado. #}
+   <fieldset class="secao{{ ' campo-com-erro' if erros.get('prefixos') }}" id="f-prefixos">
+    <legend>prefixos do grupo, um por linha</legend>
+    <div class="campos">
+     <label class="campo campo-largo">
+      <span class="rotulo">v4</span>
+      <textarea name="prefixos_v4" rows="5">{{ grupo.prefixos["v4"]|join("\n") }}</textarea>
+     </label>
+     <label class="campo campo-largo">
+      <span class="rotulo">v6</span>
+      <textarea name="prefixos_v6" rows="5">{{ grupo.prefixos["v6"]|join("\n") }}</textarea>
+     </label>
+    </div>
+    <div class="ajuda">em branco = sem confinamento: o membro anuncia o que o AP dele permitir</div>
+    {% if erros.get('prefixos') %}
+    <p class="msg-erro">{{ erros.get('prefixos') }}</p>
+    {% endif %}
+   </fieldset>
+
+   <div class="acoes acoes-fim">
+    <button class="btn btn-primario" type="submit">salvar</button>
+   </div>
+  </form>
+
+  {% if not criando %}
+  <fieldset class="secao secao-perigo">
+   <legend>zona de perigo</legend>
+   {# Duas etapas, como antes: o excluir abre a confirmacao em vez de apagar
+      no primeiro clique. E se o grupo ainda tiver membros o app recusa, entao
+      a tela mostra o motivo em vez de oferecer de novo o botao que nao vai
+      funcionar. #}
+   {% if erros.get('confirmado') %}
+   <div class="noticia aviso">
+    <div>
+     <strong>Confirma excluir o grupo {{ grupo.nome }}?</strong>
+     {% if membros %}<div>Peers apontando para ele: {{ membros|join(", ") }}.</div>{% endif %}
+     <form method="post" action="/grupo/{{ grupo.nome }}/excluir">
+      <input type="hidden" name="confirmado" value="sim">
+      <button class="btn btn-perigo" type="submit">confirmar exclusao</button>
+     </form>
+    </div>
+   </div>
+   {% elif erros.get('membros') %}
+   <div class="noticia aviso">
+    <div>
+     <strong>O grupo ainda tem peers membros</strong>
+     <div>Tire-os do grupo antes de excluir: {{ membros|join(", ") }}.</div>
+    </div>
+   </div>
+   {% else %}
+   <form method="post" action="/grupo/{{ grupo.nome }}/excluir">
+    <div class="acoes">
+     <button class="btn btn-perigo" type="submit">excluir</button>
+    </div>
+   </form>
+   {% endif %}
+  </fieldset>
+  {% endif %}
+  </div>
+ </main>
+
+ {% if saida %}
+ <section id="saida" class="painel">
+  <h2>saida do grupo {{ grupo.nome }}</h2>
+  <div class="painel-corpo">
+   <div class="abas">
+    <a class="btn btn-fantasma" href="/grupo/{{ grupo.nome }}">editar grupo</a>
+    <a class="btn btn-fantasma" href="/base.txt">bloco base</a>
+    {% if plan.quadro_ao_criar(grupo, de_grupo=True) %}
+    <a class="btn btn-fantasma" href="/saida/grupo/{{ grupo.nome }}/criar-lista">ao criar o grupo</a>
+    {% endif %}
+   </div>
+   <div class="bloco">
+    <div class="bloco-topo">
+     <span class="bloco-nome">bloco do grupo</span>
+     <button class="btn" type="button" onclick="copiar('saida-grupo')">copiar bloco do grupo</button>
+    </div>
+    <pre id="saida-grupo">{{ saida }}</pre>
+   </div>
+  </div>
+ </section>
+ {% endif %}
+
+</div>
+</body>
+</html>

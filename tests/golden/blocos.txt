@@ -1,0 +1,36 @@
+# gerado por bgpgen - nao editar a mao
+# blocos proprios do AS64512
+# fonte: peers.yaml, secao blocos
+# fora da view do bgp: estaticas de ancoragem e filtros de originacao.
+# as linhas "network" de cada familia vao no fim deste arquivo.
+
+ip route-static 38.252.64.0 255.255.252.0 NULL0 preference 250
+
+xpl route-filter ORIGEM-38-252-64-0_22
+ apply local-preference 900
+ apply community {64512:1000, 64512:613, 64512:621, 15169:12100} overwrite
+ break
+end-filter
+
+ip route-static 38.252.64.0 255.255.255.0 NULL0 preference 250
+
+xpl route-filter ORIGEM-38-252-64-0_24
+ apply local-preference 900
+ apply community {64512:1000, 64512:211} overwrite
+ break
+end-filter
+
+ipv6 route-static 2804:36b4:: 32 NULL0 preference 250
+
+xpl route-filter ORIGEM-2804-36b4_32
+ apply local-preference 900
+ apply community {64512:1000} overwrite
+ break
+end-filter
+
+# --- dentro de ipv4-family unicast ---
+ network 38.252.64.0 255.255.252.0 route-filter ORIGEM-38-252-64-0_22
+ network 38.252.64.0 255.255.255.0 route-filter ORIGEM-38-252-64-0_24
+
+# --- dentro de ipv6-family unicast ---
+ network 2804:36b4:: 32 route-filter ORIGEM-2804-36b4_32
