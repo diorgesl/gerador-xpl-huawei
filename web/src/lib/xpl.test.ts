@@ -63,6 +63,44 @@ describe("o contrato de cada classe", () => {
     caso("2001:db8::/32", [["prefixo", "2001:db8::/32"]])
   })
 
+  it("le o IPv6 comprimido que comeca com dois pontos", () => {
+    // as quatro primeiras linhas da lista de bogons do bloco base
+    caso(" :: 0 le 0,", [["prefixo", "::"], ["numero", "0"], ["numero", "0"]])
+    caso(" :: 128,", [["prefixo", "::"], ["numero", "128"]])
+    caso(" ::1 128,", [["prefixo", "::1"], ["numero", "128"]])
+    caso(" ::ffff:0:0 96 le 128,", [["prefixo", "::ffff:0:0"], ["numero", "96"], ["numero", "128"]])
+  })
+
+  it("nao le o comeco de um IPv6 como community", () => {
+    // "2804:36b4::" tem dois grupos numericos no comeco, e sem a guarda de
+    // fronteira o ramo da community o partia em "2804:36" mais o resto
+    caso(" network 2804:36b4:: 32", [
+      ["palavra-chave", "network"],
+      ["prefixo", "2804:36b4::"],
+      ["numero", "32"],
+    ])
+    // e a community de verdade continua saindo inteira
+    caso("{2804:36} additive", [["community", "2804:36"]])
+  })
+
+  it("le os nomes de objeto que o proprio gerador escreve", () => {
+    caso("xpl route-filter ORIGEM-2804-36b4_32", [
+      ["palavra-chave", "xpl"],
+      ["palavra-chave", "route-filter"],
+      ["objeto", "ORIGEM-2804-36b4_32"],
+    ])
+    // `preference` e texto e nao aparece; o NULL0 e o nome da interface de
+    // descarte, sem separador nenhum
+    caso("ip route-static 2804:36b4:: 32 NULL0 preference 250", [
+      ["palavra-chave", "ip"],
+      ["palavra-chave", "route-static"],
+      ["prefixo", "2804:36b4::"],
+      ["numero", "32"],
+      ["objeto", "NULL0"],
+      ["numero", "250"],
+    ])
+  })
+
   it("le o nome de objeto e o numero solto", () => {
     caso(" call route-filter IMPORT-SANITY-V4", [
       ["palavra-chave", "call"],
@@ -80,12 +118,14 @@ describe("o contrato de cada classe", () => {
     expect(tokenizar("descriptions").map((x) => x.classe)).toEqual(["texto"])
     // e casam quando a palavra e inteira
     expect(tokenizar("ip").map((x) => x.classe)).toEqual(["palavra-chave"])
-    // o nome de objeto inteiro tambem e um token so, sem palavra-chave no meio
-    // (o mesmo filtro do `caso`: aqui a lista e a dos tokens classificados,
-    // porque os espacos saem como texto e o round-trip ja cobre eles)
-    expect(tokenizar("peer 198.51.100.2 description CLIENTE-AS268127")
-      .filter((x) => x.classe !== "texto").map((x) => x.classe))
-      .toEqual(["palavra-chave", "prefixo", "palavra-chave", "objeto"])
+    // o nome de objeto inteiro tambem e um token so, sem palavra-chave no meio.
+    // O filtro e o mesmo do `caso`: sem ele o branco entre as palavras entra na
+    // lista de classes, e a linha tem sete tokens, nao quatro
+    expect(
+      tokenizar("peer 198.51.100.2 description CLIENTE-AS268127")
+        .filter((x) => x.classe !== "texto")
+        .map((x) => x.classe),
+    ).toEqual(["palavra-chave", "prefixo", "palavra-chave", "objeto"])
   })
 
   it("a linha de comentario e um token so, inteira", () => {
