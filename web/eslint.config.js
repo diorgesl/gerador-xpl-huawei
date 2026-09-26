@@ -31,8 +31,11 @@ export default defineConfig([
     },
   },
   {
+    // as regras recomendadas entram junto dos globais: so os globais nao
+    // conferem nada, porque nenhuma regra olha para eles
     files: ["scripts/**/*.mjs"],
-    languageOptions: { globals: globals.node },
+    extends: [js.configs.recommended],
+    languageOptions: { globals: globals.node, ecmaVersion: 2022 },
   },
   {
     // os componentes do shadcn saem do CLI com o helper do cva exportado ao
