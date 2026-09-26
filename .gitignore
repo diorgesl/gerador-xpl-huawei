@@ -16,6 +16,15 @@ venv/
 /.venv/
 .venv
 
+# front: dependencias e build saem do Vite
+web/node_modules/
+web/dist/
+
+# playwright
+web/e2e/.tmp/
+web/test-results/
+web/playwright-report/
+
 # macOS
 .DS_Store
 

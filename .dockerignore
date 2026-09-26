@@ -3,6 +3,10 @@
 .venv/
 venv/
 
+# dependencias e build do front: a imagem monta os dois no estagio node
+web/node_modules/
+web/dist/
+
 .git/
 .pytest_cache/
 __pycache__/
