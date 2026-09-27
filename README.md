@@ -100,7 +100,7 @@ npm test              # Vitest: tokenizador XPL, diff, campos, contraste, compon
 npm run lint
 npm run api:conferir  # falha se o schema.d.ts estiver velho em relação ao app.openapi()
 npx playwright install  # uma vez: baixa os navegadores que o Playwright pede
-npm run e2e             # Playwright: compila e roda os 12 casos contra um uvicorn (8 fluxos + 4 de copia)
+npm run e2e             # Playwright: compila e roda os 14 casos contra um uvicorn (8 fluxos + 6 de copia)
 ```
 
 O `npm run api:tipos` regenera o `web/src/api/schema.d.ts` a partir do

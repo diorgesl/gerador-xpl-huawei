@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    // o mesmo destino dos outros dois: sem isto o `tsc -b` larga um
+    // tsconfig.e2e.tsbuildinfo solto na raiz do web/, fora do gitignore
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["playwright.config.ts", "e2e/**/*.ts"]
+}

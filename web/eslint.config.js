@@ -31,6 +31,10 @@ export default defineConfig([
     },
   },
   {
+    files: ["playwright.config.ts", "e2e/**/*.ts"],
+    languageOptions: { globals: globals.node },
+  },
+  {
     // as regras recomendadas entram junto dos globais: so os globais nao
     // conferem nada, porque nenhuma regra olha para eles
     files: ["scripts/**/*.mjs"],
