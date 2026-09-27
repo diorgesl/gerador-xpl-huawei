@@ -5,6 +5,7 @@ import { PeerTela, TelaDoPeer } from "@/telas/peers/PeerTela"
 import { GrupoTela, TelaDoGrupo } from "@/telas/grupos/GrupoTela"
 import { PrefixosTela } from "@/telas/prefixos/PrefixosTela"
 import { BaseTela } from "@/telas/base/BaseTela"
+import { ConfiguracoesTela } from "@/telas/configuracoes/ConfiguracoesTela"
 
 // Cada tela entra aqui na task que a cria: a rota de /peers vem junto com a
 // lista, a de /grupos com a tela de grupo, e assim por diante. Ate la o link
@@ -33,6 +34,7 @@ const roteador = createBrowserRouter([
       { path: "grupos/:id", element: <TelaDoGrupo /> },
       { path: "prefixos", element: <PrefixosTela /> },
       { path: "base", element: <BaseTela /> },
+      { path: "configuracoes", element: <ConfiguracoesTela /> },
       { path: "*", element: <NaoEncontrado /> },
     ],
   },

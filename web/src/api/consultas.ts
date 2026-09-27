@@ -12,6 +12,7 @@ export type GrupoResumo = components["schemas"]["GrupoResumo"]
 export type Previa = components["schemas"]["Previa"]
 export type Saida = components["schemas"]["Saida"]
 export type Blocos = components["schemas"]["Blocos"]
+export type RedeAtual = components["schemas"]["RedeAtual"]
 export type Recusa = { erros: Record<string, string>; avisos: { campo: string; mensagem: string }[] }
 
 export function lerRecusa(corpo: unknown): Recusa {
