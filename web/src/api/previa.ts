@@ -26,9 +26,14 @@ export function usePrevia({ tipo, id, valores, ligado }: {
   const [atrasado, setAtrasado] = useState<PeerForm | GrupoForm | null>(null)
 
   useEffect(() => {
+    // Sem a guarda do `ligado`, o relogio comeca na montagem, com o formulario
+    // em branco: se o registro demorar mais que a janela, a primeira previa sai
+    // com o formulario vazio, e o painel mostra o bloco de um peer sem ASN e sem
+    // prefixo ate a previa seguinte
+    if (!ligado) return
     const relogio = setTimeout(() => setAtrasado(valores), ATRASO)
     return () => clearTimeout(relogio)
-  }, [valores])
+  }, [valores, ligado])
 
   return useQuery({
     queryKey: ["previa", tipo, id, atrasado],

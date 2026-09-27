@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useForm, useWatch } from "react-hook-form"
-import { useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { MoreHorizontal } from "lucide-react"
@@ -19,6 +19,7 @@ import { usePeerInicial } from "@/api/inicial"
 import { usePrevia } from "@/api/previa"
 import { copiarComAviso } from "@/lib/copiar"
 import { cn } from "@/lib/utils"
+import { usePublicarAcoes } from "@/app/acoes-contexto"
 import { FormularioPeer } from "./FormularioPeer"
 import { CAMPO_BRANCO } from "./camposPeer"
 
@@ -30,6 +31,24 @@ export function PeerTela() {
 
   const ident = id ? Number(id) : null
   const de = busca.get("de")
+
+  // A navegacao que a propria tela pede nao pode cair no aviso de alteracao nao
+  // salva: o registro foi excluido, sumiu, ou acabou de ser gravado. A marca e um
+  // ref porque o `useBlocker` le no momento da navegacao, e nao no render
+  // seguinte: com um booleano, a navegacao deste instante veria o valor velho
+  const saindoDeProposito = useRef(false)
+  const { pathname } = useLocation()
+  useEffect(() => {
+    saindoDeProposito.current = false
+  }, [pathname])
+
+  const irPara = useCallback(
+    (destino: string, opcoes?: { replace?: boolean }) => {
+      saindoDeProposito.current = true
+      navegar(destino, opcoes)
+    },
+    [navegar],
+  )
   const tipo = busca.get("tipo") ?? "cliente"
   const copiando = de !== null
 
@@ -66,9 +85,9 @@ export function PeerTela() {
   useEffect(() => {
     if (inicial.error?.message === "nao_encontrado") {
       toast.error("registro não encontrado")
-      navegar("/peers", { replace: true })
+      irPara("/peers", { replace: true })
     }
-  }, [inicial.error, navegar])
+  }, [inicial.error, irPara])
 
   const previa = usePrevia({ tipo: "peers", id: ident, valores, ligado: Boolean(inicial.data) })
 
@@ -160,7 +179,7 @@ export function PeerTela() {
     if (r.error) {
       if (r.response.status === 404) {
         toast.error("registro não encontrado")
-        navegar("/peers", { replace: true })
+        irPara("/peers", { replace: true })
         return null
       }
       // Sem o refetch daqui: ele subiria o `dataUpdatedAt` da previa e a marca
@@ -174,8 +193,15 @@ export function PeerTela() {
     toast(`gravado em out/${r.data.arquivo}`)
     void consultas.invalidateQueries({ queryKey: chaves.peers })
     void consultas.invalidateQueries({ queryKey: chaves.plano })
+    // A aba de remocao vem de GET /saida, e nao da previa: sem invalidar, ela
+    // continuaria com o bloco de ANTES do salvar, e o copiar dela levaria para
+    // o equipamento um bloco que nao vale mais
+    void consultas.invalidateQueries({ queryKey: ["saida", "peer", ident] })
     form.reset(r.data.registro.formulario)
-    if (ident === null) navegar(`/peers/${r.data.registro.id}`, { replace: true })
+    // O ID do formulario move o registro no servidor (a API documenta isso):
+    // se ele mudou, a URL tem que acompanhar, senao o proximo salvar bate no
+    // 404 de um registro que existe com outro id
+    if (String(r.data.registro.id) !== (id ?? "")) irPara(`/peers/${r.data.registro.id}`, { replace: true })
     return r.data.registro.id
   }
 
@@ -204,8 +230,17 @@ export function PeerTela() {
     setExcluindo(false)
     void consultas.invalidateQueries({ queryKey: chaves.peers })
     toast("peer excluído")
-    navegar("/peers", { replace: true })
+    irPara("/peers", { replace: true })
   }
+
+  // A paleta oferece o que a tela aberta sabe fazer, e o que ela nao publica
+  // nao aparece la: sem esta chamada, o "duplicar o registro aberto" e o
+  // "copiar o bloco aberto" ficam mortos, que foi o que aconteceu ate aqui
+  usePublicarAcoes({
+    aoSalvar: () => void gravar(),
+    aoDuplicar: ident === null ? undefined : () => irPara(`/peers/novo?de=${ident}`),
+    aoCopiarBloco: () => { const aba = abas[0]; if (aba?.conteudo) void copiarComAviso(aba.conteudo, blocoRef.current) },
+  })
 
   const grupo = (grupos.data ?? []).find((g) => String(g.id) === String(valores.grupo_id))
 
@@ -223,7 +258,7 @@ export function PeerTela() {
 
   return (
     <div className="flex min-h-0 flex-col gap-3 p-3">
-      <AvisoNaoSalvo sujo={sujo} />
+      <AvisoNaoSalvo sujo={sujo} permitir={() => saindoDeProposito.current} />
 
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-base font-semibold">{valores.nome || "peer novo"}</h1>

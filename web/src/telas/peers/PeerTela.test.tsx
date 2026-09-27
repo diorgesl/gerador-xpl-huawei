@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
-import { mockFetch, montarRota } from "@/teste/roteador"
+import { describe, expect, it } from "vitest"
+import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
 import { PeerTela } from "./PeerTela"
 
 const PLANO = {
@@ -50,7 +50,8 @@ const rotas = [
   { path: "/peers/:id", element: <PeerTela /> },
 ]
 
-afterEach(() => vi.unstubAllGlobals())
+// A limpeza do `unstubAllGlobals` e o resto do que cada caso deixa para tras sao
+// do arnes, que os registra uma vez por arquivo (web/src/teste/roteador.tsx)
 
 describe("a tela do peer", () => {
   it("abre com o token e o ASN no cabecalho", async () => {
@@ -93,10 +94,22 @@ describe("a tela do peer", () => {
   })
 
   it("duplicar leva para o peer novo preenchido com a copia", async () => {
-    mockFetch({ ...BASE, "GET /api/peers/7/copia": { corpo: { id: 8, token: "268127", formulario: { ...FORMULARIO, id: "8" } } } })
+    // A copia leva valores que a origem nao tem: o token e o mesmo dos dois
+    // lados, entao so o token nao diz de qual registro a tela leu. Com o ASN e o
+    // nome diferentes, quem abrisse o registro errado (o 7, e nao o /copia do
+    // 7) ou nao aplicasse o reset do formulario reprova aqui
+    mockFetch({
+      ...BASE,
+      "GET /api/peers/7/copia": {
+        corpo: { id: 8, token: "268127", formulario: { ...FORMULARIO, id: "8", asn: "268999", nome: "Cliente COPIADO" } },
+      },
+    })
     montarRota(rotas, "/peers/7")
     await userEvent.click(await screen.findByRole("button", { name: /duplicar/i }))
     expect(await screen.findByText(/cópia de 268127/)).toBeInTheDocument()
+    expect(screen.getByLabelText("ASN")).toHaveValue("268999")
+    expect(screen.getByLabelText("Nome")).toHaveValue("Cliente COPIADO")
+    expect(peticoes().map((p) => `${p.metodo} ${p.caminho}`)).toContain("GET /api/peers/7/copia")
   })
 
   it("a recusa do salvar sai quando a previa responde de novo", async () => {
@@ -139,6 +152,67 @@ describe("a tela do peer", () => {
     await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
     await waitFor(() =>
       expect(screen.getByLabelText(/^IPv4 \(2\)/)).toHaveValue("45.169.232.0/22\n45.169.236.0/23"),
+    )
+    // e o corpo do PUT e o que a tela mandou de verdade, que e o trabalho dela:
+    // o arnes le metodo, caminho, query e corpo, e ate aqui nada neste ramo
+    // conferia o que sai numa escrita
+    const put = peticoes().find((p) => p.metodo === "PUT")
+    expect(put?.caminho).toBe("/api/peers/7")
+    expect(put?.corpo).toMatchObject({ prefixos_v4: ["45.169.232.0/22", "45.169.236.0/23"] })
+  })
+
+  it("o excluir sai sem perguntar sobre alteracao nao salva", async () => {
+    // o excluir navega por conta propria, e a essa altura o registro ja nao
+    // existe: com o bloqueio valendo, o operador veria o aviso de "sair sem
+    // salvar?" sobre um registro excluido, e a unica saida seria confirma-lo
+    mockFetch({ ...BASE, "DELETE /api/peers/7": { status: 204, corpo: null } })
+    montarRota(rotas, "/peers/7")
+    await userEvent.type(await screen.findByLabelText("ASN"), "9")
+    await userEvent.click(screen.getByRole("button", { name: /mais ações/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /excluir/i }))
+    await userEvent.click(await screen.findByRole("button", { name: /^excluir$/i }))
+    expect(await screen.findByText("lista de peers")).toBeInTheDocument()
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+
+  it("o salvar atualiza a aba de remocao", async () => {
+    // a remocao vem de GET /saida, e nao da previa: sem invalidar depois do
+    // salvar, a aba continuaria com o bloco de antes, e o copiar dela levaria
+    // para o equipamento um bloco que nao vale mais
+    const mapa = {
+      ...BASE,
+      "PUT /api/peers/7": { corpo: { registro: { id: 7, token: "268127", formulario: FORMULARIO }, arquivo: "268127-cliente.txt", avisos: [] } },
+      "GET /api/peers/7/saida": { corpo: { bloco: "salvo", remover: "undo REM-ANTIGO", criar_lista: null, arquivo: "268127-cliente.txt" } },
+    }
+    mockFetch(mapa)
+    montarRota(rotas, "/peers/7")
+    await screen.findByRole("tab", { name: /remoção/i })
+    mapa["GET /api/peers/7/saida"].corpo.remover = "undo REM-NOVO"
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar$/i }))
+    await userEvent.click(await screen.findByRole("tab", { name: /remoção/i }))
+    expect(await screen.findByText(/REM-NOVO/)).toBeInTheDocument()
+  })
+
+  it("o salvar que muda o id leva a url junto", async () => {
+    // o id do formulario move o registro no servidor: com a url parada no id
+    // velho, o salvamento seguinte bate no 404 de um registro que existe
+    mockFetch({
+      ...BASE,
+      "PUT /api/peers/7": { corpo: { registro: { id: 8, token: "268127", formulario: FORMULARIO }, arquivo: "268127-cliente.txt", avisos: [] } },
+      "GET /api/peers/8": { corpo: { id: 8, token: "268127", formulario: { ...FORMULARIO, id: "8" } } },
+      "GET /api/peers/8/saida": { corpo: { bloco: "salvo", remover: null, criar_lista: null, arquivo: "268127-cliente.txt" } },
+    })
+    montarRota(rotas, "/peers/7")
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar$/i }))
+    // a releitura no id novo e quem prova que a url andou: o campo ID passa a
+    // mostrar o do registro lido em /peers/8, e nao o do corpo do PUT
+    await waitFor(() => expect(screen.getByLabelText("ID")).toHaveValue("8"))
+    expect(peticoes().map((p) => `${p.metodo} ${p.caminho}`)).toContain("GET /api/peers/8")
+    // e a previa seguinte ja pergunta pelo id novo, na query: e o outro pedaco
+    // que o arnes expoe, e o que diz que o id saiu da URL, e nao do corpo. A
+    // espera e a janela de 400ms, que rearma quando o registro lido chega
+    await waitFor(() =>
+      expect(peticoes().some((p) => p.caminho === "/api/peers/previa" && p.query === "id=8")).toBe(true),
     )
   })
 

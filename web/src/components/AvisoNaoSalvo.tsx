@@ -7,8 +7,17 @@ import { Button } from "@/components/ui/button"
  * navegacao da SPA (useBlocker, que so existe em data router) e o fechamento
  * da aba ou o recarregamento (beforeunload).
  */
-export function AvisoNaoSalvo({ sujo, aoSair }: { sujo: boolean; aoSair?: () => void }) {
-  const bloqueio = useBlocker(sujo)
+export function AvisoNaoSalvo({ sujo, aoSair, permitir }: {
+  sujo: boolean
+  aoSair?: () => void
+  // A tela marca por ref as navegacoes que ela mesma pediu (excluir, o registro
+  // que sumiu, o peer novo que acabou de ser gravado) e esta funcao responde no
+  // momento da navegacao. Com um booleano do render, o `useBlocker` barraria a
+  // navegacao da propria tela: ele re-registra a cada commit e veria o `sujo`
+  // do commit anterior
+  permitir?: () => boolean
+}) {
+  const bloqueio = useBlocker(() => sujo && !(permitir?.() ?? false))
 
   useEffect(() => {
     if (!sujo) return
