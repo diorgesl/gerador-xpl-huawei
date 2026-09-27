@@ -837,6 +837,27 @@ git add web/src/components/Falha.tsx web/src/telas
 git commit -m "O tentar de novo desabilita enquanto o pedido corre"
 ```
 
+**Adendo (medido na execucao, 2026-09-27).** O conserto como este plano o
+escreveu e um no-op, e a premissa da task estava errada. Com
+`tentando={X.isFetching}` e mais nada, o caso nao passa: no clique o TanStack
+zera o `error` de uma consulta sem dado quando ela e refeita
+(`@tanstack/query-core/query.js:486`), entao o aviso de falha sai da tela, a tela
+volta ao formulario vazio e o botao a desabilitar deixa de existir. E nao existe
+clique duplo hoje, porque o primeiro clique tira o botao da tela.
+
+O que foi entregue, e o que o criterio de aceite virou: cada um dos cinco
+chamadores calcula
+
+```tsx
+const retentando = tentando && X.data === undefined && X.errorUpdateCount > 0
+```
+
+e o aviso fica de pe, com o botao desabilitado, enquanto o retry corre (o
+`errorUpdateCount` sobrevive ao refetch; o `data === undefined` deixa de fora o
+refetch de fundo de quem ja tem dado). O efeito observavel deixa de ser "evitar
+dois pedidos" e passa a ser "a tela nao pisca o formulario vazio durante o
+retry", que e o defeito que existia de verdade.
+
 ---
 
 ### Task 8: O tema com marca acessivel
