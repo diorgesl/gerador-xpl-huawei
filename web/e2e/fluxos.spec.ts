@@ -144,3 +144,10 @@ test("editar grupo e tentar excluir com membro", async ({ page }) => {
   await page.getByRole("button", { name: /^excluir$/ }).last().click()
   await expect(page.getByText(/ainda tem peers membros: CDN-ALFA/)).toBeVisible()
 })
+
+test("a lista convida a escolher quando nada esta aberto", async ({ page }) => {
+  await page.goto("/peers")
+  await expect(page.getByText(/escolha um peer ou crie um/)).toBeVisible()
+  await page.goto("/grupos")
+  await expect(page.getByText(/escolha um grupo ou crie um/)).toBeVisible()
+})

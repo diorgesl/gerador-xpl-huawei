@@ -1,16 +1,17 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom"
+import { Navigate, createBrowserRouter, RouterProvider } from "react-router-dom"
 import { Casca } from "./casca"
 import { NaoEncontrado } from "@/telas/NaoEncontrado"
+import { Inicio } from "@/telas/Inicio"
 import { PeerTela, TelaDoPeer } from "@/telas/peers/PeerTela"
 import { GrupoTela, TelaDoGrupo } from "@/telas/grupos/GrupoTela"
 import { PrefixosTela } from "@/telas/prefixos/PrefixosTela"
 import { BaseTela } from "@/telas/base/BaseTela"
 import { ConfiguracoesTela } from "@/telas/configuracoes/ConfiguracoesTela"
 
-// Cada tela entra aqui na task que a cria: a rota de /peers vem junto com a
-// lista, a de /grupos com a tela de grupo, e assim por diante. Ate la o link
-// da barra lateral cai no NaoEncontrado, que e uma tela de verdade e nao um
-// lugar reservado.
+// Cada tela entrou aqui na task que a criou, e a lista dos registros nao e uma
+// delas: ela e a barra lateral, que a casca monta em toda rota. O que mora em
+// /peers e /grupos e a tela de chegada, para quem abre o app sem registro
+// aberto.
 //
 // O router fica sem export: constante e componente no mesmo arquivo quebra o
 // fast refresh, e so o Roteador abaixo usa este objeto. Ele e criado no modulo,
@@ -20,16 +21,22 @@ const roteador = createBrowserRouter([
     path: "/",
     element: <Casca />,
     children: [
-      { index: true, element: <NaoEncontrado /> },
+      // Em producao quem responde / e o uvicorn, com um 307 para /peers. Com o
+      // Vite na 5173 esse redirect nao existe, e sem esta rota o modo de
+      // desenvolvimento documentado no README abre o NaoEncontrado
+      { index: true, element: <Navigate to="/peers" replace /> },
       // O React Router ordena por especificidade, entao "peers/novo" ganha de
       // "peers/:id" sem precisar de ordem no arquivo. A rota por id usa o
       // TelaDoPeer, e a do grupo pelo TelaDoGrupo, que remontam a tela na troca
       // de registro: o elemento e reusado quando so o :id muda, e o formulario
       // sobreviveria com os valores do registro anterior
-      { path: "peers", element: <PeerTela /> },
+      //
+      // A rota da lista e a da chegada, e nao um formulario em branco: quem cria
+      // e /peers/novo, que e para onde o "+ novo" da barra leva
+      { path: "peers", element: <Inicio oQue="peer" /> },
       { path: "peers/novo", element: <PeerTela /> },
       { path: "peers/:id", element: <TelaDoPeer /> },
-      { path: "grupos", element: <GrupoTela /> },
+      { path: "grupos", element: <Inicio oQue="grupo" /> },
       { path: "grupos/novo", element: <GrupoTela /> },
       { path: "grupos/:id", element: <TelaDoGrupo /> },
       { path: "prefixos", element: <PrefixosTela /> },
