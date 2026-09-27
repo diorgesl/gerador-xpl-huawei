@@ -1131,7 +1131,14 @@ git commit -m "O e2e mede o salvar e copiar no WebKit, e o resto dos pendentes"
 
 - [ ] **Step 1: Os comentarios**
 
-Os treze de `app/api.py` estao em `:6`, `:55`, `:85`, `:151`, `:175`, `:295`, `:372`, `:386`, `:418`, `:422`, `:514`, `:552`, `:572`; os dois de `app/formulario.py`, em `:63-66` e `:534`. Cada um passa a descrever o que o codigo faz hoje. Os tres que citam funcoes apagadas:
+Os treze de `app/api.py` estao em `:6`, `:55`, `:85`, `:151`, `:175`, `:295`,
+`:372`, `:386`, `:418`, `:422`, `:514`, `:552`, `:572`; os dois de
+`app/formulario.py`, em `:63-66` e `:534`. A revisao da Task 1 acrescentou mais
+um, que ela nao podia consertar (o brief daquela task limitava a mudanca ao
+`avisos`): `app/validate.py:452-455` diz "O peer fica como esta; alinha-lo e
+mudanca separada (ver a spec)", e a Task 1 E aquela mudanca, entao o comentario
+passa a dizer que o grupo recusa e o peer avisa. Cada um passa a descrever o que
+o codigo faz hoje. Os tres que citam funcoes apagadas:
 
 ```python
 # app/api.py:6, hoje "de cada campo e o bloco gerado sao os mesmos nas duas telas."
