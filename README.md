@@ -105,8 +105,10 @@ npm run e2e             # Playwright: compila e roda os 10 casos contra um uvico
 
 O `npm run api:tipos` regenera o `web/src/api/schema.d.ts` a partir do
 `app.openapi()`. O arquivo é versionado, e o `api:conferir` roda junto com a
-suíte do Python quando o `web/node_modules` existe (dentro do container ele é
-pulado).
+suíte do Python quando o front está instalado: o `web/node_modules` no lugar e o
+`npm` no `PATH`. Dentro do container ele é pulado, porque a imagem não tem
+`npm` — o `node_modules` da máquina chega lá pelo bind mount do `compose.yaml`,
+e é por isso que a condição olha os dois.
 
 Os testes do Playwright sobem um uvicorn com um `peers.yaml` temporário, copiado
 de `web/e2e/peers.yaml` para `web/e2e/.tmp/` pelo `web/e2e/global-setup.ts`: o
