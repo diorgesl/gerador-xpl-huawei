@@ -33,8 +33,8 @@ def erros_para_dict(erros):
     """Um erro por campo, e o primeiro que apareceu para aquele campo.
 
     A ordem da lista e a ordem das checagens, e o primeiro erro e o mais
-    perto do valor que o operador digitou: os erros de campo do app.py vem
-    antes dos do validar, que so ve o que sobrou do int(). Com o dict
+    perto do valor que o operador digitou: os erros de campo do formulario.py
+    vem antes dos do validar, que so ve o que sobrou do int(). Com o dict
     deixando o ultimo vencer, um "abc" no aprendizado de um grupo de
     upstream mostrava "ponto de aprendizado 3xxx obrigatorio" no lugar do
     "valor numerico invalido" do proprio campo.

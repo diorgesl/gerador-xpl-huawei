@@ -8,7 +8,8 @@ As três etapas do front em SPA estão entregues e mergeadas na `main`. Ficou um
 lista de pendências que as etapas anteriores registraram de propósito, cada uma
 no seu lugar: três perguntas de produto que ninguém respondeu, seis minors
 adiados do front, três registros de manutenção da re-revisão da etapa 2, quatro
-do e2e, e quinze comentários que o corte deixou apontando para o que apagou.
+do e2e, e os comentários obsoletos que o corte deixou apontando para o que
+apagou.
 
 Nada disso quebra o app. Junto, é o que falta para o assunto fechar, e duas das
 pendências são de comportamento: uma validação que não confere o que diz
@@ -59,7 +60,7 @@ etapa 2 deixou aberta fecha aqui, sem linha de código.
 - Os quatro pendentes do e2e (aspas nos caminhos, typecheck, globais de Node, e
   a cópia provando o bloco daquele peer).
 - O caso de "salvar e copiar" nos dois navegadores.
-- Os quinze comentários obsoletos.
+- Os comentários obsoletos.
 
 ### O que não entra
 
