@@ -22,11 +22,16 @@ export function ResumoErros({ erros, tipo, deGrupo = false, aoIrPara }: Props) {
       <ul className="mt-1 space-y-0.5 text-xs">
         {itens.map(([chave, mensagem]) => {
           const campos = camposDoErro(chave, tipo, deGrupo)
-          const campo = campos[0] ?? null
-          const secao = campo ? secoes.find((s) => s.campos.includes(campo))?.id ?? null : null
+          // Um campo so: vai nele. Varios: a mensagem nao diz qual deles esta
+          // torto (o `prefixo invalido` de v4 e o de v6 saem na mesma chave), e
+          // prometer o primeiro era pior que levar ao topo da secao que os tem
+          const campo = campos.length === 1 ? campos[0] : null
+          const secao = campos.length > 0
+            ? secoes.find((s) => campos.every((c) => s.campos.includes(c)))?.id ?? null
+            : null
           return (
             <li key={chave}>
-              {campo ? (
+              {campos.length > 0 ? (
                 <button
                   type="button"
                   className="text-left underline decoration-dotted"

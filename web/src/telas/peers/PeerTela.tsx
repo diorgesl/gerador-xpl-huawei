@@ -406,8 +406,14 @@ export function PeerTela() {
               avisos={avisos}
               erroIrr={erroIrr}
               aoConsultarIrr={(forcar) => irr.mutate(forcar)}
-              aoIrPara={(campo) => {
-                if (!campo) return
+              aoIrPara={(campo, secao) => {
+                if (!campo && !secao) return
+                // Sem campo o alvo e a secao: e o caso do erro que cobre varios
+                // campos, em que apontar um deles seria mentir sobre onde esta
+                if (!campo) {
+                  document.getElementById(`secao-${secao}`)?.scrollIntoView({ block: "start" })
+                  return
+                }
                 const alvo = document.querySelector<HTMLElement>(`[data-campo="${campo}"] input, [data-campo="${campo}"] textarea, [data-campo="${campo}"] button`)
                 alvo?.focus()
                 alvo?.scrollIntoView({ block: "center" })
