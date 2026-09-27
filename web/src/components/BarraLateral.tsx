@@ -27,10 +27,15 @@ export function BarraLateral({ peers, grupos, asn, aoNovo }: Props) {
   const peersVisiveis = filtrarPeers(peers, busca)
   const gruposVisiveis = filtrarGrupos(grupos, busca)
 
+  // `startsWith(para)` acendia /peers/1 em /peers/12 (e em /peers/123): dois
+  // itens acesos, e o errado era o do registro que o operador nao abriu. O que
+  // compara e o segmento inteiro, e nao o comeco do texto
+  const aberto = (para: string) => pathname === para || pathname.startsWith(`${para}/`)
+
   const item = (para: string, rotulo: string, extra?: React.ReactNode) => (
     <Link
       to={para}
-      aria-current={pathname.startsWith(para) ? "page" : undefined}
+      aria-current={aberto(para) ? "page" : undefined}
       className="flex items-center justify-between gap-2 rounded px-2 py-1 text-sm hover:bg-accent aria-[current=page]:bg-accent"
     >
       <span className="truncate">{rotulo}</span>

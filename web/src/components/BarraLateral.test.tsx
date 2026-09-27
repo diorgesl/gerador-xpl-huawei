@@ -61,6 +61,26 @@ describe("a barra lateral", () => {
     expect(screen.getByText("4")).toBeInTheDocument()
   })
 
+  it("o item aceso e o do registro aberto, e nao o do id que comeca igual", () => {
+    // `startsWith(para)` acendia /peers/1 em /peers/12: dois itens acesos, e o
+    // errado era o do registro que o operador nao abriu. O que compara e o
+    // segmento inteiro, e nao o prefixo do texto
+    render(
+      <MemoryRouter initialEntries={["/peers/12"]}>
+        <BarraLateral
+          peers={[...PEERS, { id: 12, token: "268999", tipo: "cliente", asn: 268999, apelido: "NOVO", nome: "Cliente NOVO", grupo_id: null }]}
+          grupos={GRUPOS}
+          asn="64512"
+          aoNovo={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+    const item = (destino: string) => screen.getAllByRole("link").find((l) => l.getAttribute("href") === destino)
+    expect(item("/peers/12")).toHaveAttribute("aria-current", "page")
+    expect(item("/peers/1")).not.toHaveAttribute("aria-current")
+    expect(item("/grupos/9")).not.toHaveAttribute("aria-current")
+  })
+
   it("o menu novo chama o destino de cada item", async () => {
     // o Item do Base UI dispara o clique pelo onClick: com o onSelect do Radix
     // (que o Base UI nao tem) o clique fechava o menu e nao chamava ninguem, e
