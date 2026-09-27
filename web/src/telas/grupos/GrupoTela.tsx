@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useForm, useWatch } from "react-hook-form"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { MoreHorizontal } from "lucide-react"
@@ -17,6 +17,7 @@ import { useGrupoInicial } from "@/api/inicial"
 import { usePrevia } from "@/api/previa"
 import { copiarComAviso } from "@/lib/copiar"
 import { cn } from "@/lib/utils"
+import { usePublicarAcoes } from "@/app/acoes-contexto"
 import { FormularioGrupo } from "./FormularioGrupo"
 import { CAMPO_BRANCO_GRUPO } from "./camposGrupo"
 
@@ -28,6 +29,24 @@ export function GrupoTela() {
 
   const ident = id ? Number(id) : null
   const de = busca.get("de")
+
+  // A navegacao que a propria tela pede nao pode cair no aviso de alteracao nao
+  // salva: o registro foi excluido, sumiu, ou acabou de ser gravado. A marca e um
+  // ref porque o `useBlocker` le no momento da navegacao, e nao no render
+  // seguinte: com um booleano, a navegacao deste instante veria o valor velho
+  const saindoDeProposito = useRef(false)
+  const { pathname } = useLocation()
+  useEffect(() => {
+    saindoDeProposito.current = false
+  }, [pathname])
+
+  const irPara = useCallback(
+    (destino: string, opcoes?: { replace?: boolean }) => {
+      saindoDeProposito.current = true
+      navegar(destino, opcoes)
+    },
+    [navegar],
+  )
   const tipo = busca.get("tipo") ?? "parceiro"
   const copiando = de !== null
 
@@ -63,9 +82,9 @@ export function GrupoTela() {
   useEffect(() => {
     if (inicial.error?.message === "nao_encontrado") {
       toast.error("registro não encontrado")
-      navegar("/grupos", { replace: true })
+      irPara("/grupos", { replace: true })
     }
-  }, [inicial.error, navegar])
+  }, [inicial.error, irPara])
 
   const previa = usePrevia({ tipo: "grupos", id: ident, valores, ligado: Boolean(inicial.data) })
 
@@ -141,7 +160,7 @@ export function GrupoTela() {
     if (r.error) {
       if (r.response.status === 404) {
         toast.error("registro não encontrado")
-        navegar("/grupos", { replace: true })
+        irPara("/grupos", { replace: true })
         return null
       }
       // Sem o refetch daqui: ele subiria o `dataUpdatedAt` da previa e a marca
@@ -155,8 +174,12 @@ export function GrupoTela() {
     toast(`gravado em out/${r.data.arquivo}`)
     void consultas.invalidateQueries({ queryKey: chaves.grupos })
     void consultas.invalidateQueries({ queryKey: chaves.peers })
+    // o criar_lista e o salvo da aba "ao criar" vem de GET /saida, e nao da
+    // previa: sem invalidar, a aba continuaria com o de antes do salvar
+    void consultas.invalidateQueries({ queryKey: ["saida", "grupo", ident] })
     form.reset(r.data.registro.formulario)
-    if (ident === null) navegar(`/grupos/${r.data.registro.id}`, { replace: true })
+    // o mesmo do peer: o id do formulario move o registro, e a URL acompanha
+    if (String(r.data.registro.id) !== (id ?? "")) irPara(`/grupos/${r.data.registro.id}`, { replace: true })
     return r.data.registro.id
   }
 
@@ -181,8 +204,16 @@ export function GrupoTela() {
     setExcluindo(false)
     void consultas.invalidateQueries({ queryKey: chaves.grupos })
     toast("grupo excluído")
-    navegar("/grupos", { replace: true })
+    irPara("/grupos", { replace: true })
   }
+
+  // A paleta oferece o que a tela aberta sabe fazer: sem esta publicacao, o
+  // "duplicar o registro aberto" e o "copiar o bloco aberto" nao aparecem
+  usePublicarAcoes({
+    aoSalvar: () => void gravar(),
+    aoDuplicar: ident === null ? undefined : () => irPara(`/grupos/novo?de=${ident}`),
+    aoCopiarBloco: () => { const aba = abas[0]; if (aba?.conteudo) void copiarComAviso(aba.conteudo, blocoRef.current) },
+  })
 
   const falhou = (plano.isError || inicial.isError) && inicial.error?.message !== "nao_encontrado"
   if (falhou) {
@@ -196,7 +227,7 @@ export function GrupoTela() {
 
   return (
     <div className="flex min-h-0 flex-col gap-3 p-3">
-      <AvisoNaoSalvo sujo={sujo} />
+      <AvisoNaoSalvo sujo={sujo} permitir={() => saindoDeProposito.current} />
 
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-base font-semibold">{valores.nome || "grupo novo"}</h1>

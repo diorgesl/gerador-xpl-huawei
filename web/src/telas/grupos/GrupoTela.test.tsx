@@ -1,7 +1,8 @@
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
-import { mockFetch, montarRota } from "@/teste/roteador"
+import { describe, expect, it } from "vitest"
+import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
+import { Casca } from "@/app/casca"
 import { GrupoTela } from "./GrupoTela"
 
 const PLANO = {
@@ -34,11 +35,15 @@ const BASE = {
 
 const rotas = [
   { path: "/peers", element: <div>lista de peers</div> },
+  // o destino do excluir e do registro que sumiu: sem a rota, a prova do
+  // excluir nao teria onde ver a tela sair
+  { path: "/grupos", element: <div>lista de grupos</div> },
   { path: "/grupos/novo", element: <GrupoTela /> },
   { path: "/grupos/:id", element: <GrupoTela /> },
 ]
 
-afterEach(() => vi.unstubAllGlobals())
+// A limpeza do `unstubAllGlobals` e o resto do que cada caso deixa para tras sao
+// do arnes, que os registra uma vez por arquivo (web/src/teste/roteador.tsx)
 
 describe("a tela do grupo", () => {
   it("lista os membros com link para o peer", async () => {
@@ -87,6 +92,112 @@ describe("a tela do grupo", () => {
     await userEvent.type(campo, "OPERADORA NOVA")
     await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
     await waitFor(() => expect(screen.getByLabelText("Nome")).toHaveValue("OPERADORA NOVA"))
+  })
+
+  it("o excluir sai sem perguntar sobre alteracao nao salva", async () => {
+    // o excluir navega por conta propria, e a essa altura o registro ja nao
+    // existe: com o bloqueio valendo, o operador veria o "sair sem salvar?"
+    // sobre um grupo excluido, e a unica saida seria confirma-lo
+    mockFetch({ ...BASE, "DELETE /api/grupos/2": { status: 204, corpo: null } })
+    montarRota(rotas, "/grupos/2")
+    await userEvent.type(await screen.findByLabelText("Nome"), " NOVA")
+    await userEvent.click(screen.getByRole("button", { name: /mais ações/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /excluir/i }))
+    await userEvent.click(await screen.findByRole("button", { name: /^excluir$/i }))
+    expect(await screen.findByText("lista de grupos")).toBeInTheDocument()
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+
+  it("o salvar atualiza a aba ao criar", async () => {
+    // o criar_lista e o `salvo` da aba "ao criar" vem de GET /saida, e nao da
+    // previa: sem invalidar depois do salvar, o painel continuaria comparando o
+    // bloco novo com o arquivo de antes
+    const mapa = {
+      ...BASE,
+      "POST /api/grupos/previa": {
+        corpo: {
+          erros: {}, avisos: [], bloco: "xpl route-filter UP-OPERADORA-EXPORT-V4",
+          criar_lista: "CL-ANTIGO", arquivo: "grupo-OPERADORA.txt", salvo: "antigo",
+        },
+      },
+      "PUT /api/grupos/2": {
+        corpo: {
+          registro: { id: 2, nome: "OPERADORA", formulario: GRUPO, membros: [] },
+          arquivo: "grupo-OPERADORA.txt", avisos: [],
+        },
+      },
+      "GET /api/grupos/2/saida": {
+        corpo: { bloco: "xpl route-filter UP-OPERADORA-EXPORT-V4", criar_lista: "CL-ANTIGO", arquivo: "grupo-OPERADORA.txt" },
+      },
+    }
+    mockFetch(mapa)
+    montarRota(rotas, "/grupos/2")
+    await screen.findByRole("tab", { name: /ao criar o grupo/i })
+    // o mapa e lido a cada chamada: o arquivo em out/ muda entre a leitura da
+    // tela e o salvar, como muda quando alguem grava por fora
+    mapa["GET /api/grupos/2/saida"].corpo.criar_lista = "CL-NOVO"
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar$/i }))
+    await userEvent.click(screen.getByRole("tab", { name: /ao criar o grupo/i }))
+    // a aba corrente e a do criar (o conteudo dela e o da previa, intocado), e o
+    // rotulo diz que o out/ relido nao bate mais com ela
+    expect(await screen.findByText("CL-ANTIGO")).toBeInTheDocument()
+    expect(await screen.findByText(/o arquivo em out\/ está desatualizado/)).toBeInTheDocument()
+    expect(peticoes().filter((p) => p.caminho === "/api/grupos/2/saida").length).toBeGreaterThan(1)
+  })
+
+  it("a paleta ve as acoes que a tela publica", async () => {
+    // o caminho inteiro da publicacao: a tela publica no ProvedorAcoes da casca
+    // e a paleta so oferece o que chegou la. Sem a chamada, "duplicar o
+    // registro aberto" e "copiar o bloco aberto" nao aparecem em tela nenhuma
+    mockFetch({
+      ...BASE,
+      "GET /api/grupos/2/copia": { corpo: { id: 8, nome: "OPERADORA", formulario: { ...GRUPO, id: "8" }, membros: [] } },
+    })
+    montarRota(
+      [{
+        path: "/", element: <Casca />,
+        children: [
+          { path: "grupos/novo", element: <GrupoTela /> },
+          { path: "grupos/:id", element: <GrupoTela /> },
+        ],
+      }],
+      "/grupos/2",
+    )
+    await screen.findByRole("tab", { name: /bloco do grupo/i })
+    await userEvent.keyboard("{Control>}k{/Control}")
+    expect(await screen.findByText("copiar o bloco aberto")).toBeInTheDocument()
+    await userEvent.click(screen.getByText("duplicar o registro aberto"))
+    // e a acao publicada leva ao destino dela, que e o grupo novo com a copia
+    expect(await screen.findByText(/cópia de OPERADORA/)).toBeInTheDocument()
+  })
+
+  it("o Ctrl+S da casca salva pelo que a tela publicou", async () => {
+    // o terceiro callback publicado e o salvar, que a paleta nao mostra: quem o
+    // alcanca e o Ctrl+S da casca (useAtalhos, em casca.tsx)
+    mockFetch({
+      ...BASE,
+      "PUT /api/grupos/2": {
+        corpo: {
+          registro: { id: 2, nome: "OPERADORA", formulario: GRUPO, membros: [] },
+          arquivo: "grupo-OPERADORA.txt", avisos: [],
+        },
+      },
+    })
+    montarRota(
+      [{
+        path: "/", element: <Casca />,
+        children: [
+          { path: "grupos/novo", element: <GrupoTela /> },
+          { path: "grupos/:id", element: <GrupoTela /> },
+        ],
+      }],
+      "/grupos/2",
+    )
+    await screen.findByRole("tab", { name: /bloco do grupo/i })
+    await userEvent.keyboard("{Control>}s{/Control}")
+    await waitFor(() =>
+      expect(peticoes().some((p) => p.metodo === "PUT" && p.caminho === "/api/grupos/2")).toBe(true),
+    )
   })
 
   it("nao tem aba de remocao: o grupo nao gera bloco de remocao", async () => {
