@@ -33,6 +33,10 @@ out/*.txt
 
 peers.yaml
 
+# excecao: o cadastro do e2e e fixture do repositorio; o peers.yaml
+# ignorado acima e o do equipamento
+!web/e2e/peers.yaml
+
 # config real do equipamento: fica no disco, nao no repositorio
 BGP_EXEMPLO.txt
 

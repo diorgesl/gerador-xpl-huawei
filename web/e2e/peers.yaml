@@ -1,0 +1,100 @@
+# Cadastro do e2e: dois peers de tipos diferentes e um grupo com um membro, que
+# e o que os cinco fluxos precisam. Nao e o cadastro real e nao vai para lugar
+# nenhum alem do uvicorn que o Playwright sobe.
+asn: 64512
+asn_politica: 65532
+peers:
+- id: 1
+  apelido: ACME
+  nome: Cliente ACME
+  tipo: cliente
+  asn: 268127
+  classe: residencial
+  lp_base: 300
+  origem: 1110
+  pop: 2001
+  descricao: CLIENTE-AS268127
+  route_limit: 50
+  bfd: true
+  graceful_restart: true
+  prepend_base: 0
+  prefixos:
+    v4:
+    - 45.169.232.0/22
+    v6: []
+  te_prefixos:
+    v4: []
+    v6: []
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  communities: []
+  large_communities: []
+  sessoes:
+    v4:
+      local: 198.51.100.1
+      remoto: 198.51.100.2
+    v6: {}
+  grupo_id: null
+- id: 3
+  apelido: CDN-ALFA
+  nome: CDN ALFA
+  tipo: parceiro
+  asn: 264130
+  classe: transito
+  lp_base: 300
+  origem: 1100
+  pop: 2001
+  descricao: CDN-ALFA
+  route_limit: 50
+  bfd: true
+  graceful_restart: true
+  prepend_base: 0
+  prefixos:
+    v4: []
+    v6: []
+  te_prefixos:
+    v4: []
+    v6: []
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  communities: []
+  large_communities: []
+  sessoes:
+    v4:
+      local: 198.51.100.9
+      remoto: 198.51.100.10
+    v6: {}
+  grupo_id: 2
+grupos:
+- id: 2
+  nome: PARCEIROS
+  tipo: parceiro
+  asn: null
+  classe: transito
+  lp_base: 300
+  origem: 1100
+  pop: 2001
+  bfd: true
+  graceful_restart: true
+  prepend_base: 0
+  prefixos:
+    v4: []
+    v6: []
+  te_prefixos:
+    v4: []
+    v6: []
+  ap_block: []
+  ap_te: []
+  ap_allowed: []
+  ap_prefer: []
+  communities: []
+  large_communities: []
+blocos:
+  v4:
+  - prefixo: 45.169.232.0/22
+    communities: []
+  v6: []
