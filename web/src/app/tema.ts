@@ -1,3 +1,5 @@
+import { createContext, useContext } from "react"
+
 export type Tema = "claro" | "escuro" | "sistema"
 
 const CHAVE = "tema"
@@ -32,6 +34,12 @@ export function aplicarTema(tema: Tema) {
   document.documentElement.classList.toggle("dark", escuro)
 }
 
-// O estado do tema mora num contexto (web/src/app/provedores.tsx), e nao aqui:
-// a paleta e as configuracoes trocam o tema por ele. Este modulo so tem a
-// leitura, a gravacao e a aplicacao, que sao as partes testaveis.
+// O contexto mora aqui, e nao no provedores.tsx, porque o arquivo de la exporta
+// o componente que o publica: componente e coisa que nao e componente no mesmo
+// arquivo quebra o fast refresh e a regra do react-refresh reclama. A paleta e
+// as configuracoes trocam o tema por este hook.
+export const ContextoTema = createContext<[Tema, (tema: Tema) => void]>(["sistema", () => {}])
+
+export function useTema() {
+  return useContext(ContextoTema)
+}

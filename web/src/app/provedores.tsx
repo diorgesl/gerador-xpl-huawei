@@ -1,17 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { Toaster } from "@/components/ui/sonner"
-import { aplicarTema, gravarTema, lerTema, type Tema } from "./tema"
+import { aplicarTema, ContextoTema, gravarTema, lerTema, type Tema } from "./tema"
 
 const consultas = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } },
 })
-
-const ContextoTema = createContext<[Tema, (tema: Tema) => void]>(["sistema", () => {}])
-
-export function useTema() {
-  return useContext(ContextoTema)
-}
 
 function ProvedorTema({ children }: { children: ReactNode }) {
   const [tema, setTema] = useState<Tema>(lerTema)

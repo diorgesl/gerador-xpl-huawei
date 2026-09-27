@@ -6,7 +6,11 @@ import { NaoEncontrado } from "@/telas/NaoEncontrado"
 // lista, a de /grupos com a tela de grupo, e assim por diante. Ate la o link
 // da barra lateral cai no NaoEncontrado, que e uma tela de verdade e nao um
 // lugar reservado.
-export const roteador = createBrowserRouter([
+//
+// O router fica sem export: constante e componente no mesmo arquivo quebra o
+// fast refresh, e so o Roteador abaixo usa este objeto. Ele e criado no modulo,
+// e nao dentro do componente, para nao ser recriado a cada render.
+const roteador = createBrowserRouter([
   {
     path: "/",
     element: <Casca />,

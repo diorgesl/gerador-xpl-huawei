@@ -2,7 +2,8 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { describe, expect, it, vi } from "vitest"
-import { BarraLateral, filtrarGrupos, filtrarPeers } from "./BarraLateral"
+import { BarraLateral } from "./BarraLateral"
+import { filtrarGrupos, filtrarPeers } from "@/lib/busca"
 
 const PEERS = [
   { id: 1, token: "268127", tipo: "cliente", asn: 268127, apelido: "", nome: "Cliente ACME", grupo_id: null },
