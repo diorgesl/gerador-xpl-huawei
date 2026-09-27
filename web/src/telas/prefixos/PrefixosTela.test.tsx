@@ -309,6 +309,28 @@ describe("a tela dos prefixos proprios", () => {
     expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
   })
 
+  it("o 500 que traz o mapa de erros mostra o aviso e a mensagem do servidor", async () => {
+    // O par do caso de cima, e o que impede a guarda de virar um `return`
+    // incondicional: ela suprime o `_corpo` do lerRecusa, que so existe quando
+    // o corpo nao tem o mapa de erros. Com a recusa de verdade no corpo, o
+    // aviso e a mensagem do servidor saem os dois, e engolir a mensagem
+    // deixaria o operador sem saber o que corrigir
+    mockFetch({
+      ...BASE,
+      "PUT /api/blocos": {
+        status: 500,
+        corpo: { erros: { blocos_v4: "linha 1: community fora da faixa numerica" }, avisos: [] },
+      },
+    })
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(document.querySelector('[data-campo="blocos_v4"]')).toHaveTextContent("linha 1: community fora da faixa numerica"),
+    )
+  })
+
   it("a rede fora na consulta ao IRR avisa com tentar de novo", async () => {
     // A consulta ao bgpq4 e a operacao mais lenta da tela: sem o aviso, o
     // clique que nao chegou a sair era indistinguivel da consulta em andamento
