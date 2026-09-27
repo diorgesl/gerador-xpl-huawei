@@ -334,17 +334,20 @@ describe("a tela dos prefixos proprios", () => {
   })
 
   it("o tentar de novo desabilita enquanto o pedido corre", async () => {
-    // O refetch do TanStack reinicia o pedido em voo: com o botao sempre
-    // clicavel, o clique duplo disparava dois pedidos, e nos peer e grupo
-    // quatro, porque cada um refaz duas consultas
+    // O defeito que este caso mede: no clique o TanStack zera o `error` de uma
+    // consulta sem dado quando ela e refeita, entao sem o `retentando` a tela
+    // pisca o formulario vazio enquanto o retry corre, e o botao aqui medido
+    // nem existe nessa janela. Nao ha clique duplo a evitar: o primeiro clique
+    // ja tira o botao da tela
     mockFetch({ ...BASE, "GET /api/blocos": { status: 500, corpo: { erros: { _: "boom" }, avisos: [] } } })
     montarRota(rotas, "/prefixos")
     const alvo = () => screen.getByRole("button", { name: /tentar de novo/i })
     // O botao so existe depois de o cliente gastar o retry dele (um, com o
-    // atraso padrao de 1s), e quem cobre essa espera e o prazo do `waitFor`: o
-    // quarto argumento do `findBy*` e ignorado nesta montagem (medido: 1003ms
-    // contra os 3003ms do mesmo prazo aqui), e com ele a espera seria de 1s, em
-    // cima do retry
+    // atraso padrao de 1s), entao a espera precisa de prazo maior que o padrao
+    // do `waitFor`, que e de 1s e cairia em cima do retry. Pelo `findBy*` o
+    // prazo vale igual, mas no TERCEIRO argumento: a assinatura ja vem ligada
+    // ao container, entao sao (role, opcoes, opcoes do waitFor), e um quarto
+    // argumento e ignorado (medido: 3004ms contra 1002ms)
     await waitFor(() => expect(alvo()).toBeInTheDocument(), { timeout: 3000 })
     // A leitura presa e a do retry, e nao a da montagem: presa antes do
     // `montarRota`, a primeira seria a presa, a falha nunca chegaria, e sem

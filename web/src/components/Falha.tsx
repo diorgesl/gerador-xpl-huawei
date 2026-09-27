@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button"
  * digitou nao se perde: o formulario nao e desmontado por causa de um refetch
  * que falhou, so a tela mostra o aviso e o botao.
  *
- * O `tentando` vem do `isFetching` de quem refaz: sem ele o botao segue
- * clicavel durante o pedido, e o refetch do TanStack reinicia o que esta em
- * voo, entao o clique duplo vira dois pedidos.
+ * O `tentando` vem do `isFetching` de quem refaz e desabilita o botao enquanto
+ * o pedido corre. Quem segura o aviso na tela durante o retry e o `retentando`
+ * do chamador: o TanStack zera o `error` de uma consulta sem dado quando ela e
+ * refeita, entao sem ele o aviso sairia da tela no clique e o botao
+ * desabilitado nem chegaria a existir. Nao ha clique duplo a evitar: o primeiro
+ * clique ja tira o botao da tela.
  */
 export function Falha({ mensagem, tentando = false, aoTentar }: {
   mensagem: string
