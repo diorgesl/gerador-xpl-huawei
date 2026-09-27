@@ -202,6 +202,18 @@ export function GrupoTela() {
       // acabou de escrever. Os erros do salvar ficam ate a proxima previa
       // responder, que e quando a lista de la substitui a de ca
       setRecusa(recusaComMarca(r.error))
+      // A recusa por `id` acontece quando o formulario em branco foi aberto
+      // com um id que outro registro tomou no meio do caminho. O formulario do
+      // grupo nao tem esse campo, entao sem esta linha a unica saida era
+      // recarregar a tela e perder o que foi digitado: a tela rebusca o
+      // proximo livre e o operador so clica em salvar de novo
+      if (recusaComMarca(r.error).erros.id && ident === null) {
+        const livre = await cliente.GET("/api/grupos/novo", { params: { query: { tipo } } })
+        // o id do formulario e texto (o `GrupoForm.id`) e o do registro e
+        // numero: sem o String o `tsc -b` reprova a linha, e a tela ja
+        // converte assim no `String(r.data.registro.id)` do salvamento
+        if (livre.data) form.setValue("id", String(livre.data.id), { shouldDirty: true })
+      }
       return null
     }
     setRecusa(null)
@@ -259,7 +271,16 @@ export function GrupoTela() {
   // "duplicar o registro aberto" e o "copiar o bloco aberto" nao aparecem. O
   // duplicar navega como o do cabecalho (com `navegar`), e o copiar so aparece
   // quando ha bloco, pelas mesmas razoes que valem na tela do peer
-  const blocoAberto = abas[0]?.conteudo ?? null
+  //
+  // O bloco aberto e o da aba que o painel avisa pelo `aoTrocarAba`, e nao o da
+  // primeira aba: com o quadro "ao criar" na tela, a copia da paleta tem que
+  // levar o que o operador esta vendo
+  //
+  // O `?? abas[0]` e o fallback do proprio painel para quando a aba corrente
+  // sai da lista, e e ele que impede a paleta de oferecer a copia de um bloco
+  // que nao e o da tela
+  const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
+  const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
   usePublicarAcoes({
     // O Ctrl+S nao pode gravar numa tela que ainda nao tem o registro: enquanto
     // o plano ou o registro nao chegaram, o formulario esta em branco e o PUT
@@ -273,11 +294,23 @@ export function GrupoTela() {
   // O endereco que nao aponta para registro nenhum tem a tela dele, como no peer
   if (enderecoInvalido) return <NaoEncontrado />
 
-  const falhou = (plano.isError || inicial.isError) && inicial.error?.message !== "nao_encontrado"
+  // O aviso sobrevive ao tentar de novo, e nao so ao erro: o TanStack zera o
+  // `error` de uma consulta sem dado quando ela e refeita (o estado volta a
+  // `pending`), entao sem o `retentando` o clique cairia no formulario em
+  // branco ate a resposta chegar, e o botao que desabilita so existiria depois
+  // disso. O `errorUpdateCount` e o que resta da falha depois do refetch, e o
+  // `data === undefined` deixa de fora o refetch de fundo de quem ja tem dado
+  const tentando = plano.isFetching || inicial.isFetching
+  const retentando = (c: { isFetching: boolean; data: unknown; errorUpdateCount: number }) =>
+    c.isFetching && c.data === undefined && c.errorUpdateCount > 0
+  const falhou =
+    (plano.isError || inicial.isError || retentando(plano) || retentando(inicial)) &&
+    inicial.error?.message !== "nao_encontrado"
   if (falhou) {
     return (
       <Falha
         mensagem="não deu para falar com a API"
+        tentando={tentando}
         aoTentar={() => { void plano.refetch(); void inicial.refetch() }}
       />
     )
@@ -340,8 +373,14 @@ export function GrupoTela() {
               avisos={previa.data?.avisos ?? []}
               erroIrr={erroIrr}
               aoConsultarIrr={(forcar) => irr.mutate(forcar)}
-              aoIrPara={(campo) => {
-                if (!campo) return
+              aoIrPara={(campo, secao) => {
+                if (!campo && !secao) return
+                // Sem campo o alvo e a secao: e o caso do erro que cobre varios
+                // campos, em que apontar um deles seria mentir sobre onde esta
+                if (!campo) {
+                  document.getElementById(`secao-${secao}`)?.scrollIntoView({ block: "start" })
+                  return
+                }
                 const alvo = document.querySelector<HTMLElement>(`[data-campo="${campo}"] input, [data-campo="${campo}"] textarea, [data-campo="${campo}"] button`)
                 alvo?.focus()
                 alvo?.scrollIntoView({ block: "center" })
@@ -353,6 +392,7 @@ export function GrupoTela() {
         <div ref={blocoRef} className={cn("min-w-0 xl:sticky xl:top-3 xl:self-start", painel === "formulario" && "hidden xl:block")}>
           <PainelSaida
             abas={abas}
+            aoTrocarAba={setAbaAtiva}
             sujo={sujo}
             carregando={previa.isFetching}
             erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}

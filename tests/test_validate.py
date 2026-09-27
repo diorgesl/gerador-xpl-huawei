@@ -157,8 +157,11 @@ def test_apelido_com_hifen_no_meio_e_aceito():
 
 
 def test_asn_repetido_e_erro():
+    # sem apelido nos dois, o token dos dois e o ASN, e o campo do erro e o
+    # apelido: e ele que desempata. Nao ha trava no ASN, dois peers do mesmo
+    # cliente sao legitimos; o que nao pode e repetir o token
     outro = um_peer(id=2, asn=9999)
-    assert "asn" in campos(validate.validar(um_peer(asn=9999), [outro]))
+    assert "apelido" in campos(validate.validar(um_peer(asn=9999), [outro]))
 
 
 def ix(asn, apelido, ident, remoto):
@@ -348,9 +351,11 @@ def test_prefixo_malformado_de_outro_peer_nao_derruba_nem_acusa():
 
 
 def test_asn_renomeado_para_um_ja_usado_e_erro_no_modo_edicao():
+    # o peer editado tambem esta sem apelido, entao o token dele e o ASN novo e
+    # o campo do erro e o apelido, como no asn repetido da criacao
     eu = um_peer(id=1, asn=268127)
     outro = um_peer(id=2, asn=9999)
-    assert "asn" in campos(
+    assert "apelido" in campos(
         validate.validar(um_peer(id=1, asn=9999), [eu, outro], anterior=eu))
 
 
@@ -473,8 +478,9 @@ def test_prefixo_de_te_malformado_e_erro_tambem_no_cliente():
 
 
 # Round 2: o tipo. Ele escolhe o template e as tabelas do plano, e o caminho
-# do POST nao tinha o portao que o /peer/novo tem: um tipo fora de plan.TIPOS
-# validava limpo, gravava o peer e so estourava no render, com TemplateNotFound.
+# do POST nao tinha o portao que o GET /api/peers/novo tem: um tipo fora de
+# plan.TIPOS validava limpo, gravava o peer e so estourava no render, com
+# TemplateNotFound.
 # E antes disso o avisos ja estourava, com KeyError, no ROUTE_LIMIT[peer.tipo]
 # depois do .get devolver None.
 
@@ -657,8 +663,9 @@ def test_grupo_sem_asn_e_sem_prefixo_passa():
 
 def test_grupo_prefixo_malformado_e_erro():
     # o prefixo do grupo vai para o plan.cidr_para_xpl como o do peer. Sem
-    # esta checagem o grupo era gravado assim mesmo e o /saida/grupo/<nome>
-    # estourava para sempre, sem a tela oferecer como consertar.
+    # esta checagem o grupo era gravado assim mesmo e o GET
+    # /api/grupos/{ident}/saida estourava para sempre, sem a tela oferecer
+    # como consertar.
     g = um_grupo(asn=64500,
                  prefixos={"v4": ["203.0.113.0", "lixo"], "v6": []})
     erros = validate.validar_grupo(g, [], [])
@@ -1072,3 +1079,70 @@ def test_prefixo_repetido_na_mesma_familia_e_recusado():
         {"v4": [bloco(), bloco()], "v6": []})
     assert erros[0].campo == "blocos_v4"
     assert "repetido" in erros[0].mensagem
+
+
+def test_origem_fora_da_tabela_do_tipo_e_aviso_nos_tipos_sem_conferencia():
+    """O peer de upstream/ix/pni nao confere a origem contra a tabela do tipo.
+
+    O grupo confere (validar_grupo), e o peer so olha a faixa 1xxx, e so nos
+    tipos downstream. A assimetria esta registrada no proprio codigo como
+    mudanca separada, e esta e ela: aviso, e nao erro, porque fechar trancaria
+    cadastro que ja existe (tres upstreams do peers.yaml real).
+    """
+    for tipo, permitidas in (("upstream", (1400, 1000, 1900)),
+                             ("ix", (1300, 1200, 1000, 1900)),
+                             ("pni", (1500, 1200, 1000, 1900))):
+        # o route_limit do um_peer e o do cliente (50), e nao o da tabela do
+        # tipo: sem alinhar, o aviso do route_limit entra na lista e o assert
+        # de lista exata deixa de falar so da origem
+        limite = plan.ROUTE_LIMIT[tipo]
+        fora = validate.avisos(um_peer(tipo=tipo, origem=1100,
+                                       route_limit=limite), [])
+        assert [e.campo for e in fora] == ["origem"], tipo
+        assert "nao esta na tabela do %s" % tipo in fora[0].mensagem
+        assert str(permitidas[0]) in fora[0].mensagem
+
+        dentro = validate.avisos(um_peer(tipo=tipo, origem=permitidas[0],
+                                         route_limit=limite), [])
+        assert dentro == [], (tipo, "origem da tabela nao pode avisar")
+
+
+def test_origem_no_downstream_nao_ganha_aviso_novo():
+    """Nos downstream a faixa 1xxx ja e erro no validar, e nao aviso aqui.
+
+    O valor e o 1400, e nao um dos que a tabela do cliente usa (1100, 1110,
+    1120, 1130): com um valor de dentro da tabela o caso passava com a guarda
+    do `avisos` e sem ela, porque o que a guarda decide e sobre o TIPO do
+    peer, e nao sobre o valor. O 1400 e o que prova: ele esta fora da tabela
+    do cliente, entao sem a guarda sairia o aviso ambar ("origem 1400 nao
+    esta na tabela do cliente") por cima do erro vermelho que o validar ja
+    da no downstream.
+    """
+    assert validate.avisos(um_peer(tipo="cliente", origem=1400), []) == []
+
+
+def test_a_colisao_de_token_aponta_o_campo_onde_o_token_nasce():
+    """Token repetido: o erro aponta o campo que resolve, e nao o ASN sempre.
+
+    O token e `apelido or str(asn)`. Com apelido, e ele que colide: apontar o
+    ASN mandava o operador trocar um campo que nao resolve, e o erro continuava
+    depois da troca, culpando o ASN de novo. Sem apelido, o token e o ASN, e
+    quem resolve e dar um apelido: o campo do erro e o apelido, e a mensagem
+    diz isso, em vez de mandar mexer num ASN que pode muito bem repetir (um
+    mesmo cliente em dois POPs e dois peers legitimos).
+    """
+    com_apelido = um_peer(id=1, apelido="ALT", nome="ALT", tipo="upstream",
+                          asn=53062)
+    copia = um_peer(id=2, apelido="ALT", nome="ALT", tipo="upstream", asn=64500)
+    erros = validate.validar(copia, [com_apelido], grupos=[])
+    assert [(e.campo, e.mensagem) for e in erros if "token" in e.mensagem] == [
+        ("apelido", "o apelido ALT ja e o token do peer ALT")]
+
+    sem_apelido = um_peer(id=3, apelido="", nome="UP A", tipo="upstream",
+                          asn=53062)
+    repetido = um_peer(id=4, apelido="", nome="UP B", tipo="upstream",
+                       asn=53062)
+    erros = validate.validar(repetido, [sem_apelido], grupos=[])
+    assert [(e.campo, e.mensagem) for e in erros if e.campo == "apelido"] == [
+        ("apelido",
+         "o ASN 53062 ja e o token do peer UP A: de um apelido a este peer")]

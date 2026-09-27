@@ -100,7 +100,8 @@ export interface paths {
         get?: never;
         /**
          * Gravar Rede
-         * @description O AS da rede no topo do peers.yaml, com as conferencias do POST /asn.
+         * @description O AS da rede no topo do peers.yaml, pelas conferencias do
+         *     _asn_do_formulario.
          */
         put: operations["gravar_rede_api_rede_put"];
         post?: never;
@@ -158,9 +159,8 @@ export interface paths {
          * Atualizar Peer
          * @description Atualiza o registro do ID da URL.
          *
-         *     O ID do corpo e editavel, como na tela HTML: se o operador o trocou, o
-         *     registro da URL passa ao ID novo, e o validar recusa o que ja for de
-         *     outro peer ou grupo.
+         *     O ID do corpo e editavel: se o operador o trocou, o registro da URL passa
+         *     ao ID novo, e o validar recusa o que ja for de outro peer ou grupo.
          */
         put: operations["atualizar_peer_api_peers__ident__put"];
         post?: never;
@@ -209,8 +209,8 @@ export interface paths {
          *
          *     O `id` e o do registro que a tela esta editando, e falta no peer novo. O
          *     erro de validacao volta em 200 e sem bloco. A remocao fica de fora: ela
-         *     desfaz o que esta no equipamento, e o que esta no equipamento e o
-         *     registro salvo, que o GET /peers/{id}/saida devolve.
+         *     desfaz o que esta no equipamento, e o que esta no equipamento e o registro
+         *     salvo, que o GET /api/peers/{ident}/saida devolve.
          */
         post: operations["previa_peer_api_peers_previa_post"];
         delete?: never;
@@ -249,9 +249,8 @@ export interface paths {
          * Consultar Irr
          * @description Os prefixos do ASN no IRR, pelo bgpq4, sem gravar nada.
          *
-         *     E o POST /bgpq4 da tela HTML sem o formulario inteiro: o que a consulta
-         *     precisa e o ASN e o token, e o resultado vai para os campos de prefixo da
-         *     tela, que o operador ainda edita antes de salvar.
+         *     A consulta precisa so do ASN e do apelido: o resultado vai para os campos
+         *     de prefixo da tela, que o operador ainda edita antes de salvar.
          */
         post: operations["consultar_irr_api_irr_post"];
         delete?: never;

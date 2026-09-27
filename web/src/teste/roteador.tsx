@@ -40,8 +40,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
   // O que a tela avisou fica no modulo do sonner, e nao na arvore que a limpeza
   // automatica desmonta: sem esta linha os toasts de um caso aparecem no
-  // seguinte, e uma assercao por texto acha o do caso anterior - "gravado em
-  // out/" e "registro nao encontrado" sao do mesmo arquivo em varios casos
+  // seguinte, e uma assercao por texto acha o do caso anterior. O caso "a rede
+  // fora no salvar avisa com tentar de novo, e o formulario nao perde nada"
+  // acha mais de uma copia do "gravado em out/", e o "a rede fora no salvar e
+  // copiar nao culpa a copia" acha um "nao deu para falar com a API" que nao e
+  // dele. Medidos em 2026-09-27: 12 casos quebram sem esta linha, 7 em
+  // PeerTela.test.tsx e 5 em GrupoTela.test.tsx
   toast.dismiss()
   const faltando = semMapa
   semMapa = []

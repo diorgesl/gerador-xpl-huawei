@@ -8,7 +8,7 @@ type Props = {
   rotulo: string
   ajuda?: string
   erro?: string
-  aviso?: string
+  avisos?: string[]
   // "o bloco de <tipo> nao usa este campo": o campo esta a vista porque tem
   // valor guardado ou erro, e nao porque pertence ao tipo aberto
   nota?: string
@@ -16,11 +16,11 @@ type Props = {
   children: ReactNode
 }
 
-export function Campo({ nome, rotulo, ajuda, erro, aviso, nota, largo, children }: Props) {
+export function Campo({ nome, rotulo, ajuda, erro, avisos, nota, largo, children }: Props) {
   return (
     <div
       data-campo={nome}
-      className={cn("flex flex-col gap-1", largo && "sm:col-span-2")}
+      className={cn("flex min-w-0 flex-col gap-1", largo && "sm:col-span-2")}
     >
       <Label htmlFor={nome} className="text-[13px]">
         {rotulo}
@@ -38,12 +38,12 @@ export function Campo({ nome, rotulo, ajuda, erro, aviso, nota, largo, children 
           (route-limit fora da tabela e abaixo do minimo, por exemplo), e o
           erro e o unico lugar da tela que mostra aviso: engolir o aviso por
           causa do erro perde a informacao que o operador precisa ver */}
-      {aviso && (
-        <p className="flex items-start gap-1 text-xs text-aviso-texto">
+      {avisos?.map((a) => (
+        <p key={a} className="flex items-start gap-1 text-xs text-aviso-texto">
           <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
-          {aviso}
+          {a}
         </p>
-      )}
+      ))}
     </div>
   )
 }

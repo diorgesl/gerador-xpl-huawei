@@ -51,6 +51,19 @@ const rotas = [
   { path: "/peers/:id", element: <PeerTela /> },
 ]
 
+// A paleta mora na casca, e nao na tela: quem mede a copia da paleta precisa da
+// tela dentro dela. E o mesmo arranjo que os casos da paleta montam a mao
+const cascaComPeer = [
+  {
+    path: "/",
+    element: <Casca />,
+    children: [
+      { path: "peers", element: <div>lista de peers</div> },
+      { path: "peers/:id", element: <PeerTela /> },
+    ],
+  },
+]
+
 // A limpeza do `unstubAllGlobals` e o resto do que cada caso deixa para tras sao
 // do arnes, que os registra uma vez por arquivo (web/src/teste/roteador.tsx)
 
@@ -99,6 +112,27 @@ describe("a tela do peer", () => {
     // texto, que acharia as duas
     expect(await screen.findByRole("button", { name: "ASN ja usado pelo peer BRDIGITAL-20G" })).toBeInTheDocument()
     expect(document.querySelector('[data-campo="asn"]')).toHaveTextContent("ASN ja usado pelo peer BRDIGITAL-20G")
+  })
+
+  it("uma chave de erro que nao e campo nao fecha o painel", async () => {
+    // o painel pergunta se ha campo no erro para decidir se mostra o bloco;
+    // com uma chave desconhecida ele fechava sem desenhar campo nenhum, e o
+    // operador ficava sem o bloco e sem saber onde corrigir
+    mockFetch({
+      ...BASE,
+      "PUT /api/peers/7": { status: 422, corpo: { erros: { campo_novo: "algo que so o backend conhece" }, avisos: [] } },
+    })
+    montarRota(rotas, "/peers/7")
+    // a previa da montagem responde ANTES do clique: e ela que fecha a janela
+    // da recusa, porque a lista dela substitui a do salvar. Clicar antes disso
+    // mediria a corrida entre as duas, e nao o que o caso quer medir
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+
+    expect(await screen.findByText("algo que so o backend conhece")).toBeInTheDocument()
+    // sem `findBy`: a espera daria tempo de a proxima previa chegar e reabrir o
+    // painel, e o caso passaria sem o painel ter deixado de fechar
+    expect(screen.getByText(/CUST-268127-IMPORT-V4/)).toBeInTheDocument()
   })
 
   it("o excluir pede confirmacao com o token no texto", async () => {
@@ -357,6 +391,73 @@ describe("a tela do peer", () => {
     await screen.findByText(/CUST-268127-IMPORT-V4/)
     await userEvent.keyboard("{Control>}k{/Control}")
     expect(await screen.findByText("copiar o bloco aberto")).toBeInTheDocument()
+  })
+
+  it("a copia da paleta leva o bloco da aba aberta", async () => {
+    // A janela em que o defeito aparece: a tela esta na aba de remocao, e a
+    // copia da paleta levava o bloco da previa. O texto de cada aba e distinto
+    // de proposito, para a assercao dizer QUAL foi copiado
+    const escrever = vi.fn()
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: escrever } })
+    mockFetch({
+      ...BASE,
+      "GET /api/peers/7/saida": { corpo: { bloco: "salvo", remover: "undo peer 198.51.100.2", criar_lista: null, arquivo: "268127-cliente.txt" } },
+    })
+    montarRota(cascaComPeer, "/peers/7")
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("tab", { name: /remoção/i }))
+
+    await userEvent.keyboard("{Control>}k{/Control}")
+    await userEvent.click(await screen.findByText("copiar o bloco aberto"))
+
+    await waitFor(() => expect(escrever).toHaveBeenCalledWith("undo peer 198.51.100.2"))
+  })
+
+  it("a copia da paleta segue o painel quando a aba aberta sai da lista", async () => {
+    // O quadro "ao criar" so existe enquanto a previa manda o `criar_lista`, e
+    // trocar o tipo e o que o derruba. Com a aba aberta saindo da lista, o
+    // painel cai na primeira: a tela tem que cair na mesma, senao a paleta
+    // oferece a copia de um bloco que nao e o que esta na tela (ou nao oferece
+    // nada, com um bloco na tela). O texto de cada aba e distinto para a
+    // assercao dizer QUAL foi copiado
+    const escrever = vi.fn()
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: escrever } })
+    const respostaDaPrevia = (criar: string | null) => ({
+      corpo: {
+        erros: {}, avisos: [], arquivo: "268127-cliente.txt", salvo: null,
+        bloco: "xpl route-filter CUST-268127-IMPORT-V4\nend-filter",
+        criar_lista: criar,
+      },
+    })
+    const mapa: Record<string, Resposta> = {
+      ...BASE,
+      // o seletor de tipo so oferece o que o plano lista
+      "GET /api/plano": { corpo: { ...PLANO, tipos: ["cliente", "upstream"] } },
+      "POST /api/peers/previa": respostaDaPrevia("xpl community-list CL-PEER-7"),
+    }
+    mockFetch(mapa)
+    montarRota(cascaComPeer, "/peers/7")
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("tab", { name: /ao criar o peer/i }))
+    expect(screen.getByText(/CL-PEER-7/)).toBeInTheDocument()
+
+    // a previa seguinte ja nao traz o quadro "ao criar". O mapa troca antes do
+    // clique no tipo, que e a alteracao que dispara a previa (400ms depois)
+    mapa["POST /api/peers/previa"] = respostaDaPrevia(null)
+    await userEvent.click(screen.getByLabelText("Tipo"))
+    await userEvent.click(await screen.findByRole("option", { name: "upstream" }))
+
+    // o estado do qual o caso fala: a aba aberta saiu, e o painel esta na
+    // primeira, que tem bloco
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /ao criar o peer/i })).not.toBeInTheDocument())
+    expect(screen.getByRole("tab", { name: /bloco do peer/i })).toHaveAttribute("aria-selected", "true")
+
+    await userEvent.keyboard("{Control>}k{/Control}")
+    await userEvent.click(await screen.findByText("copiar o bloco aberto"))
+
+    await waitFor(() =>
+      expect(escrever).toHaveBeenCalledWith("xpl route-filter CUST-268127-IMPORT-V4\nend-filter"),
+    )
   })
 
   it("o duplicar do cabecalho pergunta com o formulario sujo", async () => {

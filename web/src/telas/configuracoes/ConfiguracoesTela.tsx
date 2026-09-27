@@ -66,6 +66,16 @@ export function ConfiguracoesTela() {
     aoSalvar: plano.data ? () => gravar.mutate() : undefined,
   })
 
+  // O aviso sobrevive ao tentar de novo, e nao so ao erro: o TanStack zera o
+  // `error` de uma consulta sem dado quando ela e refeita (o estado volta a
+  // `pending`), entao sem o `retentando` o botao que desabilita so existiria
+  // depois da resposta. O `errorUpdateCount` e o que resta da falha depois do
+  // refetch, e o `data === undefined` deixa de fora o refetch de fundo de quem
+  // ja tem o plano
+  const tentando = plano.isFetching
+  const retentando = tentando && plano.data === undefined && plano.errorUpdateCount > 0
+  const falhou = plano.isError || retentando
+
   return (
     <div className="flex max-w-xl flex-col gap-4 p-3">
       <h1 className="text-base font-semibold">Configurações</h1>
@@ -76,8 +86,8 @@ export function ConfiguracoesTela() {
           Sem ele a tela ficava com os campos vazios e o gravar morto sem dizer
           por que. A mensagem e a mesma das outras telas, para a falha ter uma
           cara so */}
-      {plano.isError && (
-        <Falha mensagem="não deu para falar com a API" aoTentar={() => void plano.refetch()} />
+      {falhou && (
+        <Falha mensagem="não deu para falar com a API" tentando={tentando} aoTentar={() => void plano.refetch()} />
       )}
 
       <fieldset className="rounded border p-3">
@@ -143,6 +153,9 @@ export function ConfiguracoesTela() {
               size="sm"
               variant={tema === t ? "secondary" : "ghost"}
               className={cn(tema === t && "ring-1")}
+              // a cor sozinha nao diz nada a quem usa leitor de tela: o
+              // aria-pressed e o que anuncia qual dos tres esta valendo
+              aria-pressed={tema === t}
               onClick={() => trocarTema(t)}
             >
               {t}

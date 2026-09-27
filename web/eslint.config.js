@@ -31,6 +31,16 @@ export default defineConfig([
     },
   },
   {
+    // Os globais de Node para o e2e. Hoje este bloco nao confere nada: o
+    // typescript-eslint desliga o no-undef nos arquivos TS, e ele e o unico
+    // rule que olharia para globais (medido com --print-config). Fica como
+    // intencao declarada, e nao como se estivesse pegando alguma coisa.
+    // Detalhe de como o flat config resolve: os globais se MESCLAM com os do
+    // bloco anterior, entao o browser nao sai daqui
+    files: ["playwright.config.ts", "e2e/**/*.ts"],
+    languageOptions: { globals: globals.node },
+  },
+  {
     // as regras recomendadas entram junto dos globais: so os globais nao
     // conferem nada, porque nenhuma regra olha para eles
     files: ["scripts/**/*.mjs"],

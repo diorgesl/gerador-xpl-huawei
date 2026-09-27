@@ -26,7 +26,10 @@
 | 8 | O tema com marca acessivel | `aria-pressed` no botao do tema escolhido |
 | 9 | Dois consertos pequenos | o `_corpo` dos prefixos e o comentario do harness |
 | 10 | e2e | aspas, typecheck, globais de Node, a copia provando o bloco, e a medicao do Safari |
-| 11 | Comentarios e registro | os quinze comentarios obsoletos e onde cada pendencia foi fechada |
+| 11 | Comentarios e registro | os comentarios obsoletos e onde cada pendencia foi fechada |
+| 12 | O erro de token | a colisao de token aponta o apelido quando e o apelido que colide |
+| 13 | O campo que invade a coluna | o select de valor longo para de pintar por cima do vizinho |
+| 14 | As sobras da tela dos prefixos | o recado do IRR deixa de mostrar o `_corpo`, e o caso da Task 9 espera o registro antes de clicar |
 
 ## Global Constraints
 
@@ -778,6 +781,9 @@ Expected: FAIL, porque o botao nao tem `disabled`.
 
 - [ ] **Step 3: O estado no componente**
 
+**Superado pelo adendo do fim da task.** O JSDoc abaixo nao e o que entrou no
+codigo: o adendo, logo depois do Step 6, e o registro do que venceu.
+
 Em `web/src/components/Falha.tsx`:
 
 ```tsx
@@ -835,6 +841,28 @@ git add web/src/components/Falha.tsx web/src/telas
 git commit -m "O tentar de novo desabilita enquanto o pedido corre"
 ```
 
+**Adendo (medido na execucao, 2026-09-27).** O conserto como este plano o
+escreveu e um no-op, e a premissa da task estava errada. Com
+`tentando={X.isFetching}` e mais nada, o caso nao passa: no clique o TanStack
+zera o `error` de uma consulta sem dado quando ela e refeita
+(`@tanstack/query-core/query.js:486`), entao o aviso de falha sai da tela, a tela
+volta ao formulario vazio e o botao a desabilitar deixa de existir. E, sem o
+`retentando`, nao existe clique duplo a evitar: o primeiro clique ja tira o botao
+da tela.
+
+O que foi entregue, e o que o criterio de aceite virou: cada um dos cinco
+chamadores calcula
+
+```tsx
+const retentando = tentando && X.data === undefined && X.errorUpdateCount > 0
+```
+
+e o aviso fica de pe, com o botao desabilitado, enquanto o retry corre (o
+`errorUpdateCount` sobrevive ao refetch; o `data === undefined` deixa de fora o
+refetch de fundo de quem ja tem dado). O efeito observavel deixa de ser "evitar
+dois pedidos" e passa a ser "a tela nao pisca o formulario vazio durante o
+retry", que e o defeito que existia de verdade.
+
 ---
 
 ### Task 8: O tema com marca acessivel
@@ -845,18 +873,39 @@ git commit -m "O tentar de novo desabilita enquanto o pedido corre"
 - Modify: `web/src/telas/configuracoes/ConfiguracoesTela.tsx`
 - Test: `web/src/telas/configuracoes/ConfiguracoesTela.test.tsx`
 
+> Nota de execucao (2026-09-27): esta task **nao tinha rodado** quando a revisao
+> final da leva a leu - o plano, a spec e o ledger a davam por fechada, e o
+> componente seguia sem `aria-pressed` e sem o caso de teste. A execucao entrou
+> na rodada de conserto, e o Step 1 abaixo ja esta na versao executada: o
+> `mockFetch(BASE)` que o snippet do brief omitia (sem ele o `afterEach` do
+> arnes acusa "rota sem mapa") e as **tres** assercoes, e nao duas. O tema padrao
+> e `sistema` (`web/src/app/tema.ts:12-19`), entao o clique em `claro` muda o
+> estado de verdade, e a terceira assercao - o `sistema` em `false` depois do
+> clique - e a que pega a **marca presa no padrao**: medida na execucao, um
+> `aria-pressed={tema === t || t === "sistema"}` passa nas duas assercoes do
+> brief e falha so nela, porque o "pressionado" ficaria em dois botoes ao mesmo
+> tempo. Um `aria-pressed={true}` fixo, esse, ja falha na segunda do brief -
+> tambem medido.
+
 - [ ] **Step 1: Escrever o teste que falha**
 
 ```tsx
   it("o tema escolhido se anuncia como pressionado", async () => {
     // a marca era so a cor (variant + ring): quem usa leitor de tela nao sabia
-    // qual dos tres estava valendo
+    // qual dos tres estava valendo. O tema padrao e "sistema", entao o clique
+    // em "claro" muda o estado de verdade, e a marca tem que SAIR do sistema
+    mockFetch(BASE)
     montarRota(rotas, "/configuracoes")
     await screen.findByRole("button", { name: "claro" })
+    expect(screen.getByRole("button", { name: "sistema" })).toHaveAttribute("aria-pressed", "true")
+
     await userEvent.click(screen.getByRole("button", { name: "claro" }))
 
     expect(screen.getByRole("button", { name: "claro" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", { name: "escuro" })).toHaveAttribute("aria-pressed", "false")
+    // sem esta terceira linha o caso passaria com a marca fixa: e ela que prova
+    // que o "pressionado" andou de um botao para o outro
+    expect(screen.getByRole("button", { name: "sistema" })).toHaveAttribute("aria-pressed", "false")
   })
 ```
 
@@ -994,6 +1043,7 @@ Os quatro pendentes do e2e e a medicao do Safari. Esta task e a unica que pode m
 **Files:**
 - Modify: `web/playwright.config.ts` (aspas nos caminhos)
 - Create: `web/tsconfig.e2e.json`, Modify: `web/tsconfig.json` (a referencia)
+- Create: `web/e2e/clipboard.d.ts` (o tipo minimo do `navigator.clipboard`, na emenda do Step 2)
 - Modify: `web/eslint.config.js` (globais de Node)
 - Modify: `web/e2e/copiar.spec.ts` (a assercao forte e o caso novo)
 - Modify: `README.md` (a contagem de casos do e2e)
@@ -1008,12 +1058,41 @@ Em `web/playwright.config.ts`, o comando do `webServer` passa a citar cada camin
 
 - [ ] **Step 2: O typecheck do e2e**
 
+> Nota de execucao (2026-09-27): a config abaixo nasceu sem `"lib"`, e o default
+> do `target` trazia a lib DOM para dentro do programa do e2e: `document`,
+> `window` e `localStorage` seguiam typecheckando, que e o oposto do que o
+> Step 3 quer (o bloco de lint existe porque o e2e "hoje recebe `document`,
+> `window` e `localStorage` como definidos"). Medido na rodada de conserto com
+> `--lib ES2022`: so `navigator.clipboard` quebrava - tres pontos, o `:22` e o
+> `:74` do `copiar.spec.ts` **e o `:113` do `fluxos.spec.ts`**, que a revisao
+> nao contou. A emenda entrou na mesma rodada: o `"lib": ["ES2022"]` no
+> `tsconfig.e2e.json` e o tipo local minimo do `clipboard` em
+> `web/e2e/clipboard.d.ts` - uma declaracao, zero `any`, zero
+> `@ts-expect-error`, zero cast.
+>
+> O que a config entrega depois da emenda, medido: escrever `document.title`,
+> `window.location` ou um campo do `navigator` fora do `clipboard` num arquivo
+> do `e2e/` e erro de tipo (`TS2584` no `document`, `TS2304` no `window` e
+> `TS2339` no campo do `navigator`); o `localStorage` continua
+> passando, e nao pela DOM - o `@types/node` 24 declara
+> `web-globals/storage.d.ts` com `var localStorage: Storage`, porque o Node tem
+> esse global. Ou seja: a garantia e "ES2022 mais os globais de Node", e nao
+> "nada de navegador".
+
 Crie `web/tsconfig.e2e.json`:
 
 ```json
 {
   "compilerOptions": {
+    // o mesmo destino dos outros dois: sem isto o `tsc -b` larga um
+    // tsconfig.e2e.tsbuildinfo solto na raiz do web/, fora do gitignore
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
     "target": "ES2022",
+    // sem o lib, a DOM entra pelo default do target e `document`, `window` e
+    // `localStorage` seguem typecheckando no e2e, que roda em navegador e nao
+    // pode contar com eles: o que o e2e enxerga aqui e o ES2022 mais os globais
+    // de Node, e so
+    "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -1041,6 +1120,22 @@ cd web && npx tsc -b
 
 Expected: PASS na primeira vez, ou erros de tipo em codigo que nunca foi checado. Cada erro e conserto real, no mesmo commit.
 
+Com o `"lib": ["ES2022"]` o que aparece sao os tres `navigator.clipboard` (dois
+no `copiar.spec.ts`, um no `fluxos.spec.ts`), e o conserto e o tipo local minimo
+em `web/e2e/clipboard.d.ts` - o que o e2e usa do navegador e o `readText`, e so:
+
+```ts
+interface Navigator {
+  readonly clipboard: { readText(): Promise<string> }
+}
+```
+
+E uma declaracao de global, e nao um cast: o compilador continua conferindo o
+resto (`navigator.clipboar` e erro de propriedade inexistente, e `document` nao
+existe no programa). O `declare global` dentro de um dos specs cobriria os dois
+arquivos pelo mesmo programa, mas o `.d.ts` ao lado deles diz de onde vem o
+tipo sem precisar procurar em qual spec ele foi declarado.
+
 - [ ] **Step 3: Os globais certos no lint**
 
 Em `web/eslint.config.js`, antes do bloco que usa `globals.browser`:
@@ -1058,7 +1153,14 @@ Em `web/eslint.config.js`, antes do bloco que usa `globals.browser`:
 cd web && npm run lint
 ```
 
-Expected: PASS, com `process` e `node:fs` reconhecidos.
+Expected: PASS, com o bloco no lugar - e ele fica como registro de intencao, e
+nao como se estivesse conferindo alguma coisa. Medido: o bloco **nao** muda nada
+hoje. Tirando-o, `npx eslint e2e playwright.config.ts` continua em exit 0, porque
+o `typescript-eslint` desliga o `no-undef` nos arquivos TS (o `--print-config` o
+resolve como desligado) e ele e o unico rule que olharia para globais; e os
+globais ainda se mesclam com os do bloco anterior, em vez de o novo vencer. Quem
+cobre os globais do e2e de verdade e o `types: ["node"]` do `tsconfig.e2e.json`
+do Step 2.
 
 - [ ] **Step 4: A copia provando o bloco daquele peer**
 
@@ -1125,12 +1227,19 @@ git commit -m "O e2e mede o salvar e copiar no WebKit, e o resto dos pendentes"
 ### Task 11: Comentarios e registro
 
 **Files:**
-- Modify: `app/api.py` (treze comentarios), `app/formulario.py` (dois)
+- Modify: `app/api.py` e `app/formulario.py` (os comentarios obsoletos)
 - Modify: `docs/superpowers/plans/2026-09-26-front-spa.md` e `docs/superpowers/plans/2026-09-27-corte-das-telas-html.md` (o registro)
 
 - [ ] **Step 1: Os comentarios**
 
-Os treze de `app/api.py` estao em `:6`, `:55`, `:85`, `:151`, `:175`, `:295`, `:372`, `:386`, `:418`, `:422`, `:514`, `:552`, `:572`; os dois de `app/formulario.py`, em `:63-66` e `:534`. Cada um passa a descrever o que o codigo faz hoje. Os tres que citam funcoes apagadas:
+Em `app/api.py`, os comentarios que citavam as telas Jinja e as rotas que sairam;
+em `app/formulario.py`, os que citavam `_contexto`, `_contexto_grupo`,
+`POP_USADOS` e as tags da tela. A revisao da Task 1 acrescentou mais um, que ela
+nao podia consertar (o brief daquela task limitava a mudanca ao `avisos`):
+`app/validate.py:452-455` diz "O peer fica como esta; alinha-lo e
+mudanca separada (ver a spec)", e a Task 1 E aquela mudanca, entao o comentario
+passa a dizer que o grupo recusa e o peer avisa. Cada um passa a descrever o que
+o codigo faz hoje. Os tres que citam funcoes apagadas:
 
 ```python
 # app/api.py:6, hoje "de cada campo e o bloco gerado sao os mesmos nas duas telas."
@@ -1177,6 +1286,381 @@ git commit -m "Os comentarios deixam de citar as telas que sairam"
 
 ---
 
+### Task 12: O erro de token aponta o campo onde o token nasce
+
+O operador duplicou o ALT (upstream, apelido `ALT`, ASN 53062, membro do grupo
+`ALT_53062`) e levou tres erros: `ASN ja usado pelo peer ALT` no campo do ASN, e
+dois `endereco ja usado pelo peer ALT`. Os dois de endereco sao o esperado numa
+copia (os IPs remotos vieram junto), e o banner da tela ja diz para troca-los.
+
+O primeiro nao. O que colide nao e o ASN: e o **token**, que e
+`apelido or str(asn)` (`peers.py:111-119`) e e o nome do peer no equipamento e
+nos arquivos de `out/`. Como o ALT tem apelido, o token dele e `ALT`, e o da
+copia tambem. Trocar o ASN nao resolve (o token continua `ALT`), e a mensagem
+segue culpando o ASN. Dois peers **podem** ter o mesmo ASN (foi a decisao
+registrada no spec desta leva, em "Por que o ASN repetido fica como esta"); o
+que nao pode e repetir o token.
+
+Hoje `validate.py:695-706` reporta a colisao sempre no campo `asn`, menos para
+`ix`/`pni` sem apelido (que vai para `apelido`, com a mensagem do route server).
+Esta task faz o campo e a mensagem seguirem de onde o token nasce.
+
+> Nota de execucao (2026-09-27): o operador levantou, com a tela do ALT na mao,
+> que "nao pode ter trava no ASN, pois um mesmo cliente pode ter mais de um
+> peer". Nao havia trava — o validador compara tokens, e a spec desta leva ja
+> registrava que o mesmo ASN com apelidos diferentes e legitimo —, mas o ramo do
+> peer **sem apelido** ainda mandava o operador mexer no ASN. A emenda entrou na
+> execucao, antes do commit: os Steps 1, 2, 3 e 4 abaixo ja estao na versao
+> emendada, e o conjunto de recusas ficou igual (mudaram o campo e a mensagem).
+
+**Files:**
+- Modify: `app/validate.py` (o laco de colisao do peer)
+- Modify: `tests/test_validate.py`
+- Modify: `web/e2e/fluxos.spec.ts:79` (a assercao do fluxo "duplicar e ajustar", que espera a mensagem antiga)
+
+**Interfaces:**
+- Produces: a mesma lista de `Erro` do `validar`, com o campo da colisao de token escolhido pela origem do token. A regra nao muda: um registro por token.
+
+- [ ] **Step 1: Escrever o teste que falha**
+
+No fim de `tests/test_validate.py`:
+
+```python
+def test_a_colisao_de_token_aponta_o_campo_onde_o_token_nasce():
+    """Token repetido: o erro aponta o campo que resolve, e nao o ASN sempre.
+
+    O token e `apelido or str(asn)`. Com apelido, e ele que colide: apontar o
+    ASN mandava o operador trocar um campo que nao resolve, e o erro continuava
+    depois da troca, culpando o ASN de novo. Sem apelido, o token e o ASN, e
+    quem resolve e dar um apelido: o campo do erro e o apelido, e a mensagem
+    diz isso, em vez de mandar mexer num ASN que pode muito bem repetir (um
+    mesmo cliente em dois POPs e dois peers legitimos).
+    """
+    com_apelido = um_peer(id=1, apelido="ALT", nome="ALT", tipo="upstream",
+                          asn=53062)
+    copia = um_peer(id=2, apelido="ALT", nome="ALT", tipo="upstream", asn=64500)
+    erros = validate.validar(copia, [com_apelido], grupos=[])
+    assert [(e.campo, e.mensagem) for e in erros if "token" in e.mensagem] == [
+        ("apelido", "o apelido ALT ja e o token do peer ALT")]
+
+    sem_apelido = um_peer(id=3, apelido="", nome="UP A", tipo="upstream",
+                          asn=53062)
+    repetido = um_peer(id=4, apelido="", nome="UP B", tipo="upstream",
+                       asn=53062)
+    erros = validate.validar(repetido, [sem_apelido], grupos=[])
+    assert [(e.campo, e.mensagem) for e in erros if e.campo == "apelido"] == [
+        ("apelido",
+         "o ASN 53062 ja e o token do peer UP A: de um apelido a este peer")]
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+```bash
+.venv/bin/python -m pytest tests/test_validate.py -q -k colisao_de_token
+```
+
+Expected: FAIL nos dois casos: o primeiro recebe `("asn", "ASN ja usado pelo peer ALT")`
+e o segundo, `("asn", "ASN ja usado pelo peer UP A")`.
+
+- [ ] **Step 3: O campo segue a origem do token**
+
+Em `app/validate.py`, troque o ramo da colisao de token (perto da linha 695):
+
+```python
+        if outro.token == peer.token:
+            # O token e `apelido or str(asn)`, e o campo do erro segue de onde
+            # ele nasce: com apelido, e o apelido que o operador tem que mexer,
+            # e apontar o ASN mandava trocar um campo que nao resolve (a copia
+            # do ALT recebeu "ASN ja usado", trocou o ASN e o erro continuou).
+            # O ix/pni sem apelido continua no apelido, porque ali o ASN e o
+            # do route server e o apelido e a saida.
+            if peer.apelido:
+                erros.append(Erro(
+                    "apelido",
+                    "o apelido %s ja e o token do peer %s"
+                    % (peer.apelido, outro.nome)))
+            elif peer.tipo in ("ix", "pni"):
+                erros.append(Erro(
+                    "apelido",
+                    "apelido obrigatorio: o ASN %d e o do route server e ja "
+                    "esta no peer %s" % (peer.asn, outro.nome)))
+            else:
+                # Sem apelido o token E o ASN, e por isso ele colide: nao ha
+                # trava no ASN (dois peers do mesmo cliente sao legitimos), o
+                # que nao pode e repetir o token, que e o nome do peer no
+                # equipamento e nos arquivos de out/. O campo e o apelido
+                # porque e ele que resolve
+                erros.append(Erro(
+                    "apelido",
+                    "o ASN %d ja e o token do peer %s: de um apelido a este "
+                    "peer" % (peer.asn, outro.nome)))
+```
+
+- [ ] **Step 4: Rodar e ver passar**
+
+```bash
+.venv/bin/python -m pytest tests/test_validate.py tests/test_api_peers.py -q
+```
+
+Expected: PASS. Tres testes que prendiam o campo antigo mudam junto, na mesma
+classe, porque o `CLIENTE` do `dados_api` nao tem apelido:
+`test_validate.py::test_asn_repetido_e_erro`,
+`::test_asn_renomeado_para_um_ja_usado_e_erro_no_modo_edicao` e
+`test_api_peers.py::test_asn_repetido_e_recusado_no_campo`.
+
+- [ ] **Step 5: O e2e que esperava a mensagem antiga**
+
+Em `web/e2e/fluxos.spec.ts`, no fluxo "duplicar e ajustar" (linha ~79), a assercao passa a esperar a mensagem nova:
+
+```ts
+  // o peer 1 do cadastro do e2e tem apelido (ACME), entao a copia colide no
+  // apelido, e o erro aponta o apelido: a mensagem antiga culpava o ASN
+  await expect(page.getByRole("alert").first()).toContainText("ja e o token do peer")
+```
+
+- [ ] **Step 6: Rodar a suite e o e2e**
+
+```bash
+.venv/bin/python -m pytest -q
+cd web && npm test && npm run e2e
+```
+
+Expected: PASS nos tres.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/validate.py tests/test_validate.py web/e2e/fluxos.spec.ts
+git commit -m "O erro de token aponta o apelido quando e o apelido que colide"
+```
+
+---
+
+### Task 13: O campo de valor longo nao invade a coluna vizinha
+
+O operador abriu a copia do ALT num viewport logo acima do `xl` e viu os campos
+sobrepostos: o select da origem ("1100 - fora da tabela do tipo") pintado por
+cima do rotulo do POP, e o do prepend por cima do keepalive.
+
+A causa: `web/src/components/ui/select.tsx:43` monta o `SelectTrigger` com
+`w-fit` e `whitespace-nowrap`, e `Formulario.tsx:229` o usa sem classe nenhuma.
+Em `xl` o painel de saida toma `minmax(0, 42rem)` da largura (o grid de duas
+colunas da tela esta em `PeerTela.tsx:411`), entao as tres colunas do formulario
+ficam com **88,66px** cada (medido em 2026-09-27; o plano estimava ~110px): o
+select, que e do tamanho do proprio texto, estoura a celula do grid e pinta por
+cima do vizinho. O `line-clamp-1` que o componente ja poe no valor nao ajuda
+enquanto o gatilho nao tiver largura para clampar.
+
+> Nota de execucao (2026-09-27): o Step 1 e o Step 3 abaixo estao na versao que
+> foi executada. A assercao do plano comparava a origem com o POP e foi medida
+> como insatisfazivel — o POP abre a linha de baixo (y=603,5 contra y=516,5) no
+> x=281, e a origem comeca em x=482,33, entao nenhuma largura passaria; a
+> fronteira virou a propria celula. E o `min-w-0` do `Campo.tsx` foi medido
+> INERTE nos tres pontos de uso (o `grid-cols-3` do Tailwind ja emite
+> `repeat(3, minmax(0, 1fr))`, minimo zero): quem conserta e o `w-full`.
+
+**Files:**
+- Modify: `web/src/components/Formulario.tsx:229` (a classe do `SelectTrigger`)
+- Modify: `web/src/components/Campo.tsx` (o `min-w-0` do item do grid)
+- Modify: `web/e2e/fluxos.spec.ts` (o caso que mede as caixas)
+
+**Interfaces:**
+- Produces: nada para as outras tasks. O `CampoCombo` (o input com `datalist`) e o `Input` comum ja sao `w-full` e nao sofrem disso.
+
+- [ ] **Step 1: Escrever o teste que falha**
+
+Em `web/e2e/fluxos.spec.ts`, no fim:
+
+```ts
+test("um valor longo nao invade a coluna vizinha", async ({ page }) => {
+  // No xl o painel de saida toma 42rem, entao cada uma das tres colunas do
+  // formulario fica com 88,66px (medido, e o que a celula da origem mede
+  // abaixo). O select do shadcn nasce `w-fit`: com um valor longo ele estourava
+  // a celula do grid e pintava por cima do campo ao lado. A medida e a unica
+  // prova possivel aqui: jsdom nao calcula layout
+  await page.goto("/peers/1")
+  const origem = page.getByLabel("Origem da rota")
+  await expect(origem).toBeVisible()
+
+  // A celula do grid e a fronteira da coluna, e e ela que a invasao atravessa:
+  // a origem fecha a terceira coluna da linha, e o que ficava por cima era o
+  // painel de saida. O POP nao serve de fronteira: ele abre a linha de baixo
+  // (celula em y=603,5 contra y=516,5 da origem) e comeca a esquerda dela.
+  // Medido antes do conserto: o gatilho terminava em 733,61 e a celula em 570,98
+  const celula = await page.locator('[data-campo="origem"]').boundingBox()
+  const a = await origem.boundingBox()
+  expect(a && celula).toBeTruthy()
+
+  // A medida so prova algo enquanto a coluna for estreita: a partir de ~245px o
+  // gatilho w-fit cabe sozinho e o caso ficaria verde sem conserto nenhum. Hoje
+  // a celula mede 88,66, entao a folga e grande: a guarda e para o dia em que a
+  // largura mudar, e nao para hoje
+  expect(celula!.width).toBeLessThan(150)
+  expect(a!.x + a!.width).toBeLessThanOrEqual(celula!.x + celula!.width + 1)
+})
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+```bash
+cd web && npm run e2e -- --project=chromium -g "nao invade"
+```
+
+Expected: FAIL, porque o gatilho atravessa a borda da propria celula. Se ele
+passar de primeira, o viewport do caso nao esta reproduzindo o aperto do `xl`:
+confira que a janela tem 1280 de largura (o padrao do `devices["Desktop Chrome"]`)
+e que as tres colunas estao de pe.
+
+- [ ] **Step 3: O gatilho com largura da coluna**
+
+Em `web/src/components/Formulario.tsx:229`:
+
+```tsx
+            <SelectTrigger id={id} className="w-full min-w-0">
+```
+
+O `w-full` faz o gatilho caber na celula, e o `line-clamp-1` que o componente ja
+aplica ao valor passa a ter efeito: o texto longo e cortado com reticencias em
+vez de vazar. O `min-w-0` fica como defensivo: medido em 2026-09-27, ele e INERTE neste ponto
+de uso (a celula mede 88,66 com e sem a classe), e quem faz o gatilho caber e o
+`w-full`. O componente base (`web/src/components/ui/select.tsx:43`) nasce com
+`w-fit` e `whitespace-nowrap`, sem `min-w-0` nenhum.
+
+- [ ] **Step 4: O item do grid tambem encolhe**
+
+Em `web/src/components/Campo.tsx`, o wrapper do campo:
+
+```tsx
+    <div
+      data-campo={nome}
+      className={cn("flex min-w-0 flex-col gap-1", largo && "sm:col-span-2")}
+    >
+```
+
+O `min-w-0` fica (e o que o campo pede de um item de grid), mas ele foi medido
+INERTE nos tres pontos de uso: o `grid-cols-3` do Tailwind emite
+`repeat(3, minmax(0, 1fr))`, ou seja o minimo da trilha ja e zero, e a celula
+mede 88,66 com e sem a classe. A explicacao do `min-width: auto` vale para uma
+trilha `1fr` pura, que nao e a daqui — quem conserta o campo e o `w-full` do
+Step 3.
+
+- [ ] **Step 5: Rodar e ver passar**
+
+```bash
+cd web && npm run e2e -- --project=chromium -g "nao invade"
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Rodar tudo o que a mudanca pode ter tocado**
+
+```bash
+cd web && npm test && npm run lint && npm run e2e
+.venv/bin/python -m pytest -q
+```
+
+Expected: PASS nos quatro. O layout do formulario e usado pelas telas de peer e
+de grupo, entao o e2e inteiro (os cinco fluxos e a copia) e a prova de que nada
+quebrou de visual.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add web/src/components/Formulario.tsx web/src/components/Campo.tsx web/e2e/fluxos.spec.ts
+git commit -m "O campo de valor longo para de invadir a coluna vizinha"
+```
+
+---
+
+### Task 14: As duas sobras da tela dos prefixos
+
+A revisao da Task 9 achou duas coisas que nao pertencem ao brief dela: o recado do IRR ainda cai no `_corpo` generico antes do recado proprio, e o caso que ela escreveu clica no salvar sem esperar o registro chegar.
+
+**Files:**
+- Modify: `web/src/telas/prefixos/PrefixosTela.tsx:112` (a corrente do recado do IRR)
+- Modify: `web/src/telas/prefixos/PrefixosTela.test.tsx` (o caso novo e a espera do caso da Task 9)
+
+- [ ] **Step 1: Escrever o teste que falha**
+
+```tsx
+  it("um 5xx fora do modelo na consulta ao IRR usa o recado do IRR", async () => {
+    // o `_corpo` do lerRecusa ("resposta inesperada da API") e o que sobra
+    // quando o corpo nao tem forma de recusa, e ele nao diz nada sobre o IRR:
+    // no ramo do salvar a Task 9 ja o tinha tirado, e aqui ficou
+    mockFetch({ ...BASE, "POST /api/blocos/irr": { status: 500, corpo: "sem forma" } })
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    await userEvent.click(screen.getByRole("button", { name: /consultar IRR/i }))
+
+    expect(await screen.findByText(/a consulta ao IRR falhou/)).toBeInTheDocument()
+    expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
+  })
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+```bash
+cd web && npx vitest run src/telas/prefixos/PrefixosTela.test.tsx -t "fora do modelo"
+```
+
+Expected: FAIL: o que aparece na tela e o texto do `_corpo`.
+
+- [ ] **Step 3: O `_corpo` sai da corrente**
+
+Em `web/src/telas/prefixos/PrefixosTela.tsx:112`:
+
+```tsx
+        // O `_corpo` do lerRecusa fica fora desta corrente: ele e o texto de
+        // quando o corpo nao tem forma de recusa, e nao diz nada sobre a
+        // consulta. O recado proprio e a mensagem que sobra
+        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros._ ?? "a consulta ao IRR falhou"))
+```
+
+- [ ] **Step 4: Rodar e ver passar**
+
+```bash
+cd web && npx vitest run src/telas/prefixos/PrefixosTela.test.tsx -t "fora do modelo"
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: A espera que faltava no caso da Task 9**
+
+No caso "um 5xx sem corpo de recusa nao mostra o texto de resposta inesperada", depois do `montarRota`:
+
+```tsx
+    montarRota(rotas, "/prefixos")
+    // o botao so habilita com o registro na mao, e o clique antes disso nao
+    // sai: a espera e a do estado, e nao a da existencia do formulario, que
+    // existe desde o primeiro render
+    const botao = await screen.findByRole("button", { name: /^salvar/i })
+    await waitFor(() => expect(botao).toBeEnabled())
+    await userEvent.click(botao)
+```
+
+A espera da forma original deste step (`await screen.findByLabelText(/IPv4/)`) foi
+medida como no-op: o rotulo existe desde o primeiro render, porque o formulario
+inteiro esta montado antes de o registro chegar, entao ela nao esperava nada. Quem
+entrou foi a espera do estado habilitado, que nao resolve enquanto o
+`GET /api/blocos` esta preso (rodada 2 da Task 14).
+
+- [ ] **Step 6: A suite do front e o lint**
+
+```bash
+cd web && npm test && npm run lint
+```
+
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add web/src/telas/prefixos/PrefixosTela.tsx web/src/telas/prefixos/PrefixosTela.test.tsx
+git commit -m "O recado do IRR nao mostra mais o texto de corpo fora do modelo"
+```
+
+---
+
 ## Tabela de pendencias
 
 Cada pendencia registrada nas etapas anteriores e onde ela fecha nesta leva.
@@ -1187,17 +1671,21 @@ Cada pendencia registrada nas etapas anteriores e onde ela fecha nesta leva.
 | ASN repetido entre peers (plano do front) | Nao fecha: decidido em 2026-09-27 que o token e a identidade, e duas sessoes do mesmo cliente sao legitimas |
 | O risco de Safari no "salvar e copiar" (plano do front) | Task 10, medido nos dois navegadores |
 | A precondicao do `test_tipos_api.py` (plano do front) | Nao entra: o container nao tem `npm`, e a condicao atual ja olha os dois |
-| Os minors adiados do front (plano do front) | Tasks 2, 4, 5, 6, 7 e 8 |
+| Os minors adiados do front (plano do front) | Tasks 3, 4, 5, 6, 7 e 8 |
 | Os tres registros de manutencao da re-revisao (plano do front) | Tasks 9 (dois deles) e 2 (`camposDoErro`) |
 | Os quatro do e2e (plano do front) | Task 10 |
 | O buraco da origem no upstream (plano do corte) | Task 1, como aviso |
 | O `graphify update .` no checkout principal (plano do corte) | Feito no merge, fora desta leva |
 | Os comentarios que citam `_contexto` e "a tela HTML" (revisao do corte) | Task 11 |
+| A mensagem `ASN ja usado` apontando o ASN quando o que colide e o apelido (achado pelo operador, na copia do ALT) | Task 12 |
+| Os campos sobrepostos no formulario, com o select de valor longo pintando por cima do vizinho (achado pelo operador, na mesma tela) | Task 13 |
+| O recado do IRR caindo no `_corpo` generico e a espera do caso dos prefixos (revisao da Task 9) | Task 14 |
 
 ## Fechamento
 
-Ao fim das onze tasks, o que as tres etapas do front deixaram registrado esta
-fechado ou decidido. Duas coisas continuam em aberto de proposito, e as duas
+Ao fim das quatorze tasks, o que as tres etapas do front deixaram registrado esta
+fechado ou decidido, mais os dois achados que o operador trouxe da tela da copia
+do ALT (o erro de token e os campos sobrepostos). Duas coisas continuam em aberto de proposito, e as duas
 estao escritas nos planos das etapas: a tela de lista no corpo (que virou estado
 vazio por decisao) e a origem dos tres upstreams do cadastro real (que o aviso
 mostra e o operador decide).

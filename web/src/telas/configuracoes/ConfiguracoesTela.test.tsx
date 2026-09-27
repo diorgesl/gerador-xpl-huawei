@@ -85,6 +85,25 @@ describe("a tela das configuracoes", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true)
   })
 
+  it("o tema escolhido se anuncia como pressionado", async () => {
+    // a marca era so a cor (variant + ring): quem usa leitor de tela nao sabia
+    // qual dos tres estava valendo. O tema padrao e "sistema", entao o clique
+    // em "claro" muda o estado de verdade, e a marca tem que SAIR do sistema
+    mockFetch(BASE)
+    montarRota(rotas, "/configuracoes")
+    await screen.findByRole("button", { name: "claro" })
+    expect(screen.getByRole("button", { name: "sistema" })).toHaveAttribute("aria-pressed", "true")
+
+    await userEvent.click(screen.getByRole("button", { name: "claro" }))
+
+    expect(screen.getByRole("button", { name: "claro" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getByRole("button", { name: "escuro" })).toHaveAttribute("aria-pressed", "false")
+    // esta terceira e a que pega a marca presa no padrao: medida na execucao,
+    // um `aria-pressed={tema === t || t === "sistema"}` passa nas duas de cima
+    // e falha so aqui, porque o "pressionado" ficaria nos dois botoes
+    expect(screen.getByRole("button", { name: "sistema" })).toHaveAttribute("aria-pressed", "false")
+  })
+
   it("o gravar AS espera o plano chegar, e depois grava o que esta na tela", async () => {
     // a janela entre a montagem e a leitura e a unica em que a tela existe sem
     // dado: sem a guarda, o botao mandava o formulario em branco, e a recusa da

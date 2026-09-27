@@ -24,7 +24,7 @@ export default defineConfig({
     // medido nesta versao (1.63), o webServer sobe antes do globalSetup, e o
     // `cd` da copia falhava com "No such file or directory" antes de o
     // globalSetup ter chance de rodar.
-    command: `node ${repo}web/e2e/global-setup.ts && cd ${temp} && BGPGEN_WEB=${repo}web/dist ${repo}.venv/bin/python -m uvicorn app.app:app --port ${PORTA}`,
+    command: `node "${repo}web/e2e/global-setup.ts" && cd "${temp}" && BGPGEN_WEB="${repo}web/dist" "${repo}.venv/bin/python" -m uvicorn app.app:app --port ${PORTA}`,
     url: `http://127.0.0.1:${PORTA}/api/plano`,
     reuseExistingServer: false,
     // a senha do admin que o bootstrap cria na copia de .tmp. O Playwright

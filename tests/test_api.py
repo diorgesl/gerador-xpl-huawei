@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app import app as mod
 from app import formulario, plan
 from app import peers as peers_mod
-from dados_api import CLIENTE
+from dados_api import CLIENTE, UPSTREAM
 from test_render import peer_cliente, peer_upstream
 
 
@@ -222,3 +222,27 @@ def test_o_as_em_branco_e_erro_de_campo(api, tmp_path):
         assert r.json()["erros"]["asn_rede"] == "informe o AS da rede"
 
     assert not (tmp_path / "peers.yaml").exists()
+
+
+def test_o_aviso_de_origem_fora_da_tabela_chega_no_upstream(api, tmp_path):
+    """O aviso de origem sai no envelope, e o peer grava assim mesmo.
+
+    O peer de upstream do cadastro real carrega origem de downstream; o que
+    esta leva faz e o operador ver isso, e nao impedir o salvar.
+    """
+    r = api.post("/api/peers", json=dict(UPSTREAM, origem="1100"))
+
+    assert r.status_code == 201, r.text
+    assert [a["campo"] for a in r.json()["avisos"]] == ["origem"]
+    assert "nao esta na tabela do upstream" in r.json()["avisos"][0]["mensagem"]
+    assert [p.origem for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [1100]
+
+
+def test_a_origem_da_tabela_nao_avisa(api):
+    # o peer em branco e a copia nascem com a origem do default, que esta
+    # dentro da tabela: quem ve o aviso e o cadastro antigo, e nao o novo
+    corpo = api.get("/api/peers/novo", params={"tipo": "upstream"}).json()
+    r = api.post("/api/peers", json=dict(UPSTREAM, origem=corpo["formulario"]["origem"]))
+
+    assert r.status_code == 201, r.text
+    assert r.json()["avisos"] == []

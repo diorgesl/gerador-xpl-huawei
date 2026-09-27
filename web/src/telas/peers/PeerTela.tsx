@@ -299,9 +299,19 @@ export function PeerTela() {
   // nao aparece la: sem esta chamada, o "duplicar o registro aberto" e o
   // "copiar o bloco aberto" ficam mortos, que foi o que aconteceu ate aqui
   //
+  // A aba corrente vem do painel pelo `aoTrocarAba`: a copia da paleta tem que
+  // ser a da aba que o operador esta vendo, e nao a primeira do painel
+  //
+  // O `?? abas[0]` e o mesmo fallback que o painel faz quando a aba corrente
+  // sai da lista (o quadro "ao criar" some quando a previa deixa de mandar o
+  // `criar_lista`): sem ele, a tela acharia que nao ha bloco nenhum enquanto o
+  // painel mostra o da primeira aba, e a paleta ofereceria a copia de um bloco
+  // que nao e o da tela - ou nenhuma
+  //
   // O bloco aberto pode nao existir (a previa em erro chega com conteudo nulo):
   // ai o item nem aparece, em vez de aparecer e nao fazer nada
-  const blocoAberto = abas[0]?.conteudo ?? null
+  const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
+  const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
   usePublicarAcoes({
     // Sem o dado na tela o formulario nem esta montado: o Ctrl+S mandaria um PUT
     // com o formulario em branco, e a recusa da API nao apareceria aqui, porque
@@ -323,11 +333,24 @@ export function PeerTela() {
 
   // Uma falha de rede nao pode passar: sem o plano a tela fica vazia sem dizer
   // por que. O 404 e outro caminho, o do toast e da volta para /peers.
-  const falhou = (plano.isError || inicial.isError) && inicial.error?.message !== "nao_encontrado"
+  //
+  // O aviso sobrevive ao tentar de novo, e nao so ao erro: o TanStack zera o
+  // `error` de uma consulta sem dado quando ela e refeita (o estado volta a
+  // `pending`), entao sem o `retentando` o clique cairia no formulario em
+  // branco ate a resposta chegar, e o botao que desabilita so existiria depois
+  // disso. O `errorUpdateCount` e o que resta da falha depois do refetch, e o
+  // `data === undefined` deixa de fora o refetch de fundo de quem ja tem dado
+  const tentando = plano.isFetching || inicial.isFetching
+  const retentando = (c: { isFetching: boolean; data: unknown; errorUpdateCount: number }) =>
+    c.isFetching && c.data === undefined && c.errorUpdateCount > 0
+  const falhou =
+    (plano.isError || inicial.isError || retentando(plano) || retentando(inicial)) &&
+    inicial.error?.message !== "nao_encontrado"
   if (falhou) {
     return (
       <Falha
         mensagem="não deu para falar com a API"
+        tentando={tentando}
         aoTentar={() => { void plano.refetch(); void inicial.refetch() }}
       />
     )
@@ -396,8 +419,14 @@ export function PeerTela() {
               avisos={avisos}
               erroIrr={erroIrr}
               aoConsultarIrr={(forcar) => irr.mutate(forcar)}
-              aoIrPara={(campo) => {
-                if (!campo) return
+              aoIrPara={(campo, secao) => {
+                if (!campo && !secao) return
+                // Sem campo o alvo e a secao: e o caso do erro que cobre varios
+                // campos, em que apontar um deles seria mentir sobre onde esta
+                if (!campo) {
+                  document.getElementById(`secao-${secao}`)?.scrollIntoView({ block: "start" })
+                  return
+                }
                 const alvo = document.querySelector<HTMLElement>(`[data-campo="${campo}"] input, [data-campo="${campo}"] textarea, [data-campo="${campo}"] button`)
                 alvo?.focus()
                 alvo?.scrollIntoView({ block: "center" })
@@ -409,6 +438,7 @@ export function PeerTela() {
         <div ref={blocoRef} className={cn("min-w-0 xl:sticky xl:top-3 xl:self-start", painel === "formulario" && "hidden xl:block")}>
           <PainelSaida
             abas={abas}
+            aoTrocarAba={setAbaAtiva}
             sujo={sujo}
             carregando={previa.isFetching}
             erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}

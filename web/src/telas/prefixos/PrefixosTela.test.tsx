@@ -297,6 +297,58 @@ describe("a tela dos prefixos proprios", () => {
     await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
   })
 
+  it("um 5xx sem corpo de recusa nao mostra o texto de resposta inesperada", async () => {
+    // peer e grupo suprimem o `_corpo` nesse caso; os prefixos mostravam os
+    // dois avisos juntos, e o "resposta inesperada da API" ficava por cima do
+    // aviso que dizia o que fazer
+    mockFetch({ ...BASE, "PUT /api/blocos": { status: 500, corpo: "sem forma" } })
+    montarRota(rotas, "/prefixos")
+    // o botao so habilita com o registro na mao, e o clique antes disso nao
+    // sai: a espera e a do estado, e nao a da existencia do formulario, que
+    // existe desde o primeiro render
+    const botao = await screen.findByRole("button", { name: /^salvar/i })
+    await waitFor(() => expect(botao).toBeEnabled())
+    await userEvent.click(botao)
+
+    expect(await screen.findByText(/não deu para falar com a API/)).toBeInTheDocument()
+    expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
+  })
+
+  it("o 500 que traz o mapa de erros mostra o aviso e a mensagem do servidor", async () => {
+    // O par do caso de cima, e o que impede a guarda de virar um `return`
+    // incondicional: ela suprime o `_corpo` do lerRecusa, que so existe quando
+    // o corpo nao tem o mapa de erros. Com a recusa de verdade no corpo, o
+    // aviso e a mensagem do servidor saem os dois, e engolir a mensagem
+    // deixaria o operador sem saber o que corrigir
+    mockFetch({
+      ...BASE,
+      "PUT /api/blocos": {
+        status: 500,
+        corpo: { erros: { blocos_v4: "linha 1: community fora da faixa numerica" }, avisos: [] },
+      },
+    })
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(document.querySelector('[data-campo="blocos_v4"]')).toHaveTextContent("linha 1: community fora da faixa numerica"),
+    )
+  })
+
+  it("um 5xx fora do modelo na consulta ao IRR usa o recado do IRR", async () => {
+    // o `_corpo` do lerRecusa ("resposta inesperada da API") e o que sobra
+    // quando o corpo nao tem forma de recusa, e ele nao diz nada sobre o IRR:
+    // no ramo do salvar a Task 9 ja o tinha tirado, e aqui ficou
+    mockFetch({ ...BASE, "POST /api/blocos/irr": { status: 500, corpo: "sem forma" } })
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    await userEvent.click(screen.getByRole("button", { name: /consultar IRR/i }))
+
+    expect(await screen.findByText(/a consulta ao IRR falhou/)).toBeInTheDocument()
+    expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
+  })
+
   it("a rede fora na consulta ao IRR avisa com tentar de novo", async () => {
     // A consulta ao bgpq4 e a operacao mais lenta da tela: sem o aviso, o
     // clique que nao chegou a sair era indistinguivel da consulta em andamento
@@ -331,6 +383,31 @@ describe("a tela dos prefixos proprios", () => {
     await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
     expect(await screen.findByLabelText(/IPv4/)).toHaveValue("38.252.64.0/22  64512:613")
     expect(peticoes().filter((p) => pedidos(p) === "GET /api/blocos").length).toBeGreaterThan(2)
+  })
+
+  it("o tentar de novo desabilita enquanto o pedido corre", async () => {
+    // O defeito que este caso mede: no clique o TanStack zera o `error` de uma
+    // consulta sem dado quando ela e refeita, e sem o `retentando` a tela pisca
+    // o formulario vazio enquanto o retry corre - e o botao aqui medido nem
+    // existe nessa janela, porque o primeiro clique ja o tira da tela. Com o
+    // `retentando`, quem barra o segundo clique e o `disabled`
+    mockFetch({ ...BASE, "GET /api/blocos": { status: 500, corpo: { erros: { _: "boom" }, avisos: [] } } })
+    montarRota(rotas, "/prefixos")
+    const alvo = () => screen.getByRole("button", { name: /tentar de novo/i })
+    // O botao so existe depois de o cliente gastar o retry dele (um, com o
+    // atraso padrao de 1s), entao a espera precisa de prazo maior que o padrao
+    // do `waitFor`, que e de 1s e cairia em cima do retry. Pelo `findBy*` o
+    // prazo vale igual, mas no TERCEIRO argumento: a assinatura ja vem ligada
+    // ao container, entao sao (role, opcoes, opcoes do waitFor), e um quarto
+    // argumento e ignorado (medido: 3004ms contra 1002ms)
+    await waitFor(() => expect(alvo()).toBeInTheDocument(), { timeout: 3000 })
+    // A leitura presa e a do retry, e nao a da montagem: presa antes do
+    // `montarRota`, a primeira seria a presa, a falha nunca chegaria, e sem
+    // falha nao ha botao - o caso mediria outra coisa
+    const soltar = segurarLeitura("GET /api/blocos")
+    await userEvent.click(alvo())
+    expect(alvo()).toBeDisabled()
+    soltar()
   })
 
   it("avisa que ha alteracao nao salva ao sair", async () => {

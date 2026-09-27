@@ -147,6 +147,10 @@ apontá-lo para outro cadastro sem mudar o app. A cópia **não** pode ser um
 da árvore antes de subir. O e2e serve o `web/dist` de verdade, então o
 `npm run build` vem antes — o script `e2e` faz isso.
 
+Os 15 casos são os 9 do `fluxos.spec.ts`, que rodam só no chromium, mais os 3 do
+`copiar.spec.ts` nos dois navegadores. Um desses três é pulado no webkit, que
+não expõe o `clipboard-read`: por isso a saída conta 14 passando e 1 pulado.
+
 ## Ordem de colagem no F1A
 
 1. **O bloco base, uma vez, antes de tudo.** A tela serve em `GET /base.txt`,

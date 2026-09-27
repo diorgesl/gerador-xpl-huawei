@@ -8,7 +8,8 @@ As três etapas do front em SPA estão entregues e mergeadas na `main`. Ficou um
 lista de pendências que as etapas anteriores registraram de propósito, cada uma
 no seu lugar: três perguntas de produto que ninguém respondeu, seis minors
 adiados do front, três registros de manutenção da re-revisão da etapa 2, quatro
-do e2e, e quinze comentários que o corte deixou apontando para o que apagou.
+do e2e, e os comentários obsoletos que o corte deixou apontando para o que
+apagou.
 
 Nada disso quebra o app. Junto, é o que falta para o assunto fechar, e duas das
 pendências são de comportamento: uma validação que não confere o que diz
@@ -59,7 +60,7 @@ etapa 2 deixou aberta fecha aqui, sem linha de código.
 - Os quatro pendentes do e2e (aspas nos caminhos, typecheck, globais de Node, e
   a cópia provando o bloco daquele peer).
 - O caso de "salvar e copiar" nos dois navegadores.
-- Os quinze comentários obsoletos.
+- Os comentários obsoletos.
 
 ### O que não entra
 
@@ -202,12 +203,11 @@ dezessete casos para não depender de uma linha que está certa.
 
 ## Comentários
 
-Quinze comentários que o corte deixou obsoletos, todos citando o que foi apagado:
-treze em `app/api.py` (`:6`, `:55`, `:85`, `:151`, `:175`, `:295`, `:372`,
-`:386`, `:418`, `:422`, `:514`, `:552`, `:572`) e dois em `app/formulario.py`
-(`:63-66` cita `_contexto`, `_contexto_grupo` e `POP_USADOS`, que não existem
-mais; `:534` fala das tags da tela). Cada um passa a descrever o que o código faz
-hoje, e nenhum deles muda comportamento.
+Os comentários que o corte deixou obsoletos, todos citando o que foi apagado: os
+de `app/api.py`, que falavam das telas Jinja e das rotas que saíram, e os de
+`app/formulario.py`, que citavam `_contexto`, `_contexto_grupo` e `POP_USADOS`,
+que não existem mais, e as tags da tela. Cada um passa a descrever o que o código
+faz hoje, e nenhum deles muda comportamento.
 
 ## Testes
 

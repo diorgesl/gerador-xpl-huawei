@@ -164,4 +164,18 @@ describe("as abas", () => {
     // linha inteira; o pedaco ainda falha se a troca de aba nao acontecer
     expect(screen.getByText(/CL-PEER-1/)).toBeInTheDocument()
   })
+
+  it("avisa a tela quando a aba muda", async () => {
+    // a tela precisa saber qual aba esta aberta para publicar a copia certa
+    // para a paleta: sem o aviso, ela copiava sempre a primeira
+    const aoTrocarAba = vi.fn()
+    // o conteudo das duas e distinto de proposito: e por ele que a tela decide
+    // o que a paleta copia, e o id e o que diz QUAL das duas esta aberta
+    montar({
+      abas: [aba(), aba({ id: "remover", rotulo: "remoção", conteudo: "undo peer", soLeitura: true, salvo: "undo peer" })],
+      aoTrocarAba,
+    })
+    await userEvent.click(screen.getByRole("tab", { name: /remoção/i }))
+    expect(aoTrocarAba).toHaveBeenCalledWith("remover")
+  })
 })

@@ -1,8 +1,8 @@
 """O formulario da tela: o texto do POST vira Peer, Grupo, blocos e AS.
 
-Mora fora do app.py para a API JSON (app/api.py) usar os mesmos helpers das
-rotas HTML sem importar o app.py, que e quem monta a API. O corpo das funcoes
-e o mesmo de quando moravam la.
+Mora fora do app.py para a API JSON (app/api.py) usar os mesmos helpers sem
+importar o app.py, que e quem monta a API. O corpo das funcoes e o mesmo de
+quando moravam la.
 """
 
 import ipaddress
@@ -60,10 +60,9 @@ def _usados(registros, campo):
     sugere o que ja foi cadastrado, e o campo continua aceitando valor novo.
     Na primeira vez a lista sai vazia e o campo e um input comum.
 
-    O helper nao soma lado nenhum: ele varre a lista que recebe. Duas telas
-    querem o 3xxx dos dois lados e por isso passam peers + grupos juntos
-    (_contexto e _contexto_grupo); o POP_USADOS passa so os peers, porque a
-    lista de POP (o d-pop) so existe na tela do peer.
+    O helper nao soma lado nenhum: ele varre a lista que recebe. Quem monta a
+    lista e quem chama: o /api/plano passa peers + grupos juntos para o
+    aprendizado (o 3xxx e um espaco so) e so os peers para o POP.
     """
     vistos = set()
     for registro in registros:
@@ -160,9 +159,9 @@ def _aprendizado_padrao(tipo, peers, grupos):
 def _padroes(rede=None):
     """As tabelas que o formulario usa para se preencher sozinho.
 
-    O formulario em branco ja nasce preenchido pelo /peer/novo; este bloco
-    existe para o operador que troca o tipo (ou a classe) dentro do proprio
-    formulario, que ate agora nao mexia em campo nenhum. O JS le estas
+    O formulario em branco ja nasce preenchido pelo GET /api/peers/novo; este
+    bloco existe para o operador que troca o tipo (ou a classe) dentro do
+    proprio formulario, que ate agora nao mexia em campo nenhum. O JS le estas
     tabelas em vez de repetir os valores, entao a politica continua morando
     so no plan.py.
 
@@ -207,7 +206,12 @@ def _origem_padrao(tipo, classe=None):
 
 
 def _id_do_formulario(dados):
-    """O id que o formulario mandou, ou None se veio vazio ou torto."""
+    """O id que o formulario mandou, ou None se veio vazio ou torto.
+
+    O campo que ele le era o escondido do formulario da tela antiga: nenhum
+    payload de hoje o manda, e a funcao ficou sem chamador junto com o
+    `_anterior`, que era o unico dela.
+    """
     bruto = _texto(dados, "id_original")
     try:
         return int(bruto) if bruto else None
@@ -244,8 +248,8 @@ def peer_do_formulario(dados, peers, anterior=None, grupos=()):
 
     erros = []
     if tipo not in plan.TIPOS:
-        # o mesmo portao do /peer/novo, com o erro junto: o formulario so
-        # oferece os quatro, e o peer nao pode ser gravado com um tipo que
+        # o mesmo portao do GET /api/peers/novo, com o erro junto: o formulario
+        # so oferece os quatro, e o peer nao pode ser gravado com um tipo que
         # nao tem template nem tabela no plano. Sem isto o POST gravava o
         # peer e o render estourava, com TemplateNotFound, depois da
         # gravacao - o mesmo estrago da origem em branco.
@@ -360,10 +364,11 @@ def grupo_do_formulario(dados, grupos, anterior=None, peers=()):
             # valor da tabela, como se o operador nao tivesse digitado nada:
             # o peer ja devolvia este erro, o grupo nao
             #
-            # o id fica de fora porque ele nao e campo que o operador digita:
-            # e o escondido que diz qual grupo este POST substitui, o mesmo
-            # papel do id_original no formulario do peer, e um id torto ali
-            # ja cai no "cria novo" do _id_do_grupo_no_formulario.
+            # o id fica de fora porque ele nao e campo que o operador digita no
+            # grupo: quem diz qual grupo este POST substitui e a URL, e o id
+            # torto ou em branco vira None e cai no `valores.get("id")` de
+            # baixo, que devolve o do registro anterior quando ha um e o
+            # proximo livre quando nao ha.
             if nome != "id":
                 erros.append(validate.Erro(nome, "valor numerico invalido"))
             valores[nome] = None
@@ -495,8 +500,8 @@ def _conferir_faixas(valores):
 def peer_em_branco(tipo, peers, grupos):
     """O peer novo do tipo: os defaults da tabela do plano e o proximo ID livre.
 
-    E o formulario em branco do GET /peer/novo e do GET /api/peers/novo. Tipo
-    fora do plano vira cliente, como a rota HTML sempre fez.
+    E o formulario em branco do GET /api/peers/novo. Tipo fora do plano vira
+    cliente.
     """
     if tipo not in plan.TIPOS:
         tipo = "cliente"
@@ -512,8 +517,8 @@ def peer_em_branco(tipo, peers, grupos):
 def grupo_em_branco(tipo, peers, grupos):
     """O grupo novo do tipo: os defaults da tabela e o proximo ID livre.
 
-    E o formulario em branco do GET /grupo/novo e do GET /api/grupos/novo.
-    Tipo fora do plano vira parceiro, como a rota HTML sempre fez.
+    E o formulario em branco do GET /api/grupos/novo. Tipo fora do plano vira
+    parceiro.
     """
     if tipo not in plan.TIPOS:
         tipo = "parceiro"
@@ -531,9 +536,9 @@ def grupo_em_branco(tipo, peers, grupos):
 # valor ou erro: esconder um campo com valor deixaria um dado gravado sem
 # ninguem ver.
 #
-# A tabela vem do render e da validacao, e nao das tags da tela HTML: um campo
-# pertence a um tipo quando muda a saida daquele tipo ou quando a validacao o
-# exige ali. O test_formulario.py refaz essa conferencia a cada execucao. O
+# A tabela vem do render e da validacao, e nao da tela: um campo pertence a um
+# tipo quando muda a saida daquele tipo ou quando a validacao o exige ali. O
+# test_formulario.py refaz essa conferencia a cada execucao. O
 # default_route muda a saida de todo tipo (o macro e comum), mas o validate so
 # o aceita em cliente e parceiro. O apelido nao esta aqui: a tag dizia "IX e
 # PNI", mas ele muda o token de qualquer tipo, e o cadastro tem upstream com
