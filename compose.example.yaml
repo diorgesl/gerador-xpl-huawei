@@ -1,9 +1,16 @@
-# bgpgen em container. Sobe com "docker compose up --build" e a tela fica em
+# bgpgen em container. Copie para compose.yaml, que e o arquivo que o docker
+# le, e suba com "docker compose up --build". A tela fica em
 # http://127.0.0.1:8765/.
 services:
   bgpgen:
     build: .
     image: bgpgen
+    # A senha do admin criado no boot, no lugar da sorteada. Sem ela o app
+    # imprime uma senha aleatoria no log do primeiro boot
+    # ("docker compose logs bgpgen | grep -A3 'admin criado'"). Descomente
+    # para fixar a sua.
+    # environment:
+    #   - BGPGEN_ADMIN_SENHA=troque-esta-senha
     ports:
       # 8765 na maquina, 8000 dentro do container. Nao da para usar a 8000 do
       # host: ela e da stack do geronet, que ja respondeu no lugar deste app

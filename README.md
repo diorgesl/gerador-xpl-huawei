@@ -53,13 +53,16 @@ não vem instalado, mas tem no brew (`brew install bgpq4`, hoje na 1.16).
 Com Docker, que já traz o `bgpq4` junto:
 
 ```bash
+cp compose.example.yaml compose.yaml
 docker compose up --build
 ```
 
-A tela fica em http://127.0.0.1:8765/, que cai em `/peers`. O `compose.yaml`
-monta o checkout em `/app`, então o `peers.yaml` e o `out/` são os do
-repositório, e editar um template de bloco vale na hora. Sem essa linha de
-`volumes:`, a imagem roda sozinha com o que foi copiado no build.
+O `compose.yaml` não vem no repositório: ele é o arquivo do operador e pode
+carregar a senha do admin, então o que fica versionado é o exemplo. A tela fica
+em http://127.0.0.1:8765/, que cai em `/peers`. O `compose.yaml` monta o
+checkout em `/app`, então o `peers.yaml` e o `out/` são os do repositório, e
+editar um template de bloco vale na hora. Sem essa linha de `volumes:`, a imagem
+roda sozinha com o que foi copiado no build.
 
 A imagem é o `python:3.14-slim` mais o `bgpq4` 1.12 do repositório Debian. O
 `bgpq4` do brew está na 1.16, então as duas rotas não dão a mesma versão do
