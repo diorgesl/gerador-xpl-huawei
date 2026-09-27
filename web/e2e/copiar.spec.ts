@@ -21,9 +21,11 @@ test.describe("a copia do bloco", () => {
     await expect(page.getByRole("button", { name: /copiado/ })).toBeVisible()
     const texto = await page.evaluate(() => navigator.clipboard.readText())
     // "end-filter" casa com qualquer bloco XPL, de qualquer peer: o que prova
-    // que a copia e do bloco DESTE peer e o token dele
+    // que a copia e do bloco DESTE peer e o token dele, que e o apelido e sai
+    // no nome dos filtros (CUST-ACME-IMPORT-V4). O ASN nao serve para isso: o
+    // e2e tem outro peer com o ASN 268127, e o bloco dele nao passa aqui
     expect(texto).toContain("end-filter")
-    expect(texto).toContain("268127")
+    expect(texto).toContain("CUST-ACME-")
   })
 
   test("o botao volta ao rotulo normal depois de um segundo e meio", async ({ page }) => {
@@ -45,18 +47,27 @@ test.describe("a copia do bloco", () => {
     await botao.click()
 
     await expect(page.getByText(/gravado em out\//)).toBeVisible()
-    // O "copiado" e o app dizendo que o writeText passou depois da requisicao
-    // do salvar, e e o que o WebKit prova aqui: medido em 2026-09-27, ele chega
-    // em "copiado" como o Chromium. O localizador do clique nao serve para
-    // isto, porque ele casa pelo rotulo antigo e o rotulo muda exatamente para
-    // "copiado" (era o defeito deste caso)
+    // O "copiado" confirma que a copia passou depois da requisicao do salvar,
+    // e nao por qual via: o `copiar()` tenta o writeText e, em qualquer
+    // excecao, cai no degrau do execCommand, e o catch e mudo. Medido com uma
+    // sonda em 2026-09-27, os dois navegadores vao pelo writeText, e o WebKit
+    // aceita a escrita depois do salvar (o que ele recusa e o readText, com
+    // NotAllowedError). Por isso o socorro de dois cliques nao entrou. O
+    // degrau do execCommand nao e codigo morto: e ele que segura a copia fora
+    // de origem segura, e esta medicao nao o exercitou
+    //
+    // O localizador do clique nao serve para esta assercao, porque ele casa
+    // pelo rotulo antigo e o rotulo muda exatamente para "copiado" (era o
+    // defeito deste caso)
     await expect(page.getByRole("button", { name: /copiado/ })).toBeVisible({ timeout: 3000 })
 
-    // O que cada um consegue provar do CONTEUDO e diferente, e o caso diz qual:
-    // o Chromium le a area de transferencia de volta; o WebKit recusa o
-    // readText com NotAllowedError ("o clipboard-read nao existe no WebKit"),
-    // entao la o conteudo e o do painel, e a area de transferencia em si fica
-    // sem prova
+    // O que cada um consegue provar do CONTEUDO e diferente, e o caso diz qual.
+    // O Chromium le a area de transferencia de volta, e isso fala da copia. O
+    // WebKit recusa o readText com NotAllowedError ("o clipboard-read nao
+    // existe no WebKit"), e o que sobra la e o painel; so que o painel mostra a
+    // previa, alimentada pelos valores do formulario, entao ele exibe o texto
+    // digitado de qualquer jeito e nao diz nada sobre o que foi copiado. Do
+    // conteudo, o WebKit nao prova nada
     if (browserName === "webkit") {
       await expect(page.getByRole("tabpanel")).toContainText(`medido em ${browserName}`)
     } else {
