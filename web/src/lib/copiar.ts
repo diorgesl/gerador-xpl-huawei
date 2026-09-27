@@ -1,3 +1,5 @@
+import { toast } from "sonner"
+
 // O que vai para o equipamento tem que ser o que esta em out/. Fora de origem
 // segura (o app aberto por HTTP de outra maquina) o navegador nao expoe o
 // navigator.clipboard, e a copia crua derrubava o botao inteiro: por isso os
@@ -16,6 +18,19 @@ export async function copiar(texto: string, alvo?: HTMLElement | null): Promise<
   if (porSelecao(texto)) return "copiado"
   selecionar(alvo)
   return "selecionado"
+}
+
+/**
+ * Copia e, quando nem o clipboard nem o execCommand funcionam, avisa que o
+ * bloco ficou selecionado. As telas chamam esta, e nao a copiar direto: o
+ * Ctrl+C manual e o unico caminho que sobra fora de origem segura.
+ */
+export async function copiarComAviso(texto: string, alvo?: HTMLElement | null) {
+  const resultado = await copiar(texto, alvo)
+  if (resultado === "selecionado") {
+    toast("o bloco ficou selecionado: use Ctrl+C para copiar")
+  }
+  return resultado
 }
 
 function porSelecao(texto: string): boolean {

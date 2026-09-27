@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { baixar, copiar } from "./copiar"
+import { baixar, copiar, copiarComAviso } from "./copiar"
 
 function comClipboard(fn: () => Promise<void>) {
   Object.defineProperty(navigator, "clipboard", {
@@ -44,6 +44,12 @@ describe("a copia do bloco", () => {
     await expect(copiar("xpl route-filter X", alvo)).resolves.toBe("selecionado")
     expect(document.getSelection()?.toString()).toBe("xpl route-filter X")
     alvo.remove()
+  })
+
+  it("avisa quando so deu para selecionar", async () => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined })
+    vi.spyOn(document, "execCommand").mockReturnValue(false)
+    await expect(copiarComAviso("x")).resolves.toBe("selecionado")
   })
 })
 

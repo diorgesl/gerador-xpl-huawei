@@ -168,6 +168,17 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* As classes que o tokenizador escreve em cada token. O par de cada uma e o
+     que o teste de contraste ja confere contra o --card, e o <pre> do
+     CodigoXpl pinta o fundo com esse mesmo token. O tk-texto fica de fora:
+     espaco e pontuacao seguem na cor do texto corrido. */
+  .tk-comentario { color: var(--xpl-comentario); }
+  .tk-palavra-chave { color: var(--xpl-palavra); }
+  .tk-community { color: var(--xpl-community); }
+  .tk-prefixo { color: var(--xpl-prefixo); }
+  .tk-objeto { color: var(--xpl-objeto); }
+  .tk-numero { color: var(--xpl-numero); }
+
   /* 32 px de altura de campo (h-8), e nao os 36 do padrao do shadcn: a tela e
      densa de proposito, e um formulario de 40 campos com campo alto vira
      rolagem sem fim */
