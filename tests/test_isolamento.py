@@ -266,11 +266,9 @@ def cliente(out, monkeypatch):
     A exclusao passa pela rota, entao o peers.yaml tambem tem que sair do
     checkout: sem o patch, a rota leria o arquivo de verdade e o teste
     apagaria o grupo do repositorio. O CACHE do bgpq4 entra junto pelo
-    mesmo motivo do test_app.
+    mesmo motivo.
     """
     monkeypatch.setattr(mod, "PEERS_YAML", out / "peers.yaml")
-    monkeypatch.setattr(servidor, "PEERS_YAML", out / "peers.yaml")
-    monkeypatch.setattr(servidor, "OUT", out)
     monkeypatch.setattr(prefixes, "CACHE", out / ".cache")
     return TestClient(servidor.app)
 
@@ -287,11 +285,11 @@ def test_excluir_grupo_com_membro_e_recusado_sem_tocar_em_arquivo(out, cliente):
     render.escrever_peer(b, grupo=grupo)
     antes = _retrato(out)
 
-    r = cliente.post("/grupo/PARCEIROS_CDN/excluir", data={"confirmado": "sim"},
-                     follow_redirects=False)
+    r = cliente.delete("/api/grupos/%d" % grupo.id)
 
-    assert r.status_code == 200
-    assert "CLIENTEA" in r.text and "CLIENTEB" in r.text
+    assert r.status_code == 409
+    assert "CLIENTEA" in r.json()["erros"]["membros"]
+    assert "CLIENTEB" in r.json()["erros"]["membros"]
     assert [g.nome for g in mod.carregar_grupos(out / "peers.yaml")] == [
         "PARCEIROS_CDN"]
     # a recusa nao pode deixar rastro: nem o yaml, nem a saida do grupo,
@@ -303,10 +301,9 @@ def test_excluir_grupo_com_membro_e_recusado_sem_tocar_em_arquivo(out, cliente):
     mod.gravar([], out / "peers.yaml")
     antes = _retrato(out)
 
-    r = cliente.post("/grupo/PARCEIROS_CDN/excluir", data={"confirmado": "sim"},
-                     follow_redirects=False)
+    r = cliente.delete("/api/grupos/%d" % grupo.id)
 
-    assert r.status_code == 303
+    assert r.status_code == 204
     assert mod.carregar_grupos(out / "peers.yaml") == []
     agora = _retrato(out)
     sumiu = set(antes) - set(agora)

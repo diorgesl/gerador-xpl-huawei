@@ -67,11 +67,27 @@ def test_corpo_fora_do_modelo_volta_no_formato_da_api(api):
     assert "xpto" in r.json()["erros"]["_corpo"]
 
 
-def test_fora_da_api_o_erro_de_query_continua_o_do_fastapi(api):
-    # a rota HTML /bgpq4 tem o forcar como int na query
-    r = api.post("/bgpq4?forcar=abc", data={})
-    assert r.status_code == 422
-    assert "detail" in r.json()
+def test_fora_da_api_a_falha_inesperada_continua_texto_puro(api, monkeypatch):
+    """O envelope JSON da API nao vaza para uma rota que nao e dela.
+
+    O par deste caso era o `/bgpq4?forcar=abc`, que saiu no corte das telas:
+    nao ha mais rota fora de /api que receba entrada tipada, entao o ramo de
+    fora do _pedido_invalido ficou inalcancavel. O do _falha_inesperada nao
+    ficou, e e o que este caso usa: um peers.yaml torto derruba o /base.txt.
+
+    O que ele pega e o vazamento (tirar a guarda do prefixo e o envelope JSON
+    aparece no /base.txt); o que ele NAO pega e a remocao do ramo, porque o
+    texto puro que o ramo devolve e o mesmo do padrao do Starlette.
+    """
+    def quebrado(caminho):
+        raise ValueError("peers.yaml: ASN 4200000000 nao cabe nos 16 bits")
+    monkeypatch.setattr(peers_mod, "carregar_asn", quebrado)
+    cliente = TestClient(mod.app, raise_server_exceptions=False)
+
+    r = cliente.get("/base.txt")
+
+    assert r.status_code == 500
+    assert r.text == "Internal Server Error"
 
 
 def test_yaml_quebrado_vira_500_em_json(api, monkeypatch):

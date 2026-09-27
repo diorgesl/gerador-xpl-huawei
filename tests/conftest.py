@@ -43,9 +43,8 @@ def fake_bgpq4(tmp_path, monkeypatch):
 def api(tmp_path, monkeypatch):
     """Um TestClient com o peers.yaml, o out/ e o cache do bgpq4 em tmp_path.
 
-    A API le o peers_mod.PEERS_YAML na hora de cada chamada, e o app.app
-    guardou uma copia do caminho no import: os dois sao trocados, como na
-    fixture `cliente` do test_app.py.
+    A API e o app leem o peers_mod.PEERS_YAML na hora de cada chamada, entao
+    trocar o caminho aqui basta: o app.app nao guarda mais copia nenhuma.
     """
     from fastapi.testclient import TestClient
 
@@ -56,7 +55,5 @@ def api(tmp_path, monkeypatch):
     monkeypatch.setattr(peers_mod, "PEERS_YAML", tmp_path / "peers.yaml")
     monkeypatch.setattr(peers_mod, "OUT", tmp_path / "out")
     monkeypatch.setattr(render, "OUT", tmp_path / "out")
-    monkeypatch.setattr(mod, "PEERS_YAML", tmp_path / "peers.yaml")
-    monkeypatch.setattr(mod, "OUT", tmp_path / "out")
     monkeypatch.setattr(prefixes, "CACHE", tmp_path / "out" / ".cache")
     return TestClient(mod.app)

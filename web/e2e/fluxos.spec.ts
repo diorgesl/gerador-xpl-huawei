@@ -151,3 +151,11 @@ test("a lista convida a escolher quando nada esta aberto", async ({ page }) => {
   await page.goto("/grupos")
   await expect(page.getByText(/escolha um grupo ou crie um/)).toBeVisible()
 })
+
+test("a raiz cai na lista", async ({ page }) => {
+  // o unico caso que exercita o 307 do uvicorn com um navegador de verdade: o
+  // webServer do Playwright sobe o uvicorn servindo o web/dist
+  await page.goto("/")
+  await expect(page).toHaveURL(/\/peers$/)
+  await expect(page.getByText(/escolha um peer ou crie um/)).toBeVisible()
+})

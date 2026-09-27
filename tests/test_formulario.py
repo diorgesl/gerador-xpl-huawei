@@ -1,25 +1,14 @@
-"""O formulario.py: os helpers que a tela HTML e a API dividem."""
+"""O formulario.py: os helpers que a API usa."""
 
 from dataclasses import replace
 
 import pytest
 
-from app import app as mod
 from app import formulario, plan, render, validate
 from app.api import dados_do_formulario, modelo_do_grupo, modelo_do_peer
 from app.formulario import grupo_do_formulario, peer_do_formulario
 from test_render import (grupo_do_tipo, peer_cliente, peer_ix, peer_parceiro,
                          peer_pni, peer_upstream)
-
-
-def test_os_helpers_moram_no_formulario_e_o_app_reexporta():
-    # o test_app.py e as rotas HTML leem estes nomes por app.app ate o corte
-    # das telas; a API os le do formulario.py
-    for nome in ("peer_do_formulario", "grupo_do_formulario", "_padroes",
-                 "_blocos_do_formulario", "_texto_blocos", "_ativos",
-                 "_asn_do_formulario", "_usados", "_origem_padrao",
-                 "_aprendizado_padrao", "CAMPOS_INT", "CAMPOS_INT_GRUPO"):
-        assert getattr(mod, nome) is getattr(formulario, nome), nome
 
 
 # O valor "preenchido" de cada campo restrito, em texto de formulario. O

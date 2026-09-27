@@ -1,8 +1,8 @@
 """O FastAPI servindo o build do front.
 
 O uvicorn e o unico processo em producao: ele serve a API em /api, os arquivos
-do build em /assets e o index.html da SPA nas rotas dela. As telas HTML antigas
-continuam em /, /peer/... e /grupo/... ate o corte.
+do build em /assets e o index.html da SPA nas rotas dela. A SPA e o unico front
+desde o corte das telas Jinja, e a raiz leva para ela.
 """
 
 from pathlib import Path
@@ -52,8 +52,7 @@ def test_o_favicon_sai_da_raiz_do_build(web, dist):
 
     O index.html que o Vite gera linka /favicon.svg, entao sem esta rota o
     navegador pede um arquivo que ninguem serve, com o build inteiro no lugar.
-    A rota e deste arquivo, e nao um curinga da raiz: um curinga engoliria as
-    telas antigas do singular, que moram em /peer/... e /grupo/...
+    A rota e deste arquivo, e nao um curinga da raiz do build.
     """
     (dist / "favicon.svg").write_text("<svg>icone</svg>")
     r = web.get("/favicon.svg")
@@ -123,11 +122,31 @@ def test_sem_build_a_api_continua_funcionando(tmp_path, monkeypatch, api):
     assert r.status_code == 200
 
 
-def test_as_telas_antigas_continuam_no_ar(web):
-    # o HEALTHCHECK do Dockerfile bate em / esperando 200
+def test_a_raiz_leva_para_a_spa(web):
+    """O HEALTHCHECK do Dockerfile bate em / esperando 200.
+
+    O 200 nao vem mais da raiz: vem do /peers que o 307 aponta, e o urllib
+    segue redirect por padrao. Este caso fixa o primeiro elo da corrente; o
+    segundo e o test_as_rotas_da_spa_servem_o_index_do_build.
+    """
+    r = web.get("/", follow_redirects=False)
+    assert r.status_code == 307
+    assert r.headers["location"] == "/peers"
+    # e, seguindo o redirect, o que o healthcheck ve: o index do build
     assert web.get("/").status_code == 200
-    assert web.get("/peer/novo").status_code == 200
-    assert web.get("/grupo/novo").status_code == 200
+
+
+def test_as_telas_do_singular_saem_do_ar(web):
+    """As telas antigas moravam em /peer/... e /grupo/..., no singular.
+
+    Depois do corte elas nao existem: o 404 e o que prova que a SPA nao passou
+    a responde-las - um curinga que engolisse o singular devolveria o index.
+    """
+    for rota in ("/peer/novo", "/peer/268127", "/saida/268127",
+                 "/grupo/novo", "/grupo/PARCEIROS", "/saida/grupo/PARCEIROS"):
+        r = web.get(rota, follow_redirects=False)
+        assert r.status_code == 404, rota
+        assert "id=root" not in r.text
 
 
 def test_o_base_txt_continua_sendo_o_texto_e_nao_o_index(web):
@@ -136,7 +155,3 @@ def test_o_base_txt_continua_sendo_o_texto_e_nao_o_index(web):
     assert "<div id=root>" not in r.text
 
 
-def test_a_rota_da_spa_nao_engole_a_do_peer_de_verdade(web):
-    # /peer/novo e a tela HTML antiga, e nao /peers/novo
-    assert web.get("/peer/novo").status_code == 200
-    assert "id=root" not in web.get("/peer/novo").text
