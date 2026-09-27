@@ -100,7 +100,7 @@ npm test              # Vitest: tokenizador XPL, diff, campos, contraste, compon
 npm run lint
 npm run api:conferir  # falha se o schema.d.ts estiver velho em relação ao app.openapi()
 npx playwright install  # uma vez: baixa os navegadores que o Playwright pede
-npm run e2e             # Playwright: compila e roda os 14 casos contra um uvicorn (8 fluxos + 6 de copia)
+npm run e2e             # Playwright: compila e roda os 15 casos contra um uvicorn (9 fluxos + 6 de copia)
 ```
 
 O `npm run api:tipos` regenera o `web/src/api/schema.d.ts` a partir do
@@ -117,6 +117,10 @@ apontá-lo para outro cadastro sem mudar o app. A cópia **não** pode ser um
 `globalSetup` do Playwright: ele roda depois do `webServer`, e o servidor precisa
 da árvore antes de subir. O e2e serve o `web/dist` de verdade, então o
 `npm run build` vem antes — o script `e2e` faz isso.
+
+Os 15 casos são os 9 do `fluxos.spec.ts`, que rodam só no chromium, mais os 3 do
+`copiar.spec.ts` nos dois navegadores. Um desses três é pulado no webkit, que
+não expõe o `clipboard-read`: por isso a saída conta 14 passando e 1 pulado.
 
 ## Ordem de colagem no F1A
 
