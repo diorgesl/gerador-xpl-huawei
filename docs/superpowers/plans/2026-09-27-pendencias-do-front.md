@@ -26,7 +26,7 @@
 | 8 | O tema com marca acessivel | `aria-pressed` no botao do tema escolhido |
 | 9 | Dois consertos pequenos | o `_corpo` dos prefixos e o comentario do harness |
 | 10 | e2e | aspas, typecheck, globais de Node, a copia provando o bloco, e a medicao do Safari |
-| 11 | Comentarios e registro | os quinze comentarios obsoletos e onde cada pendencia foi fechada |
+| 11 | Comentarios e registro | os comentarios obsoletos e onde cada pendencia foi fechada |
 | 12 | O erro de token | a colisao de token aponta o apelido quando e o apelido que colide |
 | 13 | O campo que invade a coluna | o select de valor longo para de pintar por cima do vizinho |
 | 14 | As sobras da tela dos prefixos | o recado do IRR deixa de mostrar o `_corpo`, e o caso da Task 9 espera o registro antes de clicar |
@@ -1160,16 +1160,16 @@ git commit -m "O e2e mede o salvar e copiar no WebKit, e o resto dos pendentes"
 ### Task 11: Comentarios e registro
 
 **Files:**
-- Modify: `app/api.py` (treze comentarios), `app/formulario.py` (dois)
+- Modify: `app/api.py` e `app/formulario.py` (os comentarios obsoletos)
 - Modify: `docs/superpowers/plans/2026-09-26-front-spa.md` e `docs/superpowers/plans/2026-09-27-corte-das-telas-html.md` (o registro)
 
 - [ ] **Step 1: Os comentarios**
 
-Os treze de `app/api.py` estao em `:6`, `:55`, `:85`, `:151`, `:175`, `:295`,
-`:372`, `:386`, `:418`, `:422`, `:514`, `:552`, `:572`; os dois de
-`app/formulario.py`, em `:63-66` e `:534`. A revisao da Task 1 acrescentou mais
-um, que ela nao podia consertar (o brief daquela task limitava a mudanca ao
-`avisos`): `app/validate.py:452-455` diz "O peer fica como esta; alinha-lo e
+Em `app/api.py`, os comentarios que citavam as telas Jinja e as rotas que sairam;
+em `app/formulario.py`, os que citavam `_contexto`, `_contexto_grupo`,
+`POP_USADOS` e as tags da tela. A revisao da Task 1 acrescentou mais um, que ela
+nao podia consertar (o brief daquela task limitava a mudanca ao `avisos`):
+`app/validate.py:452-455` diz "O peer fica como esta; alinha-lo e
 mudanca separada (ver a spec)", e a Task 1 E aquela mudanca, entao o comentario
 passa a dizer que o grupo recusa e o peer avisa. Cada um passa a descrever o que
 o codigo faz hoje. Os tres que citam funcoes apagadas:
@@ -1555,7 +1555,7 @@ Cada pendencia registrada nas etapas anteriores e onde ela fecha nesta leva.
 | ASN repetido entre peers (plano do front) | Nao fecha: decidido em 2026-09-27 que o token e a identidade, e duas sessoes do mesmo cliente sao legitimas |
 | O risco de Safari no "salvar e copiar" (plano do front) | Task 10, medido nos dois navegadores |
 | A precondicao do `test_tipos_api.py` (plano do front) | Nao entra: o container nao tem `npm`, e a condicao atual ja olha os dois |
-| Os minors adiados do front (plano do front) | Tasks 2, 4, 5, 6, 7 e 8 |
+| Os minors adiados do front (plano do front) | Tasks 3, 4, 5, 6, 7 e 8 |
 | Os tres registros de manutencao da re-revisao (plano do front) | Tasks 9 (dois deles) e 2 (`camposDoErro`) |
 | Os quatro do e2e (plano do front) | Task 10 |
 | O buraco da origem no upstream (plano do corte) | Task 1, como aviso |

@@ -530,10 +530,10 @@ def validar(peer, peers, anterior=None, grupos=None):
     erros = []
 
     # o tipo escolhe o template do render e as tabelas do plano. O formulario
-    # so oferece os quatro, mas o POST nao passa pelo portao do /peer/novo, e
-    # um tipo fora da lista gravava o peer para estourar depois, com
-    # TemplateNotFound: o mesmo estrago da origem em branco, com o mesmo
-    # caminho de gravacao antes do render. O peer_do_formulario ja cai no
+    # so oferece os quatro, mas o POST nao passa pelo portao do
+    # GET /api/peers/novo: um tipo fora da lista gravava o peer para estourar
+    # depois, com TemplateNotFound: o mesmo estrago da origem em branco, com o
+    # mesmo caminho de gravacao antes do render. O peer_do_formulario ja cai no
     # cliente; esta checagem e o que barra um Peer montado por fora.
     if peer.tipo not in plan.TIPOS:
         erros.append(Erro("tipo", "tipo desconhecido: %s" % peer.tipo))

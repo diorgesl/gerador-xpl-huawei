@@ -34,7 +34,8 @@ export interface paths {
         get?: never;
         /**
          * Gravar Rede
-         * @description O AS da rede no topo do peers.yaml, com as conferencias do POST /asn.
+         * @description O AS da rede no topo do peers.yaml, pelas conferencias do
+         *     _asn_do_formulario.
          */
         put: operations["gravar_rede_api_rede_put"];
         post?: never;
@@ -142,8 +143,8 @@ export interface paths {
          *
          *     O `id` e o do registro que a tela esta editando, e falta no peer novo. O
          *     erro de validacao volta em 200 e sem bloco. A remocao fica de fora: ela
-         *     desfaz o que esta no equipamento, e o que esta no equipamento e o
-         *     registro salvo, que o GET /peers/{id}/saida devolve.
+         *     desfaz o que esta no equipamento, e o que esta no equipamento e o registro
+         *     salvo, que o GET /api/peers/{ident}/saida devolve.
          */
         post: operations["previa_peer_api_peers_previa_post"];
         delete?: never;

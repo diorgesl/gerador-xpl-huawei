@@ -159,9 +159,9 @@ def _aprendizado_padrao(tipo, peers, grupos):
 def _padroes(rede=None):
     """As tabelas que o formulario usa para se preencher sozinho.
 
-    O formulario em branco ja nasce preenchido pelo /peer/novo; este bloco
-    existe para o operador que troca o tipo (ou a classe) dentro do proprio
-    formulario, que ate agora nao mexia em campo nenhum. O JS le estas
+    O formulario em branco ja nasce preenchido pelo GET /api/peers/novo; este
+    bloco existe para o operador que troca o tipo (ou a classe) dentro do
+    proprio formulario, que ate agora nao mexia em campo nenhum. O JS le estas
     tabelas em vez de repetir os valores, entao a politica continua morando
     so no plan.py.
 
@@ -243,8 +243,8 @@ def peer_do_formulario(dados, peers, anterior=None, grupos=()):
 
     erros = []
     if tipo not in plan.TIPOS:
-        # o mesmo portao do /peer/novo, com o erro junto: o formulario so
-        # oferece os quatro, e o peer nao pode ser gravado com um tipo que
+        # o mesmo portao do GET /api/peers/novo, com o erro junto: o formulario
+        # so oferece os quatro, e o peer nao pode ser gravado com um tipo que
         # nao tem template nem tabela no plano. Sem isto o POST gravava o
         # peer e o render estourava, com TemplateNotFound, depois da
         # gravacao - o mesmo estrago da origem em branco.
@@ -495,8 +495,8 @@ def _conferir_faixas(valores):
 def peer_em_branco(tipo, peers, grupos):
     """O peer novo do tipo: os defaults da tabela do plano e o proximo ID livre.
 
-    E o formulario em branco do GET /peer/novo e do GET /api/peers/novo. Tipo
-    fora do plano vira cliente, como a rota HTML sempre fez.
+    E o formulario em branco do GET /api/peers/novo. Tipo fora do plano vira
+    cliente.
     """
     if tipo not in plan.TIPOS:
         tipo = "cliente"
@@ -512,8 +512,8 @@ def peer_em_branco(tipo, peers, grupos):
 def grupo_em_branco(tipo, peers, grupos):
     """O grupo novo do tipo: os defaults da tabela e o proximo ID livre.
 
-    E o formulario em branco do GET /grupo/novo e do GET /api/grupos/novo.
-    Tipo fora do plano vira parceiro, como a rota HTML sempre fez.
+    E o formulario em branco do GET /api/grupos/novo. Tipo fora do plano vira
+    parceiro.
     """
     if tipo not in plan.TIPOS:
         tipo = "parceiro"

@@ -202,12 +202,11 @@ dezessete casos para não depender de uma linha que está certa.
 
 ## Comentários
 
-Quinze comentários que o corte deixou obsoletos, todos citando o que foi apagado:
-treze em `app/api.py` (`:6`, `:55`, `:85`, `:151`, `:175`, `:295`, `:372`,
-`:386`, `:418`, `:422`, `:514`, `:552`, `:572`) e dois em `app/formulario.py`
-(`:63-66` cita `_contexto`, `_contexto_grupo` e `POP_USADOS`, que não existem
-mais; `:534` fala das tags da tela). Cada um passa a descrever o que o código faz
-hoje, e nenhum deles muda comportamento.
+Os comentários que o corte deixou obsoletos, todos citando o que foi apagado: os
+de `app/api.py`, que falavam das telas Jinja e das rotas que saíram, e os de
+`app/formulario.py`, que citavam `_contexto`, `_contexto_grupo` e `POP_USADOS`,
+que não existem mais, e as tags da tela. Cada um passa a descrever o que o código
+faz hoje, e nenhum deles muda comportamento.
 
 ## Testes
 

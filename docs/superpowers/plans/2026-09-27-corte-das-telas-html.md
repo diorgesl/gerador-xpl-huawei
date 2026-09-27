@@ -1503,7 +1503,7 @@ O que fica em aberto, e vale registrar:
 - **O e2e e o unico que exercita o 307 com um navegador.** Os testes do
   `test_web.py` fixam o cabecalho com o TestClient; quem segue o redirect de
   verdade e o Playwright e o HEALTHCHECK do container.
-- O 307 continua exercitado so pelo e2e e pelo HEALTHCHECK do container: esta
-  leva nao mexe nele.
+- O 307 continua exercitado com um navegador so pelo e2e, e o HEALTHCHECK segue
+  a corrente dos testes; esta leva nao mexe no `app/app.py` nem no `Dockerfile`.
 
 ---
