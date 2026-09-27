@@ -248,6 +248,52 @@ describe("a tela dos prefixos proprios", () => {
     expect(screen.getByRole("button", { name: /consultar IRR/i })).toBeEnabled()
   })
 
+  it("a rede fora no salvar avisa com tentar de novo, e o texto nao se perde", async () => {
+    // O openapi-fetch RE-LANCA a excecao de rede: o mutate nao chama onSuccess
+    // nem onError nenhum, e o clique em salvar nao deixava rastro na tela
+    const mapa: Record<string, Resposta> = { ...BASE, "PUT /api/blocos": { rede: true } }
+    mockFetch(mapa)
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    fireEvent.change(screen.getByLabelText(/IPv4/), { target: { value: "45.169.232.0/22  64512:613" } })
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    expect(screen.getByLabelText(/IPv4/)).toHaveValue("45.169.232.0/22  64512:613")
+    mapa["PUT /api/blocos"] = BASE["PUT /api/blocos"]
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
+  })
+
+  it("o 500 no salvar avisa com tentar de novo", async () => {
+    // o 500 e o outro caso da mesma linha da spec ("500 ou rede fora"), e ele
+    // chega pelo ramo do `r.error`, e nao pela excecao
+    const mapa: Record<string, Resposta> = { ...BASE, "PUT /api/blocos": { status: 500, corpo: { detail: "falhou" } } }
+    mockFetch(mapa)
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
+    mapa["PUT /api/blocos"] = BASE["PUT /api/blocos"]
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
+  })
+
+  it("a rede fora na consulta ao IRR avisa com tentar de novo", async () => {
+    // A consulta ao bgpq4 e a operacao mais lenta da tela: sem o aviso, o
+    // clique que nao chegou a sair era indistinguivel da consulta em andamento
+    const mapa: Record<string, Resposta> = { ...BASE, "POST /api/blocos/irr": { rede: true } }
+    mockFetch(mapa)
+    montarRota(rotas, "/prefixos")
+    await userEvent.click(await screen.findByRole("button", { name: /consultar IRR/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    mapa["POST /api/blocos/irr"] = { corpo: { v4: "45.169.232.0/22", v6: "" } }
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    await waitFor(() => expect(peticoes().filter((p) => p.caminho === "/api/blocos/irr")).toHaveLength(2))
+    // e o texto que a consulta trouxe chegou na tela: o caminho de volta
+    // termina onde o de ida terminaria
+    await waitFor(() => expect(screen.getByLabelText(/IPv4/)).toHaveValue("45.169.232.0/22"))
+  })
+
   it("a API fora do ar mostra a falha, e o tentar de novo traz o registro", async () => {
     // Sem o guarda a tela abre com os dois editores vazios, o painel dizendo que
     // esta gerando uma previa que nao vem, e os botoes do IRR levando a um

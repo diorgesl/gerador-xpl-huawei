@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { PainelSaida, type AbaSaida } from "@/components/PainelSaida"
 import { cliente } from "@/api/cliente"
-import { chaves, lerRecusa, useBlocos } from "@/api/consultas"
+import { chaves, lerRecusa, recusaComMarca, useBlocos } from "@/api/consultas"
+import { avisarFalhaDeRede, falhaDoServidor } from "@/lib/aviso"
 import { copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
 
@@ -70,11 +71,14 @@ export function PrefixosTela() {
     mutationFn: () => cliente.PUT("/api/blocos", { body: { v4, v6 } }),
     onSuccess: (r) => {
       if (r.error) {
+        // o 5xx e falha do servidor, e nao do texto: o aviso com o caminho de
+        // volta entra junto, e o "tentar de novo" repete o mesmo PUT
+        if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => salvar.mutate())
         // Sem o refetch da previa daqui: ele subiria o `dataUpdatedAt` dela e a
         // marca da recusa chegaria vencida, apagando no mesmo instante a lista
         // que ela acabou de escrever. Os erros do salvar ficam ate a proxima
         // previa responder, que e quando a lista de la substitui a de ca
-        setRecusa({ em: Date.now(), erros: lerRecusa(r.error).erros, irr: null })
+        setRecusa(recusaComMarca(r.error))
         return
       }
       setRecusa(null)
@@ -86,20 +90,20 @@ export function PrefixosTela() {
       // seguinte ao toast que disse que ele acabou de ser escrito
       void consultas.invalidateQueries({ queryKey: ["previa-blocos"] })
     },
+    onError: () => avisarFalhaDeRede(() => salvar.mutate()),
   })
 
   const consultar = useMutation({
     mutationFn: (forcar: boolean) => cliente.POST("/api/blocos/irr", { body: { v4, v6, forcar } }),
-    onSuccess: (r) => {
+    onSuccess: (r, forcar) => {
       if (r.error) {
         const lida = lerRecusa(r.error)
-        setRecusa({
-          em: Date.now(),
-          erros: lida.erros,
-          // a mensagem do bgpq4 nao e de um campo: ela sai ao lado dos botoes,
-          // e nao no editor nem no painel
-          irr: lida.erros.bgpq4 ?? lida.erros._corpo ?? lida.erros._ ?? "a consulta ao IRR falhou",
-        })
+        // o 502 do bgpq4 e falha do servidor: o aviso com o caminho de volta
+        // entra junto do recado, que sai ao lado dos botoes
+        if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => consultar.mutate(forcar))
+        // a mensagem do bgpq4 nao e de um campo: ela sai ao lado dos botoes, e
+        // nao no editor nem no painel
+        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros._corpo ?? lida.erros._ ?? "a consulta ao IRR falhou"))
         return
       }
       // so o recado do IRR sai: os erros que o salvar deixou na tela ficam com
@@ -108,6 +112,10 @@ export function PrefixosTela() {
       if (r.data) setRascunho({ v4: r.data.v4, v6: r.data.v6 })
       toast("prefixos do IRR no formulário; nada foi gravado")
     },
+    // a excecao de rede nao passa pelo ramo do `r.error`, e a consulta ao bgpq4
+    // e a operacao mais lenta da tela: sem o aviso, o clique que nem saiu era
+    // indistinguivel da consulta em andamento
+    onError: (_erro, forcar) => avisarFalhaDeRede(() => consultar.mutate(forcar)),
   })
 
   // A recusa vale ate a proxima previa responder, que traz a lista de erros

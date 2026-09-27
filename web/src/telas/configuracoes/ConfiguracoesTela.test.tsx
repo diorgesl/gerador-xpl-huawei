@@ -139,6 +139,39 @@ describe("a tela das configuracoes", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /gravar AS/i })).toBeEnabled())
   })
 
+  it("a rede fora no gravar avisa com tentar de novo, e o campo nao se perde", async () => {
+    // O openapi-fetch RE-LANCA a excecao de rede: o onSuccess do gravar nao
+    // rodava, e o clique em "gravar AS" nao deixava rastro nenhum na tela
+    const mapa: Record<string, Resposta> = { ...BASE, "PUT /api/rede": { rede: true } }
+    mockFetch(mapa)
+    montarRota(rotas, "/configuracoes")
+    const campo = await screen.findByLabelText(/AS da rede/i)
+    await waitFor(() => expect(campo).toHaveValue("64512"))
+    await userEvent.clear(campo)
+    await userEvent.type(campo, "64500")
+    await userEvent.click(screen.getByRole("button", { name: /gravar AS/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    expect(screen.getByLabelText(/AS da rede/i)).toHaveValue("64500")
+    mapa["PUT /api/rede"] = { corpo: { asn: "64500", politica: "65532" } }
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
+  })
+
+  it("o 500 no gravar avisa com tentar de novo", async () => {
+    // o 500 e o outro caso da mesma linha da spec ("500 ou rede fora"), e ele
+    // chega pelo ramo do `r.error`, e nao pela excecao
+    const mapa: Record<string, Resposta> = { ...BASE, "PUT /api/rede": { status: 500, corpo: { detail: "falhou" } } }
+    mockFetch(mapa)
+    montarRota(rotas, "/configuracoes")
+    const gravar = await screen.findByRole("button", { name: /gravar AS/i })
+    await waitFor(() => expect(gravar).toBeEnabled())
+    await userEvent.click(gravar)
+    expect(await screen.findByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
+    mapa["PUT /api/rede"] = { corpo: { asn: "64512", politica: "65532" } }
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
+  })
+
   it("o Ctrl+S grava o AS com o plano na mao", async () => {
     // a tela publica o `aoSalvar` para a paleta e o Ctrl+S, como as outras
     // quatro: sem a publicacao o atalho fica morto aqui

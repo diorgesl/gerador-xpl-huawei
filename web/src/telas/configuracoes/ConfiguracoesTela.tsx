@@ -9,6 +9,7 @@ import { usePublicarAcoes } from "@/app/acoes-contexto"
 import { useTema } from "@/app/tema"
 import { cliente } from "@/api/cliente"
 import { chaves, lerRecusa, usePlano, type RedeAtual } from "@/api/consultas"
+import { avisarFalhaDeRede, falhaDoServidor } from "@/lib/aviso"
 import { cn } from "@/lib/utils"
 
 export function ConfiguracoesTela() {
@@ -37,6 +38,9 @@ export function ConfiguracoesTela() {
     mutationFn: () => cliente.PUT("/api/rede", { body: { asn: rede.asn, politica: rede.politica } }),
     onSuccess: (r) => {
       if (r.error) {
+        // o 5xx e falha do servidor, e nao do AS digitado: o aviso com o
+        // caminho de volta entra junto da recusa, se houver uma
+        if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => gravar.mutate())
         setErros(lerRecusa(r.error).erros)
         return
       }
@@ -49,6 +53,9 @@ export function ConfiguracoesTela() {
       void consultas.invalidateQueries({ queryKey: chaves.grupos })
       void consultas.invalidateQueries({ queryKey: chaves.blocos })
     },
+    // a excecao de rede nao passa pelo ramo do `r.error`: o openapi-fetch a
+    // re-lanca, e sem este caminho o clique em gravar nao deixava rastro
+    onError: () => avisarFalhaDeRede(() => gravar.mutate()),
   })
 
   // Sem o dado na tela o Ctrl+S nao grava: o namespace ainda nao chegou, e um
