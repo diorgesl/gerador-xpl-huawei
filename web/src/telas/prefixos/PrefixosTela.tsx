@@ -101,8 +101,13 @@ export function PrefixosTela() {
   // aberto. Nao ha duplicar: os prefixos do AS sao um registro so, e nao uma
   // lista de registros como os peers e os grupos
   const blocoAberto = abas[0]?.conteudo ?? null
+  // O salvamento exige o texto conhecido: enquanto o GET /api/blocos nao
+  // responde, os dois editores estao vazios e o backend ACEITA esse vazio
+  // (`validar_blocos` nao tem o que apontar), gravando um out/blocos.txt sem
+  // nenhuma originacao. Nas telas do peer e do grupo o vazio e recusado pela
+  // API, entao la a guarda e so a do Ctrl+S
   usePublicarAcoes({
-    aoSalvar: () => salvar.mutate(),
+    aoSalvar: blocos.data ? () => salvar.mutate() : undefined,
     aoCopiarBloco: blocoAberto ? () => void copiarComAviso(blocoAberto, blocoRef.current) : undefined,
   })
 
@@ -137,7 +142,7 @@ export function PrefixosTela() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => salvar.mutate()} disabled={salvar.isPending}>salvar</Button>
+        <Button size="sm" onClick={() => salvar.mutate()} disabled={salvar.isPending || !blocos.data}>salvar</Button>
         <Button size="sm" variant="ghost" onClick={() => consultar.mutate(false)} disabled={consultar.isPending}>
           consultar IRR
         </Button>

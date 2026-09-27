@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
@@ -62,6 +62,29 @@ describe("a tela dos prefixos proprios", () => {
     montarRota(rotas, "/prefixos")
     await userEvent.click(await screen.findByRole("button", { name: /^salvar/i }))
     expect(await screen.findByText("prefixo invalido: 2001:db8::/129")).toBeInTheDocument()
+  })
+
+  it("nao grava antes de o registro chegar", async () => {
+    // Enquanto o GET /api/blocos nao responde, os editores estao vazios e o
+    // backend ACEITA esse vazio: gravar ali escreveria um out/blocos.txt sem
+    // nenhuma originacao. A guarda esta no botao e no `aoSalvar` que a tela
+    // publica para a paleta; este caso mede o botao, que e o caminho que a
+    // prova alcanca sem montar a casca
+    mockFetch({ ...BASE, "GET /api/blocos": { status: 500, corpo: { detail: "falhou" } } })
+    montarRota(rotas, "/prefixos")
+    const botao = await screen.findByRole("button", { name: /^salvar$/i })
+    // o segundo GET e o retry do cliente (um, com o atraso padrao de 1s), e e
+    // ele que separa o "ainda carregando" do "nao veio": esperar por ele e
+    // medir o estado que a guarda existe para cobrir, em que o botao ja esta
+    // desabilitado por outro motivo. Os 3s passam do retry, e o padrao de 1s
+    // do waitFor nao
+    await waitFor(
+      () => expect(peticoes().filter((p) => p.caminho === "/api/blocos")).toHaveLength(2),
+      { timeout: 3000 },
+    )
+    expect(botao).toBeDisabled()
+    fireEvent.click(botao)
+    expect(peticoes().some((p) => p.metodo === "PUT" && p.caminho === "/api/blocos")).toBe(false)
   })
 
   it("o erro que vem da propria previa aparece e tira o bloco antigo do painel", async () => {
