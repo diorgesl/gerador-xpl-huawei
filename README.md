@@ -33,6 +33,8 @@ está no `.gitignore`.
   do peer mexe nos filtros e não tem como zerar o que está no equipamento.
 - **Não importa nada do `PLANO.md`.** O documento é a referência de desenho; o
   app não o lê em tempo de execução.
+- **Não tem gestão de usuários.** É um admin só, criado no boot, e sem papéis.
+  Trocar a senha é apagar o `usuarios.yaml` e reiniciar; não há tela para isso.
 
 ## Como subir
 
@@ -92,6 +94,33 @@ O diretório do build vem de `BGPGEN_WEB`, e o padrão é `web/dist`. Sem build,
 rotas da SPA respondem 503 com a instrução de compilar; a API continua
 funcionando.
 
+### O login
+
+O app sobe com um admin e uma senha sorteada. A senha sai uma vez, no log do
+primeiro boot, e não é gravada em lugar nenhum: quem não guardou precisa apagar
+o `usuarios.yaml` e reiniciar para gerar outra.
+
+```bash
+docker compose logs bgpgen | grep -A3 "admin criado"   # a senha do primeiro boot
+```
+
+O que fica atrás do login é o `/api` inteiro (menos as três rotas de sessão), o
+`/base.txt`, o `/docs` e o `/openapi.json`; a SPA e os arquivos do build
+continuam abertos, senão a própria tela de login não carregaria. A sessão é um
+cookie de sete dias, e reiniciar o app não desloga ninguém: o que derruba as
+sessões abertas é trocar o segredo, o que acontece quando o `usuarios.yaml` é
+recriado.
+
+Duas variáveis mexem nisso:
+
+| Variável | Para quê |
+| --- | --- |
+| `BGPGEN_ADMIN_SENHA` | A senha do admin criado no boot, no lugar da sorteada. É o que o e2e usa |
+| `BGPGEN_COOKIE_SEGURO=1` | Liga o atributo `Secure` do cookie, para quem põe o app atrás de um TLS |
+
+O `usuarios.yaml` (o hash da senha e o segredo dos cookies) fica na raiz, ao
+lado do `peers.yaml`, e é ignorado pelo git e pelo build da imagem.
+
 ### Testes do front
 
 ```bash
@@ -100,7 +129,7 @@ npm test              # Vitest: tokenizador XPL, diff, campos, contraste, compon
 npm run lint
 npm run api:conferir  # falha se o schema.d.ts estiver velho em relação ao app.openapi()
 npx playwright install  # uma vez: baixa os navegadores que o Playwright pede
-npm run e2e             # Playwright: compila e roda os 12 casos contra um uvicorn (8 fluxos + 4 de copia)
+npm run e2e             # Playwright: compila e roda os casos contra um uvicorn, logando uma vez no setup
 ```
 
 O `npm run api:tipos` regenera o `web/src/api/schema.d.ts` a partir do
