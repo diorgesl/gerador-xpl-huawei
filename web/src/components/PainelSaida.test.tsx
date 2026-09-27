@@ -16,8 +16,9 @@ const montar = (props: Partial<Parameters<typeof PainelSaida>[0]> = {}) =>
   render(
     <PainelSaida
       abas={[aba()]} sujo={false} carregando={false} erro={null}
-      // o padrao e a copia que deu certo, que e o caso comum da tela
-      onCopiar={vi.fn().mockResolvedValue(true)} {...props}
+      // o padrao e a copia e o salvamento que deram certo, que e o caso comum
+      onCopiar={vi.fn().mockResolvedValue(true)}
+      onSalvarECopiar={vi.fn().mockResolvedValue(true)} {...props}
     />,
   )
 
@@ -59,6 +60,14 @@ describe("o botao de copiar", () => {
   it("vira salvar e copiar quando o out/ esta desatualizado", () => {
     montar({ abas: [aba({ salvo: ANTIGO })] })
     expect(screen.getByRole("button", { name: /salvar e copiar/i })).toBeInTheDocument()
+  })
+
+  it("sem quem grave, o botao e copiar e nao promete salvar", () => {
+    // a tela dos prefixos tem o salvar no proprio botao e nao passa
+    // onSalvarECopiar: um botao dizendo "salvar e copiar" que so copia mente
+    // sobre o que fez
+    montar({ sujo: true, onSalvarECopiar: undefined })
+    expect(screen.getByRole("button", { name: /^copiar$/i })).toBeInTheDocument()
   })
 
   it("na aba de remocao e sempre copiar, porque ela vem do registro salvo", () => {

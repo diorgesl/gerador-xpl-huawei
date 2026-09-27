@@ -64,8 +64,11 @@ export function PainelSaida({ abas, sujo, carregando, erro, onCopiar, onSalvarEC
   // salva (o bloco ainda nao esta no peers.yaml, mesmo que o texto da previa
   // seja igual ao do out/) ou a previa difere do arquivo. O cabecalho continua
   // falando da previa contra o out/, que e outra pergunta.
+  // O `onSalvarECopiar` entra na conta: sem ele a tela nao sabe gravar, e um
+  // botao dizendo "salvar e copiar" que so copia mente sobre o que fez (e o
+  // caso da tela dos prefixos, que tem o salvar no proprio botao)
   const precisaSalvar = Boolean(
-    aba && !aba.soLeitura && !semBloco &&
+    aba && !aba.soLeitura && !semBloco && onSalvarECopiar &&
     (sujo || estadoDoBloco(aba.conteudo, aba.salvo, sujo).estado !== "igual"),
   )
 

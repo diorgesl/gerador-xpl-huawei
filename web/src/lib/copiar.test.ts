@@ -55,6 +55,21 @@ describe("a copia do bloco", () => {
     await expect(copiarComAviso("x")).resolves.toBe("selecionado")
     expect(toast).toHaveBeenCalledWith("o bloco ficou selecionado: use Ctrl+C para copiar")
   })
+
+  it("seleciona o codigo dentro do painel, e nao o painel inteiro", async () => {
+    // as telas passam o painel montado: o Ctrl+C manual nao pode levar junto o
+    // rotulo das abas e dos botoes, e a numeracao fica fora do `code`
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined })
+    vi.spyOn(document, "execCommand").mockReturnValue(false)
+    const painel = document.createElement("div")
+    painel.innerHTML =
+      "<span>bloco do peer</span><pre><span>1</span><code>xpl route-filter X\nend-filter</code></pre><button>copiar</button>"
+    document.body.appendChild(painel)
+
+    await expect(copiar("xpl route-filter X\nend-filter", painel)).resolves.toBe("selecionado")
+    expect(document.getSelection()?.toString()).toBe("xpl route-filter X\nend-filter")
+    painel.remove()
+  })
 })
 
 describe("o download do bloco", () => {

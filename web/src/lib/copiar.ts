@@ -52,10 +52,14 @@ function porSelecao(texto: string): boolean {
 
 function selecionar(alvo?: HTMLElement | null) {
   if (!alvo) return
+  // as telas passam o painel inteiro, e o que interessa e o codigo dentro
+  // dele: sem esta volta o Ctrl+C levaria junto o rotulo das abas e dos
+  // botoes. O `code` e o bloco copiavel, com a numeracao de fora
+  const elemento = alvo.querySelector("code") ?? alvo
   const selecao = document.getSelection()
   if (!selecao) return
   const intervalo = document.createRange()
-  intervalo.selectNodeContents(alvo)
+  intervalo.selectNodeContents(elemento)
   selecao.removeAllRanges()
   selecao.addRange(intervalo)
 }
