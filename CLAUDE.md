@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repository holds a single design document, `PLANO.md`, specifying the BGP communities policy for AS64512 and its implementation in XPL (Huawei VRP's policy language) on the NetEngine 8000 F1A. There is no source code, build system, package manifest, or test suite — it is a network engineering reference document written in Portuguese, not a software project. There is no build/lint/test command to run.
 
+Além do documento, o repositório tem o app que o implementa: `app/` (FastAPI, com a API JSON em `/api` e as telas Jinja em `templates/`) e `web/` (a SPA em React que consome a API). A suíte é `pytest` para o Python e `vitest` para o front; os comandos estão no `README.md`.
+
 ## Working with this document
 
 - Keep tables and prose consistent — sections cross-reference each other. The numeric convention and polarity rules set out in "Escopo e princípios" govern every community table that follows, and the peer ID table ("Tabela de peers e IDs") is the single source of truth for values used in the `5PPA`, `6CA`, and `3xxx` sections.

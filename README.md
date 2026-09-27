@@ -10,11 +10,13 @@ app escreve o bloco daquela sessão em `out/<token>-<tipo>.txt`, sobrescrevendo
 só esse arquivo. Gerar um peer não toca na saída dos outros. O bloco base, que
 é igual para todos, a tela serve em `GET /base.txt`.
 
-Além da tela, o app serve uma API JSON em `/api`, que a tela nova (em
-construção, ver `docs/superpowers/specs/2026-09-26-front-spa-design.md`) vai
-consumir. As rotas usam o mesmo formulário, a mesma validação e o mesmo render
-da tela, e a documentação interativa fica em `/docs`. A prévia
-(`POST /api/peers/previa`) monta o bloco sem gravar nada.
+Além da tela, o app serve uma API JSON em `/api`, que a SPA em `web/` consome.
+A SPA está no ar em `/peers`, servida pelo próprio uvicorn. As telas antigas
+seguem em `/` até o corte, e o desenho das duas está em
+`docs/superpowers/specs/2026-09-26-front-spa-design.md`. As rotas usam o mesmo
+formulário, a mesma validação e o mesmo render da tela, e a documentação
+interativa fica em `/docs`. A prévia (`POST /api/peers/previa`) monta o bloco
+sem gravar nada.
 
 O estado é o `peers.yaml`, o cadastro dos peers. O que está em `out/` é saída, e
 está no `.gitignore`.
@@ -63,6 +65,56 @@ binário.
 
 Suíte: `.venv/bin/python -m pytest`, ou
 `docker compose run --rm bgpgen python -m pytest` para rodar dentro do container.
+
+### O front (SPA)
+
+A tela nova é uma SPA em `web/`, servida pelo próprio FastAPI. Em produção não há
+processo separado: o uvicorn serve a API, os arquivos do build e o `index.html`.
+
+Em desenvolvimento são dois processos, com o Vite recarregando a tela na hora:
+
+```bash
+.venv/bin/uvicorn app.app:app --port 8000      # a API e as telas antigas
+cd web && npm install && npm run dev           # a SPA em http://127.0.0.1:5173
+```
+
+O Vite faz proxy de `/api` e `/base.txt` para a 8000, então a SPA funciona nos
+dois modos com o mesmo código.
+
+Para servir a SPA pelo uvicorn, com um processo só:
+
+```bash
+cd web && npm run build && cd ..
+.venv/bin/uvicorn app.app:app --port 8000      # a SPA em /peers
+```
+
+O diretório do build vem de `BGPGEN_WEB`, e o padrão é `web/dist`. Sem build, as
+rotas da SPA respondem 503 com a instrução de compilar; a API e as telas antigas
+continuam funcionando.
+
+### Testes do front
+
+```bash
+cd web
+npm test              # Vitest: tokenizador XPL, diff, campos, contraste, componentes
+npm run lint
+npm run api:conferir  # falha se o schema.d.ts estiver velho em relação ao app.openapi()
+npx playwright install  # uma vez: baixa os navegadores que o Playwright pede
+npm run e2e             # Playwright: compila e roda os seis fluxos contra um uvicorn
+```
+
+O `npm run api:tipos` regenera o `web/src/api/schema.d.ts` a partir do
+`app.openapi()`. O arquivo é versionado, e o `api:conferir` roda junto com a
+suíte do Python quando o `web/node_modules` existe (dentro do container ele é
+pulado).
+
+Os testes do Playwright sobem um uvicorn com um `peers.yaml` temporário, copiado
+de `web/e2e/peers.yaml` para `web/e2e/.tmp/` pelo `web/e2e/global-setup.ts`: o
+app resolve o cadastro a partir da raiz do projeto, e a cópia é o que permite
+apontá-lo para outro cadastro sem mudar o app. A cópia **não** pode ser um
+`globalSetup` do Playwright: ele roda depois do `webServer`, e o servidor precisa
+da árvore antes de subir. O e2e serve o `web/dist` de verdade, então o
+`npm run build` vem antes — o script `e2e` faz isso.
 
 ## Ordem de colagem no F1A
 
