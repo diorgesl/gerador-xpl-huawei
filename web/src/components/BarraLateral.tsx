@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { BadgeTipo } from "@/components/BadgeTipo"
 import { filtrarGrupos, filtrarPeers } from "@/lib/busca"
 import type { GrupoResumo, PeerResumo } from "@/api/consultas"
+import { useSair } from "@/api/sessao"
 import { useState } from "react"
 
 const TIPOS = ["cliente", "parceiro", "upstream", "ix", "pni"]
@@ -24,6 +25,7 @@ type Props = {
 export function BarraLateral({ peers, grupos, asn, aoNovo }: Props) {
   const [busca, setBusca] = useState("")
   const { pathname } = useLocation()
+  const sair = useSair()
   const peersVisiveis = filtrarPeers(peers, busca)
   const gruposVisiveis = filtrarGrupos(grupos, busca)
 
@@ -123,6 +125,13 @@ export function BarraLateral({ peers, grupos, asn, aoNovo }: Props) {
           {item("/base", "Bloco base")}
           {item("/configuracoes", "Configurações")}
         </section>
+      </div>
+
+      <div className="border-t pt-2">
+        <Button variant="ghost" size="sm" onClick={() => sair.mutate()}
+                disabled={sair.isPending}>
+          sair
+        </Button>
       </div>
 
     </nav>

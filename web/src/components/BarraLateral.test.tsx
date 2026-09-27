@@ -1,9 +1,11 @@
 import { render, screen } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { describe, expect, it, vi } from "vitest"
 import { BarraLateral } from "./BarraLateral"
 import { filtrarGrupos, filtrarPeers } from "@/lib/busca"
+import { montarRota, mockFetch, peticoes } from "@/teste/roteador"
 
 const PEERS = [
   { id: 1, token: "268127", tipo: "cliente", asn: 268127, apelido: "", nome: "Cliente ACME", grupo_id: null },
@@ -35,11 +37,15 @@ describe("o filtro da busca", () => {
 })
 
 describe("a barra lateral", () => {
+  // o provedor de consultas entrou junto do botao de sair: o useSair le o
+  // QueryClient, e o MemoryRouter cru nao traz nenhum
   const montar = (props = {}) =>
     render(
-      <MemoryRouter>
-        <BarraLateral peers={PEERS} grupos={GRUPOS} asn="64512" aoNovo={vi.fn()} {...props} />
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <BarraLateral peers={PEERS} grupos={GRUPOS} asn="64512" aoNovo={vi.fn()} {...props} />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
   it("mostra as secoes, os links e o AS da rede", () => {
@@ -66,14 +72,16 @@ describe("a barra lateral", () => {
     // errado era o do registro que o operador nao abriu. O que compara e o
     // segmento inteiro, e nao o prefixo do texto
     render(
-      <MemoryRouter initialEntries={["/peers/12"]}>
-        <BarraLateral
-          peers={[...PEERS, { id: 12, token: "268999", tipo: "cliente", asn: 268999, apelido: "NOVO", nome: "Cliente NOVO", grupo_id: null }]}
-          grupos={GRUPOS}
-          asn="64512"
-          aoNovo={vi.fn()}
-        />
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={["/peers/12"]}>
+          <BarraLateral
+            peers={[...PEERS, { id: 12, token: "268999", tipo: "cliente", asn: 268999, apelido: "NOVO", nome: "Cliente NOVO", grupo_id: null }]}
+            grupos={GRUPOS}
+            asn="64512"
+            aoNovo={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
     const item = (destino: string) => screen.getAllByRole("link").find((l) => l.getAttribute("href") === destino)
     expect(item("/peers/12")).toHaveAttribute("aria-current", "page")
@@ -100,5 +108,21 @@ describe("a barra lateral", () => {
     await userEvent.type(screen.getByRole("searchbox"), "acme")
     expect(screen.getByRole("link", { name: /Cliente ACME/ })).toBeInTheDocument()
     expect(screen.queryByRole("link", { name: /BRDIGITAL-20G/ })).not.toBeInTheDocument()
+  })
+
+  it("sair chama o logout e volta para o login", async () => {
+    // o montar dos outros casos usa o MemoryRouter cru, e o useSair precisa do
+    // QueryClient: aqui quem monta e o arnes, com a rota de destino de verdade
+    mockFetch({ "POST /api/logout": { corpo: { logado: false, usuario: null } } })
+    montarRota([
+      { path: "/peers", element: <BarraLateral peers={[]} grupos={[]} asn="64512" aoNovo={() => {}} /> },
+      { path: "/login", element: <h1>entrou na tela de login</h1> },
+    ], "/peers")
+
+    await userEvent.click(screen.getByRole("button", { name: /sair/i }))
+
+    await screen.findByText("entrou na tela de login")
+    const pedido = peticoes().find((p) => p.caminho === "/api/logout")
+    expect(pedido?.metodo).toBe("POST")
   })
 })

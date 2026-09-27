@@ -38,6 +38,47 @@ describe("o cliente fala com o mesmo caminho relativo em dev e em producao", () 
   })
 })
 
+describe("o cliente avisa quando a sessao caiu", () => {
+  // o chamador escolhe a requisicao: e o caminho dela que decide se o 401
+  // significa "sessao caiu" ou "senha errada"
+  async function comResposta(
+    status: number,
+    chamada: (cliente: typeof import("./cliente").cliente) => Promise<unknown>,
+  ) {
+    vi.stubGlobal("Request", Requisicao)
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(new Response("{}", { status, headers: { "content-type": "application/json" } })),
+    )
+    vi.resetModules()
+    const modulo = await import("./cliente")
+    let avisos = 0
+    modulo.quandoPerderSessao(() => { avisos += 1 })
+    await chamada(modulo.cliente)
+    return avisos
+  }
+
+  it("avisa no 401 de uma consulta qualquer", async () => {
+    const avisos = await comResposta(401, (c) => c.GET("/api/plano"))
+
+    expect(avisos).toBe(1)
+  })
+
+  it("nao avisa no 422 nem no 500", async () => {
+    expect(await comResposta(422, (c) => c.GET("/api/plano"))).toBe(0)
+    expect(await comResposta(500, (c) => c.GET("/api/plano"))).toBe(0)
+  })
+
+  it("nao avisa no 401 do login, que e senha errada", async () => {
+    // se avisasse, a tela de login recarregaria a cada chute e apagaria a
+    // mensagem de erro e a senha digitada
+    const avisos = await comResposta(401, (c) =>
+      c.POST("/api/login", { body: { usuario: "admin", senha: "chute" } }),
+    )
+
+    expect(avisos).toBe(0)
+  })
+})
+
 describe("a leitura da recusa", () => {
   it("le o corpo no formato da API", () => {
     expect(lerRecusa({ erros: { asn: "ASN ja usado" }, avisos: [] })).toEqual({

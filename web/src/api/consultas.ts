@@ -13,6 +13,7 @@ export type Previa = components["schemas"]["Previa"]
 export type Saida = components["schemas"]["Saida"]
 export type Blocos = components["schemas"]["Blocos"]
 export type RedeAtual = components["schemas"]["RedeAtual"]
+export type Sessao = components["schemas"]["SessaoResposta"]
 export type Recusa = { erros: Record<string, string>; avisos: { campo: string; mensagem: string }[] }
 
 /**
@@ -49,6 +50,7 @@ export const chaves = {
   grupos: ["grupos"] as const,
   grupo: (id: number) => ["grupo", id] as const,
   blocos: ["blocos"] as const,
+  sessao: ["sessao"] as const,
 }
 
 // As listas recarregam quando a janela volta ao foco: uma edicao manual no
