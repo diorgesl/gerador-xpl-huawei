@@ -878,11 +878,14 @@ retry", que e o defeito que existia de verdade.
 > componente seguia sem `aria-pressed` e sem o caso de teste. A execucao entrou
 > na rodada de conserto, e o Step 1 abaixo ja esta na versao executada: o
 > `mockFetch(BASE)` que o snippet do brief omitia (sem ele o `afterEach` do
-> arnés acusa "rota sem mapa") e as **tres** assercoes, e nao duas. A terceira -
-> o `sistema` em `false` depois do clique - e a que prova que a marca se
-> **move**: o tema padrao e `sistema` (`web/src/app/tema.ts:12-19`), entao ela
-> comeca em `true` e tem que virar `false`. Sem ela, um `aria-pressed={true}`
-> fixo passaria nas duas assercoes do brief; medido na execucao, ele falha.
+> arnes acusa "rota sem mapa") e as **tres** assercoes, e nao duas. O tema padrao
+> e `sistema` (`web/src/app/tema.ts:12-19`), entao o clique em `claro` muda o
+> estado de verdade, e a terceira assercao - o `sistema` em `false` depois do
+> clique - e a que pega a **marca presa no padrao**: medida na execucao, um
+> `aria-pressed={tema === t || t === "sistema"}` passa nas duas assercoes do
+> brief e falha so nela, porque o "pressionado" ficaria em dois botoes ao mesmo
+> tempo. Um `aria-pressed={true}` fixo, esse, ja falha na segunda do brief -
+> tambem medido.
 
 - [ ] **Step 1: Escrever o teste que falha**
 

@@ -98,8 +98,9 @@ describe("a tela das configuracoes", () => {
 
     expect(screen.getByRole("button", { name: "claro" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", { name: "escuro" })).toHaveAttribute("aria-pressed", "false")
-    // sem esta terceira linha o caso passaria com a marca fixa: e ela que prova
-    // que o "pressionado" andou de um botao para o outro
+    // esta terceira e a que pega a marca presa no padrao: medida na execucao,
+    // um `aria-pressed={tema === t || t === "sistema"}` passa nas duas de cima
+    // e falha so aqui, porque o "pressionado" ficaria nos dois botoes
     expect(screen.getByRole("button", { name: "sistema" })).toHaveAttribute("aria-pressed", "false")
   })
 
