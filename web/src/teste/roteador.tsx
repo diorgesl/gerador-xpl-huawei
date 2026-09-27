@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react"
+import { cleanup, render } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { RouterProvider, createMemoryRouter, type RouteObject } from "react-router-dom"
 import { afterEach, beforeEach, vi } from "vitest"
@@ -38,6 +38,12 @@ afterEach(() => {
   // estado de verdade: a prova via a tela navegar embora e podia passar mesmo
   // assim. Agora ela acusa, e o nome da chave vem na mensagem
   if (faltando.length > 0) {
+    // O `throw` daqui encerra o ciclo antes de a limpeza automatica do
+    // testing-library rodar, que e um gancho registrado antes deste: sem a
+    // chamada, a arvore do caso fica montada e o caso seguinte reprova com
+    // "Found multiple elements", que aponta para o lugar errado e enterra a
+    // chave que faltou
+    cleanup()
     throw new Error(`rota sem mapa no mockFetch: ${[...new Set(faltando)].join(", ")}`)
   }
 })
