@@ -297,6 +297,18 @@ describe("a tela dos prefixos proprios", () => {
     await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
   })
 
+  it("um 5xx sem corpo de recusa nao mostra o texto de resposta inesperada", async () => {
+    // peer e grupo suprimem o `_corpo` nesse caso; os prefixos mostravam os
+    // dois avisos juntos, e o "resposta inesperada da API" ficava por cima do
+    // aviso que dizia o que fazer
+    mockFetch({ ...BASE, "PUT /api/blocos": { status: 500, corpo: "sem forma" } })
+    montarRota(rotas, "/prefixos")
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar/i }))
+
+    expect(await screen.findByText(/não deu para falar com a API/)).toBeInTheDocument()
+    expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
+  })
+
   it("a rede fora na consulta ao IRR avisa com tentar de novo", async () => {
     // A consulta ao bgpq4 e a operacao mais lenta da tela: sem o aviso, o
     // clique que nao chegou a sair era indistinguivel da consulta em andamento

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { PainelSaida, type AbaSaida } from "@/components/PainelSaida"
 import { cliente } from "@/api/cliente"
-import { chaves, lerRecusa, recusaComMarca, useBlocos } from "@/api/consultas"
+import { chaves, lerRecusa, recusaComMarca, temRecusa, useBlocos } from "@/api/consultas"
 import { avisarFalhaDeRede, falhaDoServidor } from "@/lib/aviso"
 import { copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
@@ -73,7 +73,13 @@ export function PrefixosTela() {
       if (r.error) {
         // o 5xx e falha do servidor, e nao do texto: o aviso com o caminho de
         // volta entra junto, e o "tentar de novo" repete o mesmo PUT
-        if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => salvar.mutate())
+        if (falhaDoServidor(r.response.status)) {
+          avisarFalhaDeRede(() => salvar.mutate())
+          // Sem corpo de recusa nao ha o que mostrar no painel, e o `_corpo`
+          // do lerRecusa ("resposta inesperada da API") seria ruido em cima do
+          // aviso: e o mesmo caminho do peer e do grupo
+          if (!temRecusa(r.error)) return
+        }
         // Sem o refetch da previa daqui: ele subiria o `dataUpdatedAt` dela e a
         // marca da recusa chegaria vencida, apagando no mesmo instante a lista
         // que ela acabou de escrever. Os erros do salvar ficam ate a proxima
