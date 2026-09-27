@@ -75,7 +75,7 @@ Em desenvolvimento são dois processos, com o Vite recarregando a tela na hora:
 
 ```bash
 .venv/bin/uvicorn app.app:app --port 8000      # a API e as telas antigas
-cd web && npm install && npm run dev           # a SPA em http://127.0.0.1:5173
+cd web && npm install && npm run dev           # a SPA em http://127.0.0.1:5173/peers
 ```
 
 O Vite faz proxy de `/api` e `/base.txt` para a 8000, então a SPA funciona nos
@@ -100,7 +100,7 @@ npm test              # Vitest: tokenizador XPL, diff, campos, contraste, compon
 npm run lint
 npm run api:conferir  # falha se o schema.d.ts estiver velho em relação ao app.openapi()
 npx playwright install  # uma vez: baixa os navegadores que o Playwright pede
-npm run e2e             # Playwright: compila e roda os seis fluxos contra um uvicorn
+npm run e2e             # Playwright: compila e roda os 10 casos contra um uvicorn (6 fluxos + 4 de copia)
 ```
 
 O `npm run api:tipos` regenera o `web/src/api/schema.d.ts` a partir do
