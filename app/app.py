@@ -149,8 +149,8 @@ def raiz():
 # nada ao contrato que o front consome. Como o web/src/api/schema.d.ts e
 # gerado do app.openapi(), deixa-las dentro mexeria no schema por uma rota que
 # nao e da API - o test_tipos_api.py pega isso na hora.
-for _rota in ("/peers", "/grupos", "/prefixos", "/base", "/configuracoes",
-              "/login"):
+for _rota in ("/peers", "/grupos", "/prefixos", "/base", "/config-completa",
+              "/configuracoes", "/login"):
     app.add_api_route(_rota, pagina_spa, methods=["GET"],
                       include_in_schema=False)
 for _rota in ("/peers", "/grupos"):

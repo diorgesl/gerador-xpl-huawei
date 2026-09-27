@@ -19,11 +19,11 @@ from app import formulario as form
 from app import peers as peers_mod
 from app import plan, prefixes, render, validate
 from app.modelos_api import (Aviso, Blocos, BlocosIrrPedido, BlocosTexto,
-                             ErroResposta, GrupoForm, GrupoRegistro,
+                             Config, ErroResposta, GrupoForm, GrupoRegistro,
                              GrupoResumo, GrupoSalvo, IrrPedido, LoginPedido,
                              Membro, PeerForm, PeerRegistro, PeerResumo,
                              PeerSalvo, Plano, Prefixos, Previa, RedeAtual,
-                             RedeForm, Saida, SessaoResposta)
+                             RedeForm, Saida, SecaoConfig, SessaoResposta)
 
 
 def _texto(valor):
@@ -650,6 +650,87 @@ def consultar_blocos(pedido: BlocosIrrPedido):
             blocos[fam], consulta.get(fam) or [])
         ausentes.extend(faltou)
     return BlocosTexto(**form._texto_blocos(blocos, ausentes))
+
+
+def _nome_do_peer(peer):
+    return peer.apelido or peer.nome or peer.token
+
+
+def _secao_base(rede):
+    # sem arquivo e sem `salvo`: o base e montado a cada requisicao, como no
+    # /base.txt, e nunca teve uma versao em out/ para comparar
+    return SecaoConfig(chave="base", titulo="Bloco base",
+                       texto=render.render_base(rede=rede))
+
+
+def _secao_originacao(blocos, rede):
+    # sem prefixo proprio em servico nao ha bloco, e a secao vazia so faria
+    # volume numa pagina que ja e longa
+    texto = _originacao(blocos, rede)
+    if texto is None:
+        return None
+    arquivo = render.OUT / "blocos.txt"
+    return SecaoConfig(chave="originacao",
+                       titulo="Originacao dos prefixos proprios",
+                       texto=texto, arquivo=arquivo.name,
+                       salvo=arquivo.exists())
+
+
+def _secao_grupo(grupo, rede):
+    destino = grupo.arquivo()
+    return SecaoConfig(chave="grupo-%s" % grupo.id,
+                       titulo="%s (%s)" % (grupo.nome, grupo.tipo),
+                       texto=render.render_grupo(grupo, rede=rede),
+                       arquivo=destino.name, salvo=destino.exists())
+
+
+def _secao_peer(peer, grupo, rede):
+    """O bloco do peer mais o quadro "ao criar", na ordem das abas da tela.
+
+    O texto e a juncao dos dois porque quem cola no equipamento cola a secao
+    inteira; o quadro so existe nos tipos com APPLY-PEER, e e o proprio
+    _criar_lista_do_peer que decide isso.
+    """
+    partes = [render.render_peer(peer, grupo=grupo, rede=rede)]
+    criar = _criar_lista_do_peer(peer, rede)
+    if criar is not None:
+        partes.append(criar)
+    destino = peer.arquivo()
+    return SecaoConfig(chave="peer-%s" % peer.id,
+                       titulo="%s (%s, AS%s)" % (_nome_do_peer(peer), peer.tipo,
+                                                 peer.asn),
+                       texto="\n\n".join(partes),
+                       arquivo=destino.name, salvo=destino.exists())
+
+
+@roteador.get("/config", response_model=Config)
+def ler_config():
+    """A config inteira numa resposta so, montada na hora pelo render.
+
+    Quem cola no equipamento le daqui: e a mesma saida das telas de cada
+    registro, na ordem em que os blocos se apoiam, e sem nada gravado em
+    out/ no caminho.
+    """
+    peers, grupos, rede = _peers(), _grupos(), _rede()
+    # a ordem e a do "Ordem de colagem no F1A" do README: o base primeiro, o
+    # grupo antes dos membros que herdam dele, e os prefixos proprios por
+    # ultimo, que nao dependem de nem sustentam bloco nenhum
+    secoes = [_secao_base(rede)]
+    secoes.extend(_secao_grupo(grupo, rede) for grupo in grupos)
+    for peer in peers:
+        grupo = _grupo_do_peer(peer, grupos)
+        if peer.grupo_id is not None and grupo is None:
+            # o membro herda do grupo; sem ele o bloco sai errado, e a tela
+            # do peer ja recusa por isso. Aqui a recusa e da config inteira,
+            # nomeando quem aponta para o vazio
+            return _falha(422, [validate.Erro(
+                "grupo_id", "o grupo %s do peer %s nao existe"
+                            % (peer.grupo_id, _nome_do_peer(peer)))])
+        secoes.append(_secao_peer(peer, grupo, rede))
+    originacao = _secao_originacao(peers_mod.carregar_blocos(_yaml()), rede)
+    if originacao is not None:
+        secoes.append(originacao)
+    return Config(secoes=secoes)
 
 
 @publico.post("/login", response_model=SessaoResposta)

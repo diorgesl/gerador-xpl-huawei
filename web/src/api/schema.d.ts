@@ -433,6 +433,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ler Config
+         * @description A config inteira numa resposta so, montada na hora pelo render.
+         *
+         *     Quem cola no equipamento le daqui: e a mesma saida das telas de cada
+         *     registro, na ordem em que os blocos se apoiam, e sem nada gravado em
+         *     out/ no caminho.
+         */
+        get: operations["ler_config_api_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/base.txt": {
         parameters: {
             query?: never;
@@ -531,6 +555,14 @@ export interface components {
              * @default
              */
             v6: string;
+        };
+        /**
+         * Config
+         * @description Toda a config numa resposta so, na ordem em que se cola.
+         */
+        Config: {
+            /** Secoes */
+            secoes: components["schemas"]["SecaoConfig"][];
         };
         /**
          * ErroResposta
@@ -1123,6 +1155,26 @@ export interface components {
             criar_lista?: string | null;
             /** Arquivo */
             arquivo: string;
+        };
+        /**
+         * SecaoConfig
+         * @description Um pedaco da config inteira, ja renderizado.
+         *
+         *     `arquivo` e o nome em out/ que aquele bloco grava, e `salvo` diz se ele
+         *     esta la. Os dois sao nulos no base, que e montado a cada requisicao pelo
+         *     render e nunca teve arquivo proprio.
+         */
+        SecaoConfig: {
+            /** Chave */
+            chave: string;
+            /** Titulo */
+            titulo: string;
+            /** Texto */
+            texto: string;
+            /** Arquivo */
+            arquivo?: string | null;
+            /** Salvo */
+            salvo?: boolean | null;
         };
         /**
          * SessaoResposta
@@ -2533,6 +2585,53 @@ export interface operations {
             };
             /** @description Bad Gateway */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+        };
+    };
+    ler_config_api_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Config"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

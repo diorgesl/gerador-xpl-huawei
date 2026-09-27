@@ -188,3 +188,28 @@ test("um valor longo nao invade a coluna vizinha", async ({ page }) => {
   expect(celula!.width).toBeLessThan(150)
   expect(a!.x + a!.width).toBeLessThanOrEqual(celula!.x + celula!.width + 1)
 })
+
+test("o sumario abre a secao sem cobrir o topo dela, e marca ela", async ({ page }) => {
+  // O sumario e `sticky` e a marca da secao lida sai do IntersectionObserver:
+  // os dois precisam de layout, que o jsdom nao calcula. O caso de vitest
+  // dirige o observador na mao; aqui a rolagem e de verdade.
+  //
+  // Sem o `scroll-mt`, o salto do link para no topo da janela, que e onde o
+  // sumario esta, e a secao chega escondida atras dele (medido: y = -0,5). E
+  // sem a faixa de leitura a marca fica na secao de cima, que ainda encosta na
+  // janela por tras do sumario
+  await page.goto("/config-completa")
+  await expect(page.getByRole("heading", { level: 1, name: "Config completa" })).toBeVisible()
+
+  const sumario = page.getByRole("navigation", { name: /sumário/i })
+  const alvo = page.locator('section[id^="peer-"]').first()
+  const id = await alvo.getAttribute("id")
+  await sumario.locator(`a[href="#${id}"]`).click()
+
+  const caixaSumario = await sumario.boundingBox()
+  const caixaAlvo = await alvo.boundingBox()
+  expect(caixaSumario && caixaAlvo).toBeTruthy()
+  expect(caixaAlvo!.y).toBeGreaterThanOrEqual(caixaSumario!.y + caixaSumario!.height - 1)
+
+  await expect(sumario.locator('a[aria-current="true"]')).toHaveAttribute("href", `#${id}`)
+})

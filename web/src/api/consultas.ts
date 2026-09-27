@@ -12,6 +12,8 @@ export type GrupoResumo = components["schemas"]["GrupoResumo"]
 export type Previa = components["schemas"]["Previa"]
 export type Saida = components["schemas"]["Saida"]
 export type Blocos = components["schemas"]["Blocos"]
+export type Config = components["schemas"]["Config"]
+export type SecaoConfig = components["schemas"]["SecaoConfig"]
 export type RedeAtual = components["schemas"]["RedeAtual"]
 export type Sessao = components["schemas"]["SessaoResposta"]
 export type Recusa = { erros: Record<string, string>; avisos: { campo: string; mensagem: string }[] }
@@ -50,6 +52,7 @@ export const chaves = {
   grupos: ["grupos"] as const,
   grupo: (id: number) => ["grupo", id] as const,
   blocos: ["blocos"] as const,
+  config: ["config"] as const,
   sessao: ["sessao"] as const,
 }
 
@@ -131,6 +134,18 @@ export function useBlocos() {
     queryFn: async () => {
       const { data, error } = await cliente.GET("/api/blocos")
       if (error) throw new Error("falha ao ler os blocos")
+      return data
+    },
+    ...comum,
+  })
+}
+
+export function useConfig() {
+  return useQuery({
+    queryKey: chaves.config,
+    queryFn: async () => {
+      const { data, error } = await cliente.GET("/api/config")
+      if (error) throw new Error("falha ao ler a config")
       return data
     },
     ...comum,

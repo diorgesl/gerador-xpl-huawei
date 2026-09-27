@@ -8,6 +8,7 @@ import { PeerTela, TelaDoPeer } from "@/telas/peers/PeerTela"
 import { GrupoTela, TelaDoGrupo } from "@/telas/grupos/GrupoTela"
 import { PrefixosTela } from "@/telas/prefixos/PrefixosTela"
 import { BaseTela } from "@/telas/base/BaseTela"
+import { ConfigTela } from "@/telas/config/ConfigTela"
 import { ConfiguracoesTela } from "@/telas/configuracoes/ConfiguracoesTela"
 
 // Cada tela entrou aqui na task que a criou, e a lista dos registros nao e uma
@@ -50,6 +51,9 @@ const roteador = createBrowserRouter([
       { path: "grupos/:id", element: <TelaDoGrupo /> },
       { path: "prefixos", element: <PrefixosTela /> },
       { path: "base", element: <BaseTela /> },
+      // o nome e comprido de proposito: "config" ao lado de "configuracoes"
+      // seriam dois links com o mesmo comeco, um do outro
+      { path: "config-completa", element: <ConfigTela /> },
       { path: "configuracoes", element: <ConfiguracoesTela /> },
       { path: "*", element: <NaoEncontrado /> },
     ],

@@ -35,7 +35,8 @@ def web(dist, api):
 # nessa tela bate no uvicorn antes de o React existir. Sem a linha, o
 # recarregamento da 404 e a tela de login so funciona por navegacao interna.
 ROTAS_DA_SPA = ["/peers", "/peers/7", "/peers/novo", "/grupos", "/grupos/2",
-                "/prefixos", "/base", "/configuracoes", "/login"]
+                "/prefixos", "/base", "/config-completa", "/configuracoes",
+                "/login"]
 
 
 @pytest.mark.parametrize("rota", ROTAS_DA_SPA)

@@ -123,6 +123,7 @@ export function BarraLateral({ peers, grupos, asn, aoNovo }: Props) {
           </h2>
           {item("/prefixos", "Prefixos próprios")}
           {item("/base", "Bloco base")}
+          {item("/config-completa", "Config completa")}
           {item("/configuracoes", "Configurações")}
         </section>
       </div>

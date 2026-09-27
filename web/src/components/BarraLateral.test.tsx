@@ -55,7 +55,8 @@ describe("a barra lateral", () => {
     for (const titulo of ["Peers", "Grupos", "Política"]) {
       expect(screen.getByRole("heading", { name: titulo })).toBeInTheDocument()
     }
-    for (const rotulo of ["Prefixos próprios", "Bloco base", "Configurações"]) {
+    for (const rotulo of ["Prefixos próprios", "Bloco base", "Config completa",
+                          "Configurações"]) {
       expect(screen.getByRole("link", { name: rotulo })).toBeInTheDocument()
     }
     expect(screen.getByText("AS64512")).toBeInTheDocument()

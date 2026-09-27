@@ -279,3 +279,24 @@ class SessaoResposta(BaseModel):
 
     logado: bool
     usuario: str | None = None
+
+
+class SecaoConfig(BaseModel):
+    """Um pedaco da config inteira, ja renderizado.
+
+    `arquivo` e o nome em out/ que aquele bloco grava, e `salvo` diz se ele
+    esta la. Os dois sao nulos no base, que e montado a cada requisicao pelo
+    render e nunca teve arquivo proprio.
+    """
+
+    chave: str
+    titulo: str
+    texto: str
+    arquivo: str | None = None
+    salvo: bool | None = None
+
+
+class Config(BaseModel):
+    """Toda a config numa resposta so, na ordem em que se cola."""
+
+    secoes: list[SecaoConfig]

@@ -147,21 +147,29 @@ apontá-lo para outro cadastro sem mudar o app. A cópia **não** pode ser um
 da árvore antes de subir. O e2e serve o `web/dist` de verdade, então o
 `npm run build` vem antes — o script `e2e` faz isso.
 
-Os 18 casos são o setup, que loga uma vez antes dos outros, os 9 do
+Os 19 casos são o setup, que loga uma vez antes dos outros, os 10 do
 `fluxos.spec.ts` e os 2 do `login.spec.ts`, que rodam só no chromium, mais os 3
 do `copiar.spec.ts` nos dois navegadores. Um desses três é pulado no webkit, que
-não expõe o `clipboard-read`: por isso a saída conta 17 passando e 1 pulado.
+não expõe o `clipboard-read`: por isso a saída conta 18 passando e 1 pulado.
 
 ## Ordem de colagem no F1A
+
+A tela "Config completa" (`/config-completa`) monta a config inteira nesta
+ordem, para conferir antes de colar e para copiar tudo de uma vez. Ela marca o
+que ainda não está em `out/`, que é a parte que provavelmente não subiu.
 
 1. **O bloco base, uma vez, antes de tudo.** A tela serve em `GET /base.txt`,
    no botão "baixar bloco base". O corpo é montado na hora do download, então o
    que o navegador salva é sempre o que o `plan.py` diz agora: não há arquivo em
    `out/` guardando uma versão antiga, nem aviso de desatualizado para conferir.
    Salve onde quiser e cole antes dos blocos de peer.
-2. **O bloco de cada peer**, na ordem que quiser: `out/<token>-cliente.txt`,
+2. **O bloco de cada grupo**, antes dos membros dele:
+   `out/grupo-<nome>.txt`. O membro sem política própria herda o que o grupo
+   define, e a sessão dele chama o grupo pelo nome: colar o membro antes deixa
+   a referência pendurada.
+3. **O bloco de cada peer**, na ordem que quiser: `out/<token>-cliente.txt`,
    `out/<token>-upstream.txt`, `out/<token>-ix.txt`, `out/<token>-pni.txt`.
-3. **A `CL-PEER-<T>` do quadro "ao criar o peer"**, na primeira vez que aquela
+4. **A `CL-PEER-<T>` do quadro "ao criar o peer"**, na primeira vez que aquela
    sessão subir, e de novo sempre que a lista mudar. Vale para cliente e
    upstream: são os dois tipos que ganham community própria de sessão. O IX não
    precisa (o route server repassa o mesmo path a todos) e o PNI também não, e
@@ -169,7 +177,7 @@ não expõe o `clipboard-read`: por isso a saída conta 17 passando e 1 pulado.
    por linha" do formulário, então re-colar o quadro troca o conteúdo pelo que
    está no cadastro; reaplicar o bloco do peer mexe só nos filtros e não tem
    como zerar o que está lá dentro.
-4. **O bloco dos prefixos do próprio AS**, se houver: `out/blocos.txt`, escrito
+5. **O bloco dos prefixos do próprio AS**, se houver: `out/blocos.txt`, escrito
    no salvar da seção de blocos. Ele traz as estáticas de ancoragem, os
    `ORIGEM-<endereço>_<máscara>` e as linhas `network` de cada família, na
    ordem em que se cola. O bloco de remoção sai na tela, ao lado do de
