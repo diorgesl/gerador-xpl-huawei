@@ -1,7 +1,7 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import "@/estilo/tokens.css"
-import { quandoPerderSessao } from "./api/cliente"
+import { quandoPerderSessao } from "@/api/cliente"
 import { Provedores } from "./provedores"
 import { Roteador } from "./roteador"
 

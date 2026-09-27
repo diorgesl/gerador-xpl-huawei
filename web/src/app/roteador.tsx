@@ -1,5 +1,7 @@
 import { Navigate, createBrowserRouter, RouterProvider } from "react-router-dom"
 import { Casca } from "./casca"
+import { ExigeLogin } from "./ExigeLogin"
+import { LoginTela } from "@/telas/login/LoginTela"
 import { NaoEncontrado } from "@/telas/NaoEncontrado"
 import { Inicio } from "@/telas/Inicio"
 import { PeerTela, TelaDoPeer } from "@/telas/peers/PeerTela"
@@ -17,9 +19,16 @@ import { ConfiguracoesTela } from "@/telas/configuracoes/ConfiguracoesTela"
 // fast refresh, e so o Roteador abaixo usa este objeto. Ele e criado no modulo,
 // e nao dentro do componente, para nao ser recriado a cada render.
 const roteador = createBrowserRouter([
+  // A tela de login fica fora da casca e fora da guarda: ela e o destino de
+  // quem nao entrou, e a guarda a mandaria para si mesma
+  { path: "/login", element: <LoginTela /> },
   {
     path: "/",
-    element: <Casca />,
+    element: (
+      <ExigeLogin>
+        <Casca />
+      </ExigeLogin>
+    ),
     children: [
       // Em producao quem responde / e o uvicorn, com um 307 para /peers. Com o
       // Vite na 5173 esse redirect nao existe, e sem esta rota o modo de
