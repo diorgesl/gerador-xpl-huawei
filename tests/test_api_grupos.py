@@ -1,7 +1,8 @@
 """A API dos grupos."""
 
 from app import peers as peers_mod
-from dados_api import GRUPO_PARCEIROS, GRUPO_UPSTREAM, arvore, membro_de
+from app import plan
+from dados_api import CLIENTE, GRUPO_PARCEIROS, GRUPO_UPSTREAM, arvore, membro_de
 
 
 def test_criar_grupo_grava_o_yaml_e_o_bloco(api, tmp_path):
@@ -160,3 +161,71 @@ def test_a_saida_do_grupo(api, tmp_path):
 
 def test_a_saida_de_grupo_que_nao_existe_e_404(api):
     assert api.get("/api/grupos/3/saida").status_code == 404
+
+
+def test_o_grupo_novo_pula_o_id_do_peer(api, tmp_path):
+    """Peer e grupo dividem o espaco de ids, e o grupo novo desvia do peer.
+
+    O proximo_id puro tem teste (test_proximo_id_desvia_do_peer_e_do_grupo_juntos,
+    em test_peers.py); a rota que o operador usa nao tinha, e era o caso que o
+    test_app.py pegava no formulario em branco do grupo.
+    """
+    assert api.post("/api/peers", json=CLIENTE).status_code == 201
+
+    assert api.get("/api/grupos/novo").json()["id"] == 1
+
+
+def test_criar_grupo_com_id_de_peer_e_recusado(api, tmp_path):
+    """A recusa por id olha as duas listas.
+
+    O id ja usado por outro GRUPO tem teste
+    (test_criar_com_id_de_outro_grupo_e_recusado); o id de um PEER nao tinha, e
+    e o caso em que a mensagem nomeia o outro tipo de registro.
+    """
+    api.post("/api/peers", json=CLIENTE)
+
+    r = api.post("/api/grupos", json=dict(GRUPO_UPSTREAM, id="0", nome="OUTRO"))
+
+    assert r.status_code == 422
+    assert r.json()["erros"]["id"] == "ID 0 ja usado pelo peer Cliente ACME"
+    assert peers_mod.carregar_grupos(tmp_path / "peers.yaml") == []
+
+
+def test_o_default_do_grupo_nao_engole_o_valor_zero(api, tmp_path):
+    """Campo em branco cai na tabela do tipo; zero e zero; id torto nao derruba.
+
+    Os tres sao o mesmo portao do grupo_do_formulario, e o test_app.py provava
+    cada um num teste separado (o lp_base zero, o lp_base em branco e o id que
+    nao e numero). O que separa os dois primeiros e o `is None` do helper: com
+    `or`, o zero viraria o default do tipo em silencio.
+    """
+    assert api.post("/api/grupos", json=dict(GRUPO_PARCEIROS, lp_base="0")).status_code == 201
+    assert api.post("/api/grupos", json=dict(GRUPO_PARCEIROS, nome="SEM_LP",
+                                             lp_base="")).status_code == 201
+    assert api.post("/api/grupos", json=dict(GRUPO_PARCEIROS, nome="ID_TORTO",
+                                             id="abc")).status_code == 201
+
+    grupos = peers_mod.carregar_grupos(tmp_path / "peers.yaml")
+    assert [(g.nome, g.lp_base) for g in grupos] == [
+        ("PARCEIROS_CDN", 0),
+        ("SEM_LP", plan.LP_BASE["parceiro"]),
+        ("ID_TORTO", plan.LP_BASE["parceiro"]),
+    ]
+    # o id torto nao virou um segundo registro no lugar de outro: os tres ids
+    # sao tres e o grupo do id ilegivel entrou como registro novo
+    assert len({g.id for g in grupos}) == 3
+
+
+def test_valor_numerico_torto_no_grupo_e_erro_no_campo(api, tmp_path):
+    """O lp_base que nao e numero nao vira default em silencio.
+
+    A mensagem e a mesma do peer, e do lado do peer ela tem teste
+    (test_api_peers.py::test_erro_de_campo_volta_422_e_nao_grava); do lado do
+    grupo nao tinha depois que o test_app.py sair, apesar de serem listas de
+    campos diferentes (CAMPOS_INT e CAMPOS_INT_GRUPO).
+    """
+    r = api.post("/api/grupos", json=dict(GRUPO_PARCEIROS, lp_base="trezentos"))
+
+    assert r.status_code == 422
+    assert r.json()["erros"]["lp_base"] == "valor numerico invalido"
+    assert peers_mod.carregar_grupos(tmp_path / "peers.yaml") == []

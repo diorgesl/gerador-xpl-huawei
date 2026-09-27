@@ -2,7 +2,7 @@
 
 from app import peers as peers_mod
 from app.api import modelo_do_peer
-from dados_api import CLIENTE, UPSTREAM, IX, arvore
+from dados_api import CLIENTE, UPSTREAM, IX, GRUPO_PARCEIROS, arvore, membro_de
 from test_render import peer_cliente, peer_ix
 
 
@@ -238,3 +238,126 @@ def test_a_saida_de_membro_de_grupo_que_saiu_e_recusada(api, tmp_path):
 
 def test_a_saida_de_id_que_nao_existe_e_404(api):
     assert api.get("/api/peers/3/saida").status_code == 404
+
+
+def test_trocar_o_tipo_apaga_o_bloco_do_tipo_antigo(api, tmp_path):
+    """O arquivo de out/ muda de nome quando o tipo muda.
+
+    O nome e <token>-<tipo>.txt, entao trocar o tipo deixa o bloco velho orfao
+    justamente no diretorio de onde o operador cola. O irmao deste caso
+    (test_trocar_o_asn_apaga_o_bloco_antigo) cobre a outra metade, o token.
+    """
+    assert api.post("/api/peers", json=CLIENTE).status_code == 201
+    assert (tmp_path / "out" / "268127-cliente.txt").exists()
+
+    r = api.put("/api/peers/0", json=dict(CLIENTE, tipo="upstream",
+                                          aprendizado="3100", prefixos_v4=[]))
+
+    assert r.status_code == 200, r.text
+    assert not (tmp_path / "out" / "268127-cliente.txt").exists()
+    assert (tmp_path / "out" / "268127-upstream.txt").exists()
+
+
+def test_o_id_escolhido_no_corpo_e_o_do_registro(api, tmp_path):
+    """O id do peer novo vem do formulario quando o operador o preenche.
+
+    O id e a identidade do registro - e o que a URL da SPA usa -, e o campo
+    sempre existiu. O id implicito tem teste (test_criar_grava_o_yaml_e_o_bloco)
+    e o id que move um registro no PUT tambem
+    (test_trocar_o_id_no_corpo_move_o_registro_da_url); o id no POST nao.
+    """
+    r = api.post("/api/peers", json=dict(CLIENTE, id="7"))
+
+    assert r.status_code == 201, r.text
+    assert r.json()["registro"]["id"] == 7
+    assert [p.id for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [7]
+
+
+def test_tipo_desconhecido_no_corpo_e_erro_no_campo(api, tmp_path):
+    """O tipo do corpo e conferido, e nao cai em cliente em silencio.
+
+    O GET /api/peers/novo?tipo=xyz cai em cliente (test_tipo_desconhecido_vira_cliente),
+    e isso e outra coisa: o formulario em branco nascer com o tipo de sempre.
+    Num POST, um tipo que nao existe e recusa.
+    """
+    r = api.post("/api/peers", json=dict(CLIENTE, tipo="xyz"))
+
+    assert r.status_code == 422
+    assert r.json()["erros"]["tipo"] == "tipo desconhecido: xyz"
+    assert peers_mod.carregar(tmp_path / "peers.yaml") == []
+
+    # e o tipo vazio nao e tipo desconhecido: campo em branco cai no cliente,
+    # como os outros campos do formulario caem no default da tabela
+    assert api.post("/api/peers", json=dict(CLIENTE, tipo="")).status_code == 201
+    assert [p.tipo for p in peers_mod.carregar(tmp_path / "peers.yaml")] == ["cliente"]
+
+
+def test_peer_com_grupo_de_outro_tipo_e_recusado_no_campo(api, tmp_path):
+    """O membro tem que ser do tipo do grupo.
+
+    A regra e do validate (test_peer_com_tipo_diferente_do_grupo_e_erro, em
+    test_validate.py, olha o campo); o que faltava era a mensagem inteira
+    chegando pelo campo certo na rota que o operador usa.
+    """
+    grupo = api.post("/api/grupos", json=GRUPO_PARCEIROS).json()["registro"]
+
+    r = api.post("/api/peers", json=dict(UPSTREAM, grupo_id=str(grupo["id"]),
+                                         nome="MEMBRO", asn="14841"))
+
+    assert r.status_code == 422
+    assert r.json()["erros"]["grupo_id"] == (
+        "grupo PARCEIROS_CDN e de parceiro, nao de upstream")
+    assert peers_mod.carregar(tmp_path / "peers.yaml") == []
+
+
+def test_membro_sem_filtro_proprio_nao_usa_o_lp_gravado(api, tmp_path):
+    """O lp_base que ficou no cadastro do membro nao entra na saida dele.
+
+    O membro sem filtro proprio herda a politica do grupo, e o render ja tem
+    teste disso (test_membro_sem_override_so_referencia_o_grupo, em
+    test_render.py). O que nao tinha par era o caso do valor GRAVADO e
+    ignorado: o membro herda do grupo mesmo com 999 no proprio cadastro.
+    """
+    grupo = api.post("/api/grupos", json=GRUPO_PARCEIROS).json()["registro"]
+    corpo = membro_de(grupo["id"])
+    corpo.update(nome="Membro sem filtro", apelido="MEMBRO", asn="64510",
+                 lp_base="999", sessao_v4_local="198.51.100.30",
+                 sessao_v4_remoto="198.51.100.31")
+    membro = api.post("/api/peers", json=corpo).json()["registro"]
+
+    bloco = api.get("/api/peers/%d/saida" % membro["id"]).json()["bloco"]
+
+    assert [p.lp_base for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [999]
+    assert "999" not in bloco
+    assert "apply local-preference" not in bloco
+    assert "group PARCEIROS_CDN" in bloco
+
+
+def test_origem_fora_da_tabela_do_tipo_grava(api, tmp_path):
+    """O upstream aceita uma origem que nao esta na tabela dele.
+
+    Isto e buraco conhecido, e nao regra: o validate confere a faixa de origem
+    dos tipos downstream (ORIGENS_CLIENTE) e cobra o ORIGENS_POR_TIPO do grupo,
+    nunca do peer. O bloco de um upstream com origem 14 sai carimbando
+    64512:14. O teste existe para o buraco ficar visivel no dia em que alguem
+    for fecha-lo - e o comentario do test_app.py que o registrava sai no corte.
+    """
+    r = api.post("/api/peers", json=dict(UPSTREAM, origem="14"))
+
+    assert r.status_code == 201, r.text
+    assert [p.origem for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [14]
+
+
+def test_origem_em_branco_cai_no_default_da_classe_e_do_tipo(api, tmp_path):
+    """A origem apagada no formulario nao zera o campo: ela cai na tabela.
+
+    No cliente e no parceiro quem manda e a classe (cgnat e 1130); no upstream,
+    que nao tem classe, e a origem do tipo (1400). O formulario em branco mostra
+    esse valor e tem teste (test_o_peer_novo_traz_os_defaults_do_tipo); o POST
+    com o campo apagado nao tinha, e era o caminho em que a origem em branco
+    estourava o "%d" do render com o peer ja gravado.
+    """
+    assert api.post("/api/peers", json=dict(CLIENTE, origem="", classe="cgnat")).status_code == 201
+    assert api.post("/api/peers", json=dict(UPSTREAM, origem="")).status_code == 201
+
+    assert [p.origem for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [1130, 1400]

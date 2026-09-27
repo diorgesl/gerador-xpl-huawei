@@ -134,6 +134,25 @@ describe("a tela dos prefixos proprios", () => {
     expect(screen.getByText(/PL-ORIGEM-V4/)).toBeInTheDocument()
   })
 
+  it("o texto digitado fica onde esta quando a consulta ao IRR falha", async () => {
+    // O par do test_bgpq4_fora_do_ar_nao_perde_a_lista_do_operador do
+    // test_app.py. A API de hoje devolve so o erro, sem a lista de volta, entao
+    // a prova de que o operador nao perde o que escreveu e o editor manter o
+    // valor depois da recusa
+    mockFetch({
+      ...BASE,
+      "POST /api/blocos/irr": { status: 502, corpo: { erros: { bgpq4: "bgpq4 nao esta no PATH" }, avisos: [] } },
+    })
+    montarRota(rotas, "/prefixos")
+    const v4 = await screen.findByLabelText(/IPv4/)
+    fireEvent.change(v4, { target: { value: "203.0.113.0/24  64512:211" } })
+
+    await userEvent.click(screen.getByRole("button", { name: /consultar IRR/i }))
+
+    expect(await screen.findByText("bgpq4 nao esta no PATH")).toBeInTheDocument()
+    expect(screen.getByLabelText(/IPv4/)).toHaveValue("203.0.113.0/24  64512:211")
+  })
+
   it("o erro do prefixo torto aparece no editor da familia dele", async () => {
     mockFetch({ ...BASE, "PUT /api/blocos": { status: 422, corpo: { erros: { blocos_v6: "prefixo invalido: 2001:db8::/129" }, avisos: [] } } })
     montarRota(rotas, "/prefixos")

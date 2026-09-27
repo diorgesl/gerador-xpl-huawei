@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app import app as mod
 from app import formulario, plan
 from app import peers as peers_mod
+from dados_api import CLIENTE
 from test_render import peer_cliente, peer_upstream
 
 
@@ -124,3 +125,84 @@ def test_irr_com_bgpq4_sem_permissao_volta_502(api, tmp_path, monkeypatch):
     r = api.post("/api/irr", json={"asn": "268127"})
     assert r.status_code == 502
     assert "bgpq4" in r.json()["erros"]
+
+
+def test_o_as_gravado_chega_no_bloco_do_peer(api, tmp_path):
+    """O AS do topo do yaml entra na config gerada, e nao so na resposta.
+
+    test_gravar_o_as_da_rede ve a gravacao; quem via a ponta - o bloco saindo
+    com o AS novo e as communities no namespace novo - era o test_app.py. O
+    render tem os testes dele com um Rede montado a mao
+    (test_o_bloco_do_peer_segue_o_asn_declarado); o que faltava era o caminho
+    HTTP inteiro.
+    """
+    assert api.put("/api/rede", json={"asn": "64500", "politica": ""}).status_code == 200
+
+    r = api.post("/api/peers", json=CLIENTE)
+
+    assert r.status_code == 201, r.text
+    bloco = (tmp_path / "out" / r.json()["arquivo"]).read_text(encoding="ascii")
+    assert "bgp 64500" in bloco
+    assert "64500:1110" in bloco
+    assert "64512" not in bloco
+
+
+def test_o_as_de_32_bits_com_namespace_chega_no_bloco(api, tmp_path):
+    """As duas chaves: o ASN no bgp e no as-path, o namespace nas communities."""
+    assert api.put("/api/rede", json={"asn": "264130", "politica": "64500"}).status_code == 200
+    corpo = dict(CLIENTE, asn="264130", nome="Cliente 32", apelido="C32",
+                 prefixos_v4=["198.51.100.0/24"],
+                 sessao_v4_remoto="198.51.100.9")
+
+    r = api.post("/api/peers", json=corpo)
+
+    assert r.status_code == 201, r.text
+    bloco = (tmp_path / "out" / r.json()["arquivo"]).read_text(encoding="ascii")
+    assert "bgp 264130" in bloco
+    assert "apply as-path 264130" in bloco
+    assert "64500:1110" in bloco
+    assert "264130:1110" not in bloco
+
+
+def test_o_namespace_em_branco_apaga_a_chave(api, tmp_path):
+    """Voltar para um AS de 16 bits limpa o asn_politica do yaml.
+
+    A funcao tem teste (test_gravar_asn_limpa_o_namespace_que_a_tela_nao_mandou,
+    em test_peers.py); a rota nao tinha.
+    """
+    arquivo = tmp_path / "peers.yaml"
+    api.put("/api/rede", json={"asn": "264130", "politica": "64500"})
+    assert "asn_politica" in arquivo.read_text(encoding="utf-8")
+
+    r = api.put("/api/rede", json={"asn": "64500", "politica": ""})
+
+    assert r.status_code == 200, r.text
+    assert "asn_politica" not in arquivo.read_text(encoding="utf-8")
+
+
+def test_o_as_fora_da_faixa_do_asn_e_erro_de_campo(api, tmp_path):
+    """AS_TRANS e o que passa do teto de 32 bits caem no campo asn_rede.
+
+    O ASN que nao e digito tem teste (test_asn_torto_e_recusado_no_campo); as
+    duas faixas de valor, nao.
+    """
+    r = api.put("/api/rede", json={"asn": "23456", "politica": ""})
+    assert r.status_code == 422
+    assert r.json()["erros"]["asn_rede"] == "ASN reservado pela IANA: 23456"
+
+    r = api.put("/api/rede", json={"asn": "99999999999", "politica": ""})
+    assert r.status_code == 422
+    assert r.json()["erros"]["asn_rede"] == "ASN de 1 a 4294967294: 99999999999"
+
+    # a recusa e antes da escrita: o arquivo fica com o AS de fabrica
+    assert peers_mod.carregar_asn(tmp_path / "peers.yaml").asn == plan.ASN_PADRAO
+
+
+def test_o_as_em_branco_e_erro_de_campo(api, tmp_path):
+    """Sem o AS nao ha o que gravar, e o namespace sozinho nao salva o campo."""
+    for corpo in ({"asn": "", "politica": ""}, {"asn": "", "politica": "64500"}):
+        r = api.put("/api/rede", json=corpo)
+        assert r.status_code == 422, corpo
+        assert r.json()["erros"]["asn_rede"] == "informe o AS da rede"
+
+    assert not (tmp_path / "peers.yaml").exists()
