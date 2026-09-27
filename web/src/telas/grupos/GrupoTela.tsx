@@ -217,7 +217,11 @@ export function GrupoTela() {
   // quando ha bloco, pelas mesmas razoes que valem na tela do peer
   const blocoAberto = abas[0]?.conteudo ?? null
   usePublicarAcoes({
-    aoSalvar: () => void gravar(),
+    // O Ctrl+S nao pode gravar numa tela que ainda nao tem o registro: enquanto
+    // o plano ou o registro nao chegaram, o formulario esta em branco e o PUT
+    // sairia com ele, sem que a recusa apareca na tela. E a mesma guarda do
+    // formulario, e sem ela o atalho vale tambem na tela de falha de rede
+    aoSalvar: plano.data && inicial.data ? () => void gravar() : undefined,
     aoDuplicar: ident === null ? undefined : () => navegar(`/grupos/novo?de=${ident}`),
     aoCopiarBloco: blocoAberto ? () => void copiarComAviso(blocoAberto, blocoRef.current) : undefined,
   })

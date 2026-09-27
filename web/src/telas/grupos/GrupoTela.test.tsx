@@ -218,6 +218,19 @@ describe("a tela do grupo", () => {
     expect(await screen.findByText(/cópia de OPERADORA/)).toBeInTheDocument()
   })
 
+  it("o duplicar do cabecalho pergunta com o formulario sujo", async () => {
+    // o mesmo comando da paleta, e o operador tem que poder dizer nao nos dois:
+    // o arquivo pinava so o da paleta, que foi feito para perguntar como este
+    mockFetch({
+      ...BASE,
+      "GET /api/grupos/2/copia": { corpo: { id: 8, nome: "OPERADORA", formulario: { ...GRUPO, id: "8" }, membros: [] } },
+    })
+    montarRota(rotas, "/grupos/2")
+    await userEvent.type(await screen.findByLabelText("Nome"), " NOVA")
+    await userEvent.click(screen.getByRole("button", { name: /duplicar/i }))
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
   it("o duplicar da paleta pergunta como o do cabecalho", async () => {
     // o mesmo comando nao pode perguntar num lugar e nao no outro: a copia vem
     // do registro SALVO, entao a alteracao nao salva se perde de qualquer jeito,
@@ -265,6 +278,31 @@ describe("a tela do grupo", () => {
     await waitFor(() =>
       expect(peticoes().some((p) => p.metodo === "PUT" && p.caminho === "/api/grupos/2")).toBe(true),
     )
+  })
+
+  it("o Ctrl+S nao salva antes de o registro chegar", async () => {
+    // Na tela de falha o formulario nem esta montado, e o `aoSalvar` publicado
+    // assim mesmo mandava um PUT com o formulario em branco: a API recusa um
+    // nome vazio, e a recusa nao aparece aqui, porque so o formulario a mostra
+    mockFetch({
+      ...BASE,
+      "GET /api/plano": { status: 500, corpo: {} },
+      "PUT /api/grupos/2": {
+        corpo: {
+          registro: { id: 2, nome: "OPERADORA", formulario: GRUPO, membros: [] },
+          arquivo: "grupo-OPERADORA.txt", avisos: [],
+        },
+      },
+    })
+    montarRota(CASCA, "/grupos/2")
+    // a tela de falha so aparece depois do retry automatico da consulta do
+    // plano, que o QueryClient do arnes deixa em um: a espera e maior que o
+    // tempo dele, senao o caso mede o relogio e nao o estado
+    await screen.findByText("não deu para falar com a API", {}, { timeout: 3000 })
+    await userEvent.keyboard("{Control>}s{/Control}")
+    // o PUT e o unico caminho de escrita do salvar, e ele nao pode sair sem o
+    // plano e o registro na mao
+    expect(peticoes().some((p) => p.metodo === "PUT")).toBe(false)
   })
 
   it("nao tem aba de remocao: o grupo nao gera bloco de remocao", async () => {
