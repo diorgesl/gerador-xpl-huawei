@@ -4,10 +4,12 @@ Tela unica: a lista de peers a esquerda, o formulario a direita, e a
 saida abaixo depois de salvar. Sem banco: o estado e o peers.yaml.
 """
 
+import os
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
+                               RedirectResponse)
 from fastapi.templating import Jinja2Templates
 
 from app import api, plan, prefixes, render, validate
@@ -270,6 +272,57 @@ def criar_lista(request: Request, token: str):
 @app.get("/base.txt", response_class=HTMLResponse)
 def baixar_base():
     return HTMLResponse(render.render_base(rede=rede()), media_type="text/plain")
+
+
+# --- o build do front (SPA) -------------------------------------------
+#
+# Em producao ha um processo so: o uvicorn serve a API em /api, os arquivos do
+# build em /assets e o index.html da SPA nas rotas dela. O diretorio do build
+# vem de BGPGEN_WEB, e o padrao e web/dist na raiz do projeto.
+#
+# O caminho e lido a cada requisicao, e nao no import: os testes o trocam, como
+# fazem com o PEERS_YAML.
+
+SEM_BUILD = ("front nao compilado: rode `npm run build` em `web/` "
+             "ou use o Vite na 5173")
+
+
+def _dir_web():
+    return Path(os.environ.get("BGPGEN_WEB", str(RAIZ / "web" / "dist")))
+
+
+def pagina_spa():
+    """O index.html do build, ou o 503 que explica como compila-lo."""
+    index = _dir_web() / "index.html"
+    if not index.is_file():
+        return PlainTextResponse(SEM_BUILD, status_code=503)
+    return FileResponse(index)
+
+
+@app.get("/assets/{caminho:path}", include_in_schema=False)
+def assets_do_build(caminho: str):
+    raiz = _dir_web() / "assets"
+    # o caminho resolvido tem que continuar dentro do diretorio: sem isto um
+    # /assets/../../peers.yaml levaria o cadastro embora
+    alvo = (raiz / caminho).resolve()
+    if not alvo.is_file() or raiz.resolve() not in alvo.parents:
+        raise HTTPException(status_code=404)
+    return FileResponse(alvo)
+
+
+# As rotas da SPA. Os nomes estao no plural de proposito: nenhum deles colide
+# com as rotas HTML, que sao /peer/... e /grupo/... no singular.
+#
+# Fora do openapi(): elas devolvem o index.html, nao JSON, e nao acrescentam
+# nada ao contrato que o front consome. Como o web/src/api/schema.d.ts e
+# gerado do app.openapi(), deixa-las dentro mexeria no schema por uma rota que
+# nao e da API - o test_tipos_api.py pega isso na hora.
+for _rota in ("/peers", "/grupos", "/prefixos", "/base", "/configuracoes"):
+    app.add_api_route(_rota, pagina_spa, methods=["GET"],
+                      include_in_schema=False)
+for _rota in ("/peers", "/grupos"):
+    app.add_api_route(_rota + "/{caminho:path}", pagina_spa, methods=["GET"],
+                      include_in_schema=False)
 
 
 @app.post("/asn", response_class=HTMLResponse)
