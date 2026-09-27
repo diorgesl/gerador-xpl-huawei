@@ -249,14 +249,15 @@ describe("a tela do grupo", () => {
   it("a recusa por id rebusca o proximo livre e mantem o formulario", async () => {
     // o formulario do grupo nao tem campo id, entao essa recusa era beco sem
     // saida: a unica saida era recarregar /grupos/novo e perder o digitado
-    mockFetch({
+    const mapa: Record<string, Resposta> = {
       ...BASE,
       "POST /api/grupos": { status: 422, corpo: { erros: { id: "ID ja usado pelo grupo PARCEIROS" }, avisos: [] } },
       // o formulario em branco que a tela abre, com o nome vazio como no outro
       // caso de /grupos/novo: com o nome do GRUPO aqui o campo comeca preenchido
       // e o digitado viraria "OPERADORAOPERADORA"
-      "GET /api/grupos/novo": { corpo: { id: 9, nome: "", formulario: { ...GRUPO, id: "9", nome: "" }, membros: [] } },
-    })
+      "GET /api/grupos/novo": { corpo: { id: 8, nome: "", formulario: { ...GRUPO, id: "8", nome: "" }, membros: [] } },
+    }
+    mockFetch(mapa)
     montarRota(rotas, "/grupos/novo")
     await screen.findByLabelText("Nome")
     await userEvent.type(screen.getByLabelText("Nome"), "OPERADORA")
@@ -266,6 +267,10 @@ describe("a tela do grupo", () => {
     // duas em vez de medir o que o caso diz medir
     await screen.findByText(/UP-OPERADORA-EXPORT-V4/)
     const antes = peticoes().filter((p) => p.metodo === "GET" && p.caminho === "/api/grupos/novo").length
+    // o id da montagem esta tomado, e quem a rebusca devolve e outro. Os ids
+    // DIFERENTES sao o que da o que medir: com o mesmo id nas duas chamadas o
+    // caso passaria com o setValue removido, que e a linha que ele protege
+    mapa["GET /api/grupos/novo"].corpo = { id: 9, nome: "", formulario: { ...GRUPO, id: "9", nome: "" }, membros: [] }
 
     await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
 
@@ -278,6 +283,14 @@ describe("a tela do grupo", () => {
     // o `some` acima ja e verdade pelo GET da MONTAGEM, entao quem mede a
     // rebusca do id livre e a contagem: um GET a mais depois da recusa
     expect(peticoes().filter((p) => p.metodo === "GET" && p.caminho === "/api/grupos/novo")).toHaveLength(antes + 1)
+    // e o id que a rebusca trouxe entra no formulario: a previa seguinte sai com
+    // os valores de la, e o corpo dela e o unico lugar da tela onde o `id`
+    // aparece, porque nenhum campo do grupo desenha esse nome
+    await waitFor(() =>
+      expect(
+        peticoes().some((p) => p.caminho === "/api/grupos/previa" && (p.corpo as { id?: string } | null)?.id === "9"),
+      ).toBe(true),
+    )
   })
 
   it("a rede fora na gravacao avisa com tentar de novo, e o formulario nao perde nada", async () => {
