@@ -1072,7 +1072,8 @@ Em `web/playwright.config.ts`, o comando do `webServer` passa a citar cada camin
 >
 > O que a config entrega depois da emenda, medido: escrever `document.title`,
 > `window.location` ou um campo do `navigator` fora do `clipboard` num arquivo
-> do `e2e/` e erro de tipo (`TS2584`/`TS2304`); o `localStorage` continua
+> do `e2e/` e erro de tipo (`TS2584` no `document`, `TS2304` no `window` e
+> `TS2339` no campo do `navigator`); o `localStorage` continua
 > passando, e nao pela DOM - o `@types/node` 24 declara
 > `web-globals/storage.d.ts` com `var localStorage: Storage`, porque o Node tem
 > esse global. Ou seja: a garantia e "ES2022 mais os globais de Node", e nao
