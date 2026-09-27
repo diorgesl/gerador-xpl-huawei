@@ -226,7 +226,7 @@ function CampoRender({ campo, ctx, bruto, erro, avisos, nota, aoMudar, aoTrocarT
               else if (id === "classe") aoTrocarClasse(valor)
             }}
           >
-            <SelectTrigger id={id}>
+            <SelectTrigger id={id} className="w-full min-w-0">
               {/* Medido: o Value do Base UI mostra o VALOR cru quando nao
                   recebe funcao, entao a tabela de campos gastaria o rotulo
                   ("1100 - cliente de transito") para o operador ler "1100".

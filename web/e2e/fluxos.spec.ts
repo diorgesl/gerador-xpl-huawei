@@ -161,3 +161,23 @@ test("a raiz cai na lista", async ({ page }) => {
   await expect(page).toHaveURL(/\/peers$/)
   await expect(page.getByText(/escolha um peer ou crie um/)).toBeVisible()
 })
+
+test("um valor longo nao invade a coluna vizinha", async ({ page }) => {
+  // No xl o painel de saida toma 42rem, entao cada uma das tres colunas do
+  // formulario fica com ~110px. O select do shadcn nasce `w-fit`: com um valor
+  // longo ele estourava a celula do grid e pintava por cima do campo ao lado.
+  // A medida e a unica prova possivel aqui: jsdom nao calcula layout
+  await page.goto("/peers/1")
+  const origem = page.getByLabel("Origem da rota")
+  await expect(origem).toBeVisible()
+
+  // A celula do grid e a fronteira da coluna, e e ela que a invasao atravessa:
+  // a origem fecha a terceira coluna da linha, e o que ficava por cima era o
+  // painel de saida. O POP nao serve de fronteira: ele abre a linha de baixo
+  // (celula em y=603,5 contra y=516,5 da origem) e comeca a esquerda dela.
+  // Medido antes do conserto: o gatilho terminava em 733,61 e a celula em 570,98
+  const celula = await page.locator('[data-campo="origem"]').boundingBox()
+  const a = await origem.boundingBox()
+  expect(a && celula).toBeTruthy()
+  expect(a!.x + a!.width).toBeLessThanOrEqual(celula!.x + celula!.width + 1)
+})

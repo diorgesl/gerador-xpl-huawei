@@ -20,7 +20,7 @@ export function Campo({ nome, rotulo, ajuda, erro, avisos, nota, largo, children
   return (
     <div
       data-campo={nome}
-      className={cn("flex flex-col gap-1", largo && "sm:col-span-2")}
+      className={cn("flex min-w-0 flex-col gap-1", largo && "sm:col-span-2")}
     >
       <Label htmlFor={nome} className="text-[13px]">
         {rotulo}
