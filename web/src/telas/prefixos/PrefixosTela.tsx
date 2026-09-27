@@ -1,17 +1,28 @@
 import { useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { AvisoNaoSalvo } from "@/components/AvisoNaoSalvo"
+import { Falha } from "@/components/Falha"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { PainelSaida, type AbaSaida } from "@/components/PainelSaida"
 import { cliente } from "@/api/cliente"
-import { chaves, lerRecusa } from "@/api/consultas"
+import { chaves, lerRecusa, useBlocos } from "@/api/consultas"
 import { copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
 
 /** O texto dos dois editores, no formato que a API recebe e devolve. */
 type Texto = { v4: string; v6: string }
+
+/** O arquivo da originacao, o mesmo que o salvar escreve em out/. */
+const ARQUIVO = "blocos.txt"
+
+/** O nome proprio do bloco de remocao: o de origem ja e o `blocos.txt`. */
+const ARQUIVO_REMOVER = "remover-blocos.txt"
+
+/** Os erros que cabem nas duas caixas. O resto e recado, e nao erro de campo. */
+const CAMPOS = ["blocos_v4", "blocos_v6"] as const
 
 export function PrefixosTela() {
   const consultas = useQueryClient()
@@ -23,20 +34,25 @@ export function PrefixosTela() {
   // registro manda ate a primeira tecla (ou a consulta ao IRR), e depois o
   // que esta na tela manda
   const [rascunho, setRascunho] = useState<Texto | null>(null)
-  const [errosDoSalvar, setErrosDoSalvar] = useState<Record<string, string>>({})
+  // O que uma recusa escreveu na tela (a do salvar ou a da consulta ao IRR) e
+  // ate quando ela vale. As duas dividem o mesmo estado porque uma previa nova
+  // derruba as duas de uma vez, e porque o recado do IRR sai do mesmo mapa de
+  // erros que a recusa do salvar. O `irr` e o que nao pertence a nenhum campo
+  const [recusa, setRecusa] = useState<{ em: number; erros: Record<string, string>; irr: string | null } | null>(null)
   const blocoRef = useRef<HTMLDivElement>(null)
 
-  const blocos = useQuery({
-    queryKey: chaves.blocos,
-    queryFn: async () => {
-      const { data, error } = await cliente.GET("/api/blocos")
-      if (error) throw new Error("falha ao ler os blocos")
-      return data
-    },
-  })
+  const blocos = useBlocos()
 
   const texto: Texto = rascunho ?? { v4: blocos.data?.texto.v4 ?? "", v6: blocos.data?.texto.v6 ?? "" }
   const { v4, v6 } = texto
+
+  // O sujo e o rascunho contra o que o servidor tem, e nao um `false` fixo: e
+  // ele que faz o cabecalho contar as linhas em vez de culpar o arquivo em
+  // out/, e e ele que arma o aviso de saida. Antes de o registro chegar nao ha
+  // com o que comparar, e ai qualquer rascunho e texto que so existe na tela
+  const sujo = rascunho !== null && (
+    blocos.data === undefined || rascunho.v4 !== blocos.data.texto.v4 || rascunho.v6 !== blocos.data.texto.v6
+  )
 
   const previa = useQuery({
     queryKey: ["previa-blocos", v4, v6],
@@ -54,12 +70,21 @@ export function PrefixosTela() {
     mutationFn: () => cliente.PUT("/api/blocos", { body: { v4, v6 } }),
     onSuccess: (r) => {
       if (r.error) {
-        setErrosDoSalvar(lerRecusa(r.error).erros)
+        // Sem o refetch da previa daqui: ele subiria o `dataUpdatedAt` dela e a
+        // marca da recusa chegaria vencida, apagando no mesmo instante a lista
+        // que ela acabou de escrever. Os erros do salvar ficam ate a proxima
+        // previa responder, que e quando a lista de la substitui a de ca
+        setRecusa({ em: Date.now(), erros: lerRecusa(r.error).erros, irr: null })
         return
       }
-      setErrosDoSalvar({})
+      setRecusa(null)
       toast("blocos gravados em out/blocos.txt")
       void consultas.invalidateQueries({ queryKey: chaves.blocos })
+      // A previa tem chave propria, com o texto: invalidar o registro nao a
+      // toca, e o `salvo` dela continuaria sendo o arquivo de ANTES do salvar.
+      // Sem esta linha o cabecalho diz que o out/ esta atrasado no segundo
+      // seguinte ao toast que disse que ele acabou de ser escrito
+      void consultas.invalidateQueries({ queryKey: ["previa-blocos"] })
     },
   })
 
@@ -67,33 +92,62 @@ export function PrefixosTela() {
     mutationFn: (forcar: boolean) => cliente.POST("/api/blocos/irr", { body: { v4, v6, forcar } }),
     onSuccess: (r) => {
       if (r.error) {
-        setErrosDoSalvar(lerRecusa(r.error).erros)
+        const lida = lerRecusa(r.error)
+        setRecusa({
+          em: Date.now(),
+          erros: lida.erros,
+          // a mensagem do bgpq4 nao e de um campo: ela sai ao lado dos botoes,
+          // e nao no editor nem no painel
+          irr: lida.erros.bgpq4 ?? lida.erros._corpo ?? lida.erros._ ?? "a consulta ao IRR falhou",
+        })
         return
       }
-      setErrosDoSalvar({})
+      // so o recado do IRR sai: os erros que o salvar deixou na tela ficam com
+      // a validade que ja tinham
+      setRecusa((atual) => (atual ? { ...atual, irr: null } : null))
       if (r.data) setRascunho({ v4: r.data.v4, v6: r.data.v6 })
       toast("prefixos do IRR no formulário; nada foi gravado")
     },
   })
 
+  // A recusa vale ate a proxima previa responder, que traz a lista de erros
+  // dela. A validade sai no render, e nao de um efeito que zera o estado: o
+  // `set-state-in-effect` do lint e erro nesta config, a mesma razao que levou
+  // o rascunho para o render. O `em` e lido no proprio evento, e nao do
+  // fechamento do handler: a previa refaz o pedido quando a janela volta ao
+  // foco, e a marca do fechamento chegaria velha depois disso
+  const recusaVale = recusa !== null && previa.dataUpdatedAt <= recusa.em ? recusa : null
   // A previa tambem traz erros: com o prefixo torto ela responde 200 com o mapa
   // de erros e o bloco nulo. Sem olhar para eles, a tela nao mostraria a
   // mensagem e o painel cairia no bloco salvo, que nao e a previa do que esta
-  // escrito. O erro do salvar tem precedencia porque e o mais recente
-  const erros = Object.keys(errosDoSalvar).length > 0 ? errosDoSalvar : previa.data?.erros ?? {}
-  const comErro = Object.keys(erros).length > 0
+  // escrito. Os do salvar vem antes porque sao os mais recentes
+  const erros = recusaVale && Object.keys(recusaVale.erros).length > 0 ? recusaVale.erros : previa.data?.erros ?? {}
+  // So os dois campos contam como erro do bloco: o bgpq4 fora do ar e o corpo
+  // fora do modelo nao dizem nada sobre o que esta escrito nas caixas, e contar
+  // o mapa inteiro apagaria o painel por causa de uma consulta que falhou
+  const comErro = CAMPOS.some((campo) => Boolean(erros[campo]))
+  const foraDosCampos = Object.entries(erros)
+    .filter(([campo]) => !(CAMPOS as readonly string[]).includes(campo))
+    .map(([, mensagem]) => mensagem)
+  const erroIrr = recusaVale?.irr ?? (foraDosCampos.length > 0 ? foraDosCampos.join("; ") : null)
 
   const abas: AbaSaida[] = [
     {
       id: "originacao", rotulo: "originação",
-      conteudo: comErro ? null : previa.data?.bloco ?? blocos.data?.originacao ?? null,
-      arquivo: "blocos.txt", salvo: previa.data?.salvo ?? null,
+      // a previa que nao veio nao e o bloco salvo: sem o `isError` daqui o
+      // painel mostraria o texto de antes como se fosse a previa de agora, com
+      // o botao de copiar vivo, e o operador levaria para o equipamento um
+      // bloco que nao e o do que esta escrito
+      conteudo: comErro || previa.isError ? null : previa.data?.bloco ?? blocos.data?.originacao ?? null,
+      arquivo: ARQUIVO, salvo: previa.data?.salvo ?? null,
     },
   ]
   if (blocos.data?.remover) {
     abas.push({
       id: "remover", rotulo: "remoção", conteudo: blocos.data.remover,
-      arquivo: "blocos.txt", salvo: blocos.data.remover, soLeitura: true,
+      // o nome proprio da remocao: com o `blocos.txt` das duas, o arquivo de
+      // undo cairia em cima do de origem na pasta de downloads
+      arquivo: ARQUIVO_REMOVER, salvo: blocos.data.remover, soLeitura: true,
     })
   }
 
@@ -111,8 +165,22 @@ export function PrefixosTela() {
     aoCopiarBloco: blocoAberto ? () => void copiarComAviso(blocoAberto, blocoRef.current) : undefined,
   })
 
+  // Uma falha de rede nao pode passar: sem o registro a tela fica com os dois
+  // editores vazios, o painel dizendo que esta gerando uma previa que nao vem,
+  // e os botoes do IRR levariam a um rascunho que o salvar nao aceita
+  if (blocos.isError) {
+    return (
+      <Falha
+        mensagem="não deu para falar com a API"
+        aoTentar={() => void blocos.refetch()}
+      />
+    )
+  }
+
   return (
     <div className="flex min-h-0 flex-col gap-3 p-3">
+      <AvisoNaoSalvo sujo={sujo} />
+
       <h1 className="text-base font-semibold">Prefixos próprios do AS</h1>
 
       <p className="max-w-3xl text-xs text-muted-foreground">
@@ -141,22 +209,38 @@ export function PrefixosTela() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={() => salvar.mutate()} disabled={salvar.isPending || !blocos.data}>salvar</Button>
-        <Button size="sm" variant="ghost" onClick={() => consultar.mutate(false)} disabled={consultar.isPending}>
+        {/* Sem o registro na mao a consulta enche as caixas com um texto que o
+            salvar nao aceita, porque e ele que a guarda do salvar espera */}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => consultar.mutate(false)}
+          disabled={consultar.isPending || !blocos.data}
+        >
           consultar IRR
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => consultar.mutate(true)} disabled={consultar.isPending}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => consultar.mutate(true)}
+          disabled={consultar.isPending || !blocos.data}
+        >
           reconsultar
         </Button>
+        {consultar.isPending && (
+          <span className="text-xs text-muted-foreground">consultando o IRR...</span>
+        )}
+        {erroIrr && <p role="alert" className="text-xs text-erro-texto">{erroIrr}</p>}
       </div>
 
       <div ref={blocoRef} className="min-w-0">
         <PainelSaida
           abas={abas}
-          sujo={false}
+          sujo={sujo}
           carregando={previa.isFetching}
-          erro={comErro ? "com erro" : null}
+          erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}
           onCopiar={async (aba) =>
             aba.conteudo ? (await copiarComAviso(aba.conteudo, blocoRef.current)) === "copiado" : false
           }

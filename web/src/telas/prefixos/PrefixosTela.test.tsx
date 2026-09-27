@@ -1,13 +1,14 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { Link } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
+import { mockFetch, montarRota, peticoes, type Pedido, type Resposta } from "@/teste/roteador"
 import { PrefixosTela } from "./PrefixosTela"
 
 const BASE = {
   "GET /api/blocos": {
     corpo: {
-      texto: { v4: "38.252.64.0/22  64512:613", v6: "" },
+      texto: { v4: "38.252.64.0/22  64512:613", v6: "2001:db8::/32  64512:613" },
       originacao: "xpl ip-prefix-list PL-ORIGEM-V4\nend-list",
       remover: "undo xpl ip-prefix-list PL-ORIGEM-V4",
     },
@@ -15,18 +16,67 @@ const BASE = {
   "POST /api/blocos/previa": {
     corpo: { erros: {}, avisos: [], bloco: "xpl ip-prefix-list PL-ORIGEM-V4\nend-list", arquivo: "blocos.txt", salvo: "xpl ip-prefix-list PL-ORIGEM-V4\nend-list" },
   },
+  "PUT /api/blocos": {
+    corpo: {
+      texto: { v4: "38.252.64.0/22  64512:613", v6: "2001:db8::/32  64512:613" },
+      originacao: "xpl ip-prefix-list PL-ORIGEM-V4\nend-list",
+      remover: "undo xpl ip-prefix-list PL-ORIGEM-V4",
+    },
+  },
 }
 
 const rotas = [{ path: "/prefixos", element: <PrefixosTela /> }]
 
-afterEach(() => vi.unstubAllGlobals())
+// A saida da tela, para os casos que medem o guarda de alteracao nao salva: o
+// bloqueio e da navegacao, e sem um destino o `useBlocker` nao teria o que
+// barrar
+const comSaida = [
+  { path: "/prefixos", element: <><PrefixosTela /><Link to="/outra">sair</Link></> },
+  { path: "/outra", element: <div>outra tela</div> },
+]
+
+// A limpeza do `unstubAllGlobals` e o resto do que cada caso deixa para tras sao
+// do arnes, que os registra uma vez por arquivo (web/src/teste/roteador.tsx)
+afterEach(() => {
+  vi.unstubAllGlobals()
+  // as espias deste arquivo sao do `vi.spyOn` (o clique do download), e nao do
+  // `stubGlobal` do arnes: sem esta linha a do primeiro caso ficaria de pe
+  vi.restoreAllMocks()
+})
+
+/**
+ * Segura uma leitura ate o caso mandar soltar, e repassa o resto ao arnes: e a
+ * janela em que a tela esta montada sem dado nenhum.
+ */
+function segurarLeitura(chave: string) {
+  const doArnes = globalThis.fetch
+  let liberar: () => void = () => {}
+  const espera = new Promise<void>((resolve) => { liberar = resolve })
+  vi.stubGlobal("fetch", async (entrada: Request) => {
+    if (`${entrada.method} ${String(entrada.url).split("?")[0]}` === chave) await espera
+    return doArnes(entrada)
+  })
+  return () => liberar()
+}
+
+/** O clique do download, sem criar blob de verdade: so o nome interessa. */
+function espiarDownload(): HTMLAnchorElement[] {
+  const cliques: HTMLAnchorElement[] = []
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+    cliques.push(this)
+  })
+  vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() })
+  return cliques
+}
+
+const pedidos = (pedido: Pedido) => `${pedido.metodo} ${pedido.caminho}`
 
 describe("a tela dos prefixos proprios", () => {
   it("mostra os dois editores com o texto de hoje", async () => {
     mockFetch(BASE)
     montarRota(rotas, "/prefixos")
     await waitFor(() => expect(screen.getByLabelText(/IPv4/)).toHaveValue("38.252.64.0/22  64512:613"))
-    expect(screen.getByLabelText(/IPv6/)).toHaveValue("")
+    expect(screen.getByLabelText(/IPv6/)).toHaveValue("2001:db8::/32  64512:613")
   })
 
   it("explica o formato acima dos editores", async () => {
@@ -57,34 +107,104 @@ describe("a tela dos prefixos proprios", () => {
     expect(peticoes().some((p) => p.metodo === "PUT")).toBe(false)
   })
 
+  it("diz que a consulta ao IRR esta em andamento", async () => {
+    // o bgpq4 leva segundos, e sem o aviso o operador nao sabe se o clique
+    // pegou: a consulta repoe os dois editores quando ela volta
+    mockFetch({ ...BASE, "POST /api/blocos/irr": { corpo: { v4: "45.169.232.0/22", v6: "" } } })
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    const soltar = segurarLeitura("POST /api/blocos/irr")
+    await userEvent.click(screen.getByRole("button", { name: /consultar IRR/i }))
+    expect(await screen.findByText(/consultando o IRR/)).toBeInTheDocument()
+    soltar()
+    await waitFor(() => expect(screen.queryByText(/consultando o IRR/)).not.toBeInTheDocument())
+  })
+
+  it("a falha da consulta ao IRR sai ao lado dos botoes, sem apagar o painel", async () => {
+    // o erro do bgpq4 nao e de um campo: a tela desenhava so os dois nomes de
+    // caixa, e a mensagem nao aparecia em lugar nenhum enquanto o painel ficava
+    // marcado com erro, escondendo um bloco que a consulta falhada nao contesta
+    mockFetch({
+      ...BASE,
+      "POST /api/blocos/irr": { status: 502, corpo: { erros: { bgpq4: "bgpq4 falhou: sem resposta do RADB" }, avisos: [] } },
+    })
+    montarRota(rotas, "/prefixos")
+    await userEvent.click(await screen.findByRole("button", { name: /consultar IRR/i }))
+    expect(await screen.findByText("bgpq4 falhou: sem resposta do RADB")).toBeInTheDocument()
+    expect(screen.getByText(/PL-ORIGEM-V4/)).toBeInTheDocument()
+  })
+
   it("o erro do prefixo torto aparece no editor da familia dele", async () => {
     mockFetch({ ...BASE, "PUT /api/blocos": { status: 422, corpo: { erros: { blocos_v6: "prefixo invalido: 2001:db8::/129" }, avisos: [] } } })
     montarRota(rotas, "/prefixos")
     await userEvent.click(await screen.findByRole("button", { name: /^salvar/i }))
-    expect(await screen.findByText("prefixo invalido: 2001:db8::/129")).toBeInTheDocument()
+    // a ancora e a caixa do IPv6, e nao o documento: o documento inteiro deixa
+    // passar uma tela que desenhe a mensagem no lugar errado
+    await waitFor(() =>
+      expect(document.querySelector('[data-campo="blocos_v6"]')).toHaveTextContent("prefixo invalido: 2001:db8::/129"),
+    )
+    expect(document.querySelector('[data-campo="blocos_v4"]')).not.toHaveTextContent("prefixo invalido")
   })
 
-  it("nao grava antes de o registro chegar", async () => {
-    // Enquanto o GET /api/blocos nao responde, os editores estao vazios e o
-    // backend ACEITA esse vazio: gravar ali escreveria um out/blocos.txt sem
-    // nenhuma originacao. A guarda esta no botao e no `aoSalvar` que a tela
-    // publica para a paleta; este caso mede o botao, que e o caminho que a
-    // prova alcanca sem montar a casca
-    mockFetch({ ...BASE, "GET /api/blocos": { status: 500, corpo: { detail: "falhou" } } })
+  it("a recusa do salvar sai quando a proxima previa responde", async () => {
+    // a recusa nao vence sozinha: quem a derruba e a proxima previa, com a lista
+    // de erros dela. Sem olhar para a data da resposta, a mensagem do salvar
+    // ficaria embaixo da caixa depois de o operador consertar a linha, e o
+    // painel seguiria apagado por causa de um erro que ja nao existe
+    mockFetch({ ...BASE, "PUT /api/blocos": { status: 422, corpo: { erros: { blocos_v6: "prefixo invalido: 2001:db8::/129" }, avisos: [] } } })
     montarRota(rotas, "/prefixos")
-    const botao = await screen.findByRole("button", { name: /^salvar$/i })
-    // o segundo GET e o retry do cliente (um, com o atraso padrao de 1s), e e
-    // ele que separa o "ainda carregando" do "nao veio": esperar por ele e
-    // medir o estado que a guarda existe para cobrir, em que o botao ja esta
-    // desabilitado por outro motivo. Os 3s passam do retry, e o padrao de 1s
-    // do waitFor nao
-    await waitFor(
-      () => expect(peticoes().filter((p) => p.caminho === "/api/blocos")).toHaveLength(2),
-      { timeout: 3000 },
-    )
-    expect(botao).toBeDisabled()
-    fireEvent.click(botao)
-    expect(peticoes().some((p) => p.metodo === "PUT" && p.caminho === "/api/blocos")).toBe(false)
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar/i }))
+    expect(await screen.findByText("prefixo invalido: 2001:db8::/129")).toBeInTheDocument()
+    expect(screen.queryByText(/PL-ORIGEM-V4/)).not.toBeInTheDocument()
+    // o operador conserta a linha: a previa responde de novo, com a lista dela
+    fireEvent.change(screen.getByLabelText(/IPv6/), { target: { value: "2001:db8::/32" } })
+    await waitFor(() => expect(screen.queryByText("prefixo invalido: 2001:db8::/129")).not.toBeInTheDocument())
+    expect(await screen.findByText(/PL-ORIGEM-V4/)).toBeInTheDocument()
+  })
+
+  it("a previa que falhou nao vira o bloco salvo no painel", async () => {
+    // sem olhar o isError da previa o painel cai no bloco salvo e o mostra como
+    // se fosse a previa do que esta escrito, com o botao de copiar vivo
+    mockFetch({ ...BASE, "POST /api/blocos/previa": { status: 500, corpo: { detail: "falhou" } } })
+    montarRota(rotas, "/prefixos")
+    // a previa gasta o retry do cliente (um, com o atraso padrao de 1s) antes de
+    // desistir, e a espera padrao de 1s fica em cima do relogio
+    expect(await screen.findByText(/a prévia volta quando os erros forem corrigidos/, {}, { timeout: 3000 })).toBeInTheDocument()
+    expect(screen.queryByText(/PL-ORIGEM-V4/)).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /copiar/i })).not.toBeInTheDocument()
+  })
+
+  it("a previa rele o out/ depois do salvar", async () => {
+    // o salvar invalida o registro, e a previa tem chave propria, com o texto:
+    // sem invalidar ela tambem, o `salvo` continua sendo o arquivo de ANTES, e
+    // o cabecalho diz que o out/ esta atrasado no segundo seguinte ao toast
+    const antes = {
+      erros: {}, avisos: [],
+      bloco: "xpl ip-prefix-list PL-ORIGEM-V4\nend-list",
+      arquivo: "blocos.txt", salvo: "xpl ip-prefix-list PL-ORIGEM-V4-VELHO\nend-list",
+    }
+    const mapa = { ...BASE, "POST /api/blocos/previa": { corpo: antes } }
+    mockFetch(mapa)
+    montarRota(rotas, "/prefixos")
+    expect(await screen.findByText(/o arquivo em out\/ está desatualizado/)).toBeInTheDocument()
+    // O out/ vira o do salvar no clique, e o duble passa a responder esse: e o
+    // que o backend faz quando a previa e refeita depois da gravacao. Nenhum
+    // pedido de previa sai entre a troca e o clique, porque a chave dela nao muda
+    mapa["POST /api/blocos/previa"].corpo = { ...antes, salvo: antes.bloco }
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByText(/igual ao salvo/)).toBeInTheDocument()
+    expect(screen.queryByText(/o arquivo em out\/ está desatualizado/)).not.toBeInTheDocument()
+  })
+
+  it("a remocao baixa com o nome dela", async () => {
+    // o nome do undo nao pode ser o mesmo da originacao: os dois downloads caem
+    // na mesma pasta, e o segundo salvamento passa por cima do primeiro
+    const cliques = espiarDownload()
+    mockFetch(BASE)
+    montarRota(rotas, "/prefixos")
+    await userEvent.click(await screen.findByRole("tab", { name: /remoção/i }))
+    await userEvent.click(screen.getByRole("button", { name: /baixar/i }))
+    expect(cliques.map((a) => a.download)).toEqual(["remover-blocos.txt"])
   })
 
   it("o erro que vem da propria previa aparece e tira o bloco antigo do painel", async () => {
@@ -106,5 +226,85 @@ describe("a tela dos prefixos proprios", () => {
     montarRota(rotas, "/prefixos")
     expect(await screen.findByText("prefixo invalido: 2001:db8::/129")).toBeInTheDocument()
     expect(await screen.findByText(/a prévia volta quando os erros forem corrigidos/)).toBeInTheDocument()
+  })
+
+  it("nao deixa salvar nem consultar o IRR enquanto o registro nao chegou", async () => {
+    // A janela entre a montagem e a leitura, que e a unica em que a tela existe
+    // sem o registro. O backend ACEITA os dois editores vazios (o
+    // `validar_blocos` nao tem o que apontar) e gravaria um out/blocos.txt sem
+    // nenhuma originacao; a consulta ao IRR encheria as caixas com um rascunho
+    // que o salvar nao aceita, porque quem libera o salvar e o registro
+    mockFetch(BASE)
+    const soltar = segurarLeitura("GET /api/blocos")
+    montarRota(rotas, "/prefixos")
+    const salvar = await screen.findByRole("button", { name: /^salvar$/i })
+    expect(salvar).toBeDisabled()
+    expect(screen.getByRole("button", { name: /consultar IRR/i })).toBeDisabled()
+    fireEvent.click(salvar)
+    expect(peticoes().filter((p) => p.metodo !== "GET")).toEqual([])
+    // e a direcao que mostra: com o registro na mao os dois voltam
+    soltar()
+    await waitFor(() => expect(screen.getByRole("button", { name: /^salvar$/i })).toBeEnabled())
+    expect(screen.getByRole("button", { name: /consultar IRR/i })).toBeEnabled()
+  })
+
+  it("a API fora do ar mostra a falha, e o tentar de novo traz o registro", async () => {
+    // Sem o guarda a tela abre com os dois editores vazios, o painel dizendo que
+    // esta gerando uma previa que nao vem, e os botoes do IRR levando a um
+    // rascunho que o salvar nao aceita
+    const mapa: Record<string, Resposta> = { ...BASE, "GET /api/blocos": { status: 500, corpo: { detail: "falhou" } } }
+    mockFetch(mapa)
+    montarRota(rotas, "/prefixos")
+    // a tela de falha so aparece depois de a consulta gastar o retry do cliente
+    // (um, com o atraso padrao de 1s), que e o mesmo do app
+    expect(await screen.findByText("não deu para falar com a API", {}, { timeout: 3000 })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^salvar$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /consultar IRR/i })).not.toBeInTheDocument()
+    // a API volta: o tentar de novo e o unico caminho de volta, e sem ele a tela
+    // ficaria presa na falha ate um F5
+    mapa["GET /api/blocos"] = BASE["GET /api/blocos"]
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    expect(await screen.findByLabelText(/IPv4/)).toHaveValue("38.252.64.0/22  64512:613")
+    expect(peticoes().filter((p) => pedidos(p) === "GET /api/blocos").length).toBeGreaterThan(2)
+  })
+
+  it("avisa que ha alteracao nao salva ao sair", async () => {
+    // a tela que reescreve o registro de originacao inteiro era a unica das
+    // quatro sem o guarda: sair com texto digitado perdia o texto em silencio
+    mockFetch(BASE)
+    montarRota(comSaida, "/prefixos")
+    fireEvent.change(await screen.findByLabelText(/IPv4/), { target: { value: "45.169.232.0/22  64512:613" } })
+    await userEvent.click(screen.getByText("sair"))
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
+  it("sai sem perguntar quando nao ha o que salvar", async () => {
+    mockFetch(BASE)
+    montarRota(comSaida, "/prefixos")
+    // o registro chega antes de o operador sair: e a saida sem nada digitado que
+    // este caso mede, e nao a janela do carregando
+    await waitFor(() => expect(screen.getByLabelText(/IPv4/)).toHaveValue("38.252.64.0/22  64512:613"))
+    await userEvent.click(screen.getByText("sair"))
+    expect(await screen.findByText("outra tela")).toBeInTheDocument()
+  })
+
+  it("o cabecalho conta as linhas quando o operador mexe no texto", async () => {
+    // a fixture tem o out/ atras do bloco, e sem o sujo o cabecalho diz que o
+    // arquivo esta desatualizado para quem acabou de digitar, que e o
+    // diagnostico errado: o arquivo esta atras do cadastro, e nao da digitacao
+    mockFetch({
+      ...BASE,
+      "POST /api/blocos/previa": {
+        corpo: {
+          erros: {}, avisos: [],
+          bloco: "xpl ip-prefix-list PL-ORIGEM-V4\nend-list",
+          arquivo: "blocos.txt", salvo: "xpl ip-prefix-list PL-ORIGEM-V4-VELHO\nend-list",
+        },
+      },
+    })
+    montarRota(rotas, "/prefixos")
+    expect(await screen.findByText(/o arquivo em out\/ está desatualizado/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/IPv4/), { target: { value: "45.169.232.0/22  64512:613" } })
+    expect(await screen.findByText(/1 linha incluída, 1 removida/)).toBeInTheDocument()
   })
 })
