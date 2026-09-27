@@ -2,6 +2,7 @@ import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
+import { Casca } from "@/app/casca"
 import { PeerTela } from "./PeerTela"
 
 const PLANO = {
@@ -173,6 +174,133 @@ describe("a tela do peer", () => {
     await userEvent.click(await screen.findByRole("button", { name: /^excluir$/i }))
     expect(await screen.findByText("lista de peers")).toBeInTheDocument()
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+
+  it("a saida que o operador pede continua perguntando", async () => {
+    // O guarda existe para a navegacao que o OPERADOR pede. Sem esta prova, um
+    // `permitir` sempre verdadeiro deixaria a suite verde, e a alteracao nao
+    // salva se perderia sem aviso. Aqui a navegacao vem de um link da barra
+    // lateral, que e o caminho de verdade
+    mockFetch({
+      ...BASE,
+      "GET /api/peers": {
+        corpo: [
+          { id: 7, token: "268127", tipo: "cliente", asn: 268127, apelido: "", nome: "Cliente ACME", grupo_id: null },
+          { id: 9, token: "268128", tipo: "cliente", asn: 268128, apelido: "", nome: "Cliente OUTRO", grupo_id: null },
+        ],
+      },
+    })
+    montarRota(
+      [
+        {
+          path: "/",
+          element: <Casca />,
+          children: [
+            { path: "peers", element: <div>lista de peers</div> },
+            { path: "peers/:id", element: <PeerTela /> },
+          ],
+        },
+      ],
+      "/peers/7",
+    )
+    await userEvent.type(await screen.findByLabelText("ASN"), "9")
+    const outro = (await screen.findAllByRole("link")).find((l) => l.getAttribute("href") === "/peers/9")
+    await userEvent.click(outro as HTMLElement)
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
+  it("o 404 que volta para o mesmo caminho nao desliga o guarda", async () => {
+    // O salvamento que toma 404 manda para /peers, que e a MESMA rota da tela
+    // aberta: com a marca presa, o guarda ficaria desligado pelo resto da vida
+    // da tela, e a proxima saida do operador levaria a alteracao nao salva em
+    // silencio. A marca tem que sair limpa daqui, e quem diz que houve
+    // navegacao e a chave da localizacao, nao o caminho
+    mockFetch({
+      ...BASE,
+      "GET /api/peers": {
+        corpo: [
+          { id: 7, token: "268127", tipo: "cliente", asn: 268127, apelido: "", nome: "Cliente ACME", grupo_id: null },
+          { id: 9, token: "268128", tipo: "cliente", asn: 268128, apelido: "", nome: "Cliente OUTRO", grupo_id: null },
+        ],
+      },
+      "GET /api/peers/novo": { corpo: { id: 0, token: "novo", formulario: FORMULARIO } },
+      "POST /api/peers": { status: 404, corpo: {} },
+    })
+    montarRota(
+      [
+        {
+          path: "/",
+          element: <Casca />,
+          children: [
+            { path: "peers", element: <PeerTela /> },
+            { path: "peers/:id", element: <PeerTela /> },
+          ],
+        },
+      ],
+      "/peers",
+    )
+    await userEvent.type(await screen.findByLabelText("ASN"), "9")
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar$/i }))
+    // a tela avisa e volta para /peers, o mesmo caminho de onde ela esta
+    expect(await screen.findByText("registro não encontrado")).toBeInTheDocument()
+    const outro = (await screen.findAllByRole("link")).find((l) => l.getAttribute("href") === "/peers/9")
+    await userEvent.click(outro as HTMLElement)
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
+  it("o duplicar da paleta pergunta como o do cabecalho", async () => {
+    // o comando e o mesmo nos dois lugares, e a copia vem do registro SALVO:
+    // a alteracao nao salva se perde de qualquer jeito, entao a paleta nao pode
+    // ser a porta por onde ela sai sem aviso
+    mockFetch(BASE)
+    montarRota(
+      [
+        {
+          path: "/",
+          element: <Casca />,
+          children: [
+            { path: "peers", element: <div>lista de peers</div> },
+            { path: "peers/:id", element: <PeerTela /> },
+            { path: "peers/novo", element: <PeerTela /> },
+          ],
+        },
+      ],
+      "/peers/7",
+    )
+    await userEvent.type(await screen.findByLabelText("ASN"), "9")
+    await userEvent.keyboard("{Control>}k{/Control}")
+    await userEvent.click(await screen.findByText("duplicar o registro aberto"))
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
+  it("a paleta nao oferece copiar o bloco quando a previa esta em erro", async () => {
+    // com erro de validacao a previa chega sem bloco, e o item que copiaria o
+    // vazio aparecia e nao fazia nada: a paleta oferece so o que a tela sabe
+    // fazer agora
+    mockFetch({
+      ...BASE,
+      "POST /api/peers/previa": {
+        corpo: { erros: { asn: "ASN ja usado pelo peer BRDIGITAL-20G" }, avisos: [], criar_lista: null, bloco: null, arquivo: null, salvo: null },
+      },
+    })
+    montarRota(
+      [
+        {
+          path: "/",
+          element: <Casca />,
+          children: [
+            { path: "peers", element: <div>lista de peers</div> },
+            { path: "peers/:id", element: <PeerTela /> },
+          ],
+        },
+      ],
+      "/peers/7",
+    )
+    // a previa em erro e o estado do qual este caso fala
+    await screen.findByRole("button", { name: "ASN ja usado pelo peer BRDIGITAL-20G" })
+    await userEvent.keyboard("{Control>}k{/Control}")
+    expect(await screen.findByText("duplicar o registro aberto")).toBeInTheDocument()
+    expect(screen.queryByText("copiar o bloco aberto")).not.toBeInTheDocument()
   })
 
   it("o salvar atualiza a aba de remocao", async () => {

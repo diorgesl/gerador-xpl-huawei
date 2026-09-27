@@ -37,10 +37,14 @@ export function PeerTela() {
   // ref porque o `useBlocker` le no momento da navegacao, e nao no render
   // seguinte: com um booleano, a navegacao deste instante veria o valor velho
   const saindoDeProposito = useRef(false)
-  const { pathname } = useLocation()
+  const local = useLocation()
+  // A chave da localizacao muda a cada navegacao, inclusive quando o destino e
+  // o MESMO caminho (o 404 de /peers redireciona para /peers). Com o pathname, a
+  // marca ficaria presa em true no primeiro caso desses e o guarda ficaria
+  // desligado pelo resto da vida da tela, em silencio
   useEffect(() => {
     saindoDeProposito.current = false
-  }, [pathname])
+  }, [local.key])
 
   const irPara = useCallback(
     (destino: string, opcoes?: { replace?: boolean }) => {
@@ -236,10 +240,18 @@ export function PeerTela() {
   // A paleta oferece o que a tela aberta sabe fazer, e o que ela nao publica
   // nao aparece la: sem esta chamada, o "duplicar o registro aberto" e o
   // "copiar o bloco aberto" ficam mortos, que foi o que aconteceu ate aqui
+  //
+  // O bloco aberto pode nao existir (a previa em erro chega com conteudo nulo):
+  // ai o item nem aparece, em vez de aparecer e nao fazer nada
+  const blocoAberto = abas[0]?.conteudo ?? null
   usePublicarAcoes({
     aoSalvar: () => void gravar(),
-    aoDuplicar: ident === null ? undefined : () => irPara(`/peers/novo?de=${ident}`),
-    aoCopiarBloco: () => { const aba = abas[0]; if (aba?.conteudo) void copiarComAviso(aba.conteudo, blocoRef.current) },
+    // O duplicar da paleta navega como o do cabecalho, com `navegar` e nao com
+    // `irPara`: a copia vem do registro SALVO, entao a alteracao nao salva se
+    // perde, e o operador tem que poder dizer nao. O mesmo comando nao pode
+    // perguntar num lugar e nao no outro
+    aoDuplicar: ident === null ? undefined : () => navegar(`/peers/novo?de=${ident}`),
+    aoCopiarBloco: blocoAberto ? () => void copiarComAviso(blocoAberto, blocoRef.current) : undefined,
   })
 
   const grupo = (grupos.data ?? []).find((g) => String(g.id) === String(valores.grupo_id))
