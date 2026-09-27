@@ -116,7 +116,7 @@ export function Formulario<T extends FieldValues>({
                 ctx={ctx}
                 bruto={valores[campo.nome]}
                 erro={erroDoCampo(campo.nome, erros, tipo, deGrupo)}
-                aviso={avisos.find((a) => a.campo === campo.nome)?.mensagem}
+                avisos={avisos.filter((a) => a.campo === campo.nome).map((a) => a.mensagem)}
                 nota={pertenceAoTipo(campo.nome, camposPorTipo, tipo)
                   ? undefined
                   : `o bloco de ${tipo} não usa este campo`}
@@ -182,12 +182,12 @@ function AreaTexto({ id, bruto, linhas, mono, aoMudar }: {
   )
 }
 
-function CampoRender({ campo, ctx, bruto, erro, aviso, nota, aoMudar, aoTrocarTipo, aoTrocarClasse }: {
+function CampoRender({ campo, ctx, bruto, erro, avisos, nota, aoMudar, aoTrocarTipo, aoTrocarClasse }: {
   campo: CampoTabela
   ctx: Contexto
   bruto: unknown
   erro?: string
-  aviso?: string
+  avisos?: string[]
   nota?: string
   aoMudar: (nome: string, valor: unknown) => void
   aoTrocarTipo: (tipo: string) => void
@@ -271,7 +271,7 @@ function CampoRender({ campo, ctx, bruto, erro, aviso, nota, aoMudar, aoTrocarTi
   }
 
   return (
-    <Campo nome={id} rotulo={rotulo} ajuda={campo.ajuda} erro={erro} aviso={aviso}
+    <Campo nome={id} rotulo={rotulo} ajuda={campo.ajuda} erro={erro} avisos={avisos}
       nota={nota} largo={campo.largo || campo.tipo === "area"}>
       {controle()}
     </Campo>

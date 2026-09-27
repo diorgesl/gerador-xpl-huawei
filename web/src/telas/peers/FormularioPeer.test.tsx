@@ -152,6 +152,24 @@ describe("o formulario do peer", () => {
     expect(campo).toHaveTextContent("route-limit fora da tabela do tipo")
   })
 
+  it("mostra todos os avisos do campo, e nao so o primeiro", () => {
+    // As communities fora do plano geram um aviso por valor (o append do
+    // _avisa_communities roda dentro do for), e o campo desenhava so o
+    // primeiro: o operador corrigia um e o outro seguia escondido
+    render(
+      <Montar
+        avisos={[
+          { campo: "communities", mensagem: "community fora do namespace: 64512:50" },
+          { campo: "communities", mensagem: "community fora da faixa do plano: 64512:51" },
+        ]}
+      />,
+    )
+
+    const campo = document.querySelector('[data-campo="communities"]')
+    expect(campo).toHaveTextContent("community fora do namespace: 64512:50")
+    expect(campo).toHaveTextContent("community fora da faixa do plano: 64512:51")
+  })
+
   it("um mapa de campos vazio cai na tabela local", () => {
     // com `??` so, o mapa vazio da API passaria como verdadeiro e o
     // `pertenceAoTipo` responderia true para todo campo com tipo: a visibilidade
