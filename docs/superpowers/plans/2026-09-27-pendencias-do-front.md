@@ -781,6 +781,9 @@ Expected: FAIL, porque o botao nao tem `disabled`.
 
 - [ ] **Step 3: O estado no componente**
 
+**Superado pelo adendo do fim da task.** O JSDoc abaixo nao e o que entrou no
+codigo: o adendo, logo depois do Step 6, e o registro do que venceu.
+
 Em `web/src/components/Falha.tsx`:
 
 ```tsx
@@ -1082,7 +1085,14 @@ Em `web/eslint.config.js`, antes do bloco que usa `globals.browser`:
 cd web && npm run lint
 ```
 
-Expected: PASS, com `process` e `node:fs` reconhecidos.
+Expected: PASS, com o bloco no lugar - e ele fica como registro de intencao, e
+nao como se estivesse conferindo alguma coisa. Medido: o bloco **nao** muda nada
+hoje. Tirando-o, `npx eslint e2e playwright.config.ts` continua em exit 0, porque
+o `typescript-eslint` desliga o `no-undef` nos arquivos TS (o `--print-config` o
+resolve como desligado) e ele e o unico rule que olharia para globais; e os
+globais ainda se mesclam com os do bloco anterior, em vez de o novo vencer. Quem
+cobre os globais do e2e de verdade e o `types: ["node"]` do `tsconfig.e2e.json`
+do Step 2.
 
 - [ ] **Step 4: A copia provando o bloco daquele peer**
 
@@ -1503,11 +1513,19 @@ No caso "um 5xx sem corpo de recusa nao mostra o texto de resposta inesperada", 
 
 ```tsx
     montarRota(rotas, "/prefixos")
-    // o botao so habilita com o registro na mao: sem esta espera o clique pode
-    // cair antes, nao sair pedido nenhum, e o caso falhar por tempo
-    await screen.findByLabelText(/IPv4/)
-    await userEvent.click(await screen.findByRole("button", { name: /^salvar/i }))
+    // o botao so habilita com o registro na mao, e o clique antes disso nao
+    // sai: a espera e a do estado, e nao a da existencia do formulario, que
+    // existe desde o primeiro render
+    const botao = await screen.findByRole("button", { name: /^salvar/i })
+    await waitFor(() => expect(botao).toBeEnabled())
+    await userEvent.click(botao)
 ```
+
+A espera da forma original deste step (`await screen.findByLabelText(/IPv4/)`) foi
+medida como no-op: o rotulo existe desde o primeiro render, porque o formulario
+inteiro esta montado antes de o registro chegar, entao ela nao esperava nada. Quem
+entrou foi a espera do estado habilitado, que nao resolve enquanto o
+`GET /api/blocos` esta preso (rodada 2 da Task 14).
 
 - [ ] **Step 6: A suite do front e o lint**
 
