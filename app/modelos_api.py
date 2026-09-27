@@ -261,3 +261,21 @@ class BlocosIrrPedido(Modelo):
     v4: str = ""
     v6: str = ""
     forcar: bool = False
+
+
+class LoginPedido(Modelo):
+    """Usuario e senha do POST /api/login.
+
+    Modelo com o extra="forbid" do resto: um nome de campo trocado no
+    front nao pode passar em silencio e virar um login vazio.
+    """
+
+    usuario: str = ""
+    senha: str = ""
+
+
+class SessaoResposta(BaseModel):
+    """Quem esta logado. E a resposta do login, do logout e do /sessao."""
+
+    logado: bool
+    usuario: str | None = None

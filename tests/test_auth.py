@@ -242,3 +242,53 @@ def test_o_cookie_so_vai_com_secure_quando_a_variavel_pede(caminho, monkeypatch)
     com_variavel = _resposta()
     auth.abrir_sessao(com_variavel, auth.NOME_ADMIN)
     assert "Secure" in com_variavel.headers["set-cookie"]
+
+
+def test_o_login_com_a_senha_certa_devolve_a_sessao(api_anonimo):
+    r = api_anonimo.post("/api/login",
+                         json={"usuario": auth.NOME_ADMIN, "senha": SENHA})
+
+    assert r.status_code == 200
+    assert r.json() == {"logado": True, "usuario": auth.NOME_ADMIN}
+    assert auth.COOKIE in r.headers["set-cookie"]
+
+
+def test_o_login_com_a_senha_errada_recusa_no_formato_da_api(api_anonimo):
+    r = api_anonimo.post("/api/login",
+                         json={"usuario": auth.NOME_ADMIN, "senha": "chute"})
+
+    assert r.status_code == 401
+    assert r.json() == {"erros": {"_": "usuario ou senha invalidos"},
+                        "avisos": []}
+    assert "set-cookie" not in r.headers
+
+
+def test_o_login_com_o_corpo_fora_do_modelo_volta_no_formato_da_api(api_anonimo):
+    r = api_anonimo.post("/api/login", json={"usuario": "admin", "xpto": "1"})
+
+    assert r.status_code == 422
+    assert "xpto" in r.json()["erros"]["_corpo"]
+
+
+def test_a_sessao_sem_cookie_diz_que_nao_esta_logado(api_anonimo):
+    r = api_anonimo.get("/api/sessao")
+
+    assert r.status_code == 200
+    assert r.json() == {"logado": False, "usuario": None}
+
+
+def test_a_sessao_com_cookie_diz_quem_entrou(api_anonimo):
+    api_anonimo.post("/api/login", json={"usuario": auth.NOME_ADMIN, "senha": SENHA})
+
+    assert api_anonimo.get("/api/sessao").json() == {"logado": True,
+                                                     "usuario": auth.NOME_ADMIN}
+
+
+def test_o_logout_apaga_o_cookie(api_anonimo):
+    api_anonimo.post("/api/login", json={"usuario": auth.NOME_ADMIN, "senha": SENHA})
+
+    r = api_anonimo.post("/api/logout")
+
+    assert r.status_code == 200
+    assert r.json() == {"logado": False, "usuario": None}
+    assert api_anonimo.get("/api/sessao").json()["logado"] is False

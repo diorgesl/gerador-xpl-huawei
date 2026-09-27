@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 import yaml
+from fastapi import Request
 
 RAIZ = Path(__file__).resolve().parent.parent
 USUARIOS_YAML = RAIZ / "usuarios.yaml"
@@ -238,7 +239,7 @@ def fechar_sessao(resposta):
                            secure=seguro())
 
 
-def da_requisicao(request, caminho=None):
+def da_requisicao(request: Request, caminho=None):
     """O usuario do cookie, ou None quando o cookie nao vale.
 
     Vale o cookie com os tres pedacos, com o prazo no futuro e com a
@@ -263,8 +264,12 @@ def da_requisicao(request, caminho=None):
     return usuario
 
 
-def exigir_login(request):
+def exigir_login(request: Request):
     """A dependencia das rotas protegidas: devolve o usuario ou recusa.
+
+    A anotacao do Request nao e decoracao: sem ela o FastAPI trata o
+    parametro como campo de query obrigatorio, e a rota responde 422
+    ("query.request: Field required") em vez de recusar por sessao.
 
     A recusa e NaoAutenticado, e nao HTTPException: o corpo do 401 e o
     mesmo das outras recusas da API, e nao o {"detail": ...} do FastAPI.

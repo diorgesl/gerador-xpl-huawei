@@ -67,7 +67,7 @@ def test_corpo_fora_do_modelo_volta_no_formato_da_api(api):
     assert "xpto" in r.json()["erros"]["_corpo"]
 
 
-def test_fora_da_api_a_falha_inesperada_continua_texto_puro(api, monkeypatch):
+def test_fora_da_api_a_falha_inesperada_continua_texto_puro(api, logar, monkeypatch):
     """O envelope JSON da API nao vaza para uma rota que nao e dela.
 
     O par deste caso era o `/bgpq4?forcar=abc`, que saiu no corte das telas:
@@ -82,7 +82,7 @@ def test_fora_da_api_a_falha_inesperada_continua_texto_puro(api, monkeypatch):
     def quebrado(caminho):
         raise ValueError("peers.yaml: ASN 4200000000 nao cabe nos 16 bits")
     monkeypatch.setattr(peers_mod, "carregar_asn", quebrado)
-    cliente = TestClient(mod.app, raise_server_exceptions=False)
+    cliente = logar(TestClient(mod.app, raise_server_exceptions=False))
 
     r = cliente.get("/base.txt")
 
@@ -90,11 +90,11 @@ def test_fora_da_api_a_falha_inesperada_continua_texto_puro(api, monkeypatch):
     assert r.text == "Internal Server Error"
 
 
-def test_yaml_quebrado_vira_500_em_json(api, monkeypatch):
+def test_yaml_quebrado_vira_500_em_json(api, logar, monkeypatch):
     def quebrado(caminho):
         raise ValueError("peers.yaml: ASN 4200000000 nao cabe nos 16 bits")
     monkeypatch.setattr(peers_mod, "carregar_asn", quebrado)
-    cliente = TestClient(mod.app, raise_server_exceptions=False)
+    cliente = logar(TestClient(mod.app, raise_server_exceptions=False))
     r = cliente.get("/api/plano")
     assert r.status_code == 500
     assert "nao cabe nos 16 bits" in r.json()["erros"]["_"]

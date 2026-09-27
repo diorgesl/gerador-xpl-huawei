@@ -8,19 +8,21 @@ de cada campo e o bloco gerado sao os mesmos nas duas telas.
 
 from dataclasses import replace
 
-from fastapi import APIRouter, FastAPI, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Query, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
+from app import auth
 from app import formulario as form
 from app import peers as peers_mod
 from app import plan, prefixes, render, validate
 from app.modelos_api import (Aviso, Blocos, BlocosIrrPedido, BlocosTexto,
                              ErroResposta, GrupoForm, GrupoRegistro,
-                             GrupoResumo, GrupoSalvo, IrrPedido, Membro, PeerForm,
-                             PeerRegistro, PeerResumo, PeerSalvo, Plano, Prefixos,
-                             Previa, RedeAtual, RedeForm, Saida)
+                             GrupoResumo, GrupoSalvo, IrrPedido, LoginPedido,
+                             Membro, PeerForm, PeerRegistro, PeerResumo,
+                             PeerSalvo, Plano, Prefixos, Previa, RedeAtual,
+                             RedeForm, Saida, SessaoResposta)
 
 
 def _texto(valor):
@@ -109,8 +111,18 @@ def modelo_do_grupo(grupo):
     return GrupoForm(**campos)
 
 
-roteador = APIRouter(prefix="/api", responses={
+# As tres rotas de sessao sao as unicas de /api que respondem sem cookie:
+# o /login precisa entrar antes de haver sessao, e o /sessao e o que a SPA
+# consulta para saber se mostra a casca. O roteador de baixo e o protegido,
+# e a dependencia fica nele inteiro, e nao rota a rota.
+publico = APIRouter(prefix="/api", responses={
     404: {"model": ErroResposta}, 422: {"model": ErroResposta}})
+
+roteador = APIRouter(prefix="/api", dependencies=[Depends(auth.exigir_login)],
+                     responses={
+                         401: {"model": ErroResposta},
+                         404: {"model": ErroResposta},
+                         422: {"model": ErroResposta}})
 
 
 def _yaml():
@@ -641,6 +653,37 @@ def consultar_blocos(pedido: BlocosIrrPedido):
     return BlocosTexto(**form._texto_blocos(blocos, ausentes))
 
 
+@publico.post("/login", response_model=SessaoResposta)
+def entrar(pedido: LoginPedido, resposta: Response):
+    """Confere a senha e abre a sessao no cookie.
+
+    Usuario errado e senha errada devolvem a mesma mensagem de proposito:
+    quem tenta adivinhar nao descobre qual dos dois acertou.
+    """
+    if not auth.conferir(pedido.usuario, pedido.senha):
+        return _falha(401, [validate.Erro("_", "usuario ou senha invalidos")])
+    auth.abrir_sessao(resposta, pedido.usuario)
+    return SessaoResposta(logado=True, usuario=pedido.usuario)
+
+
+@publico.post("/logout", response_model=SessaoResposta)
+def sair(resposta: Response):
+    """Apaga o cookie. Sem estado no servidor, nao ha mais o que apagar."""
+    auth.fechar_sessao(resposta)
+    return SessaoResposta(logado=False, usuario=None)
+
+
+@publico.get("/sessao", response_model=SessaoResposta)
+def ler_sessao(request: Request):
+    """Quem esta logado agora, sem exigir cookie.
+
+    E o que a SPA pergunta ao abrir a pagina: um 401 aqui obrigaria a
+    tela a adivinhar pelo erro de outra consulta.
+    """
+    usuario = auth.da_requisicao(request)
+    return SessaoResposta(logado=usuario is not None, usuario=usuario)
+
+
 async def _pedido_invalido(request: Request, exc: RequestValidationError):
     """Corpo, caminho ou query fora do modelo, no formato das outras recusas.
 
@@ -669,8 +712,19 @@ async def _falha_inesperada(request: Request, exc: Exception):
     return PlainTextResponse("Internal Server Error", status_code=500)
 
 
+async def _sem_sessao(request: Request, exc: auth.NaoAutenticado):
+    """O 401 das rotas protegidas, no formato das outras recusas.
+
+    Um HTTPException daria {"detail": ...}, que e o formato que a SPA leria
+    como resposta fora do modelo.
+    """
+    return _falha(401, [validate.Erro("_", str(exc))])
+
+
 def instalar(app: FastAPI):
-    """Monta as rotas /api e os dois tratadores de erro no app."""
+    """Monta as rotas /api e os tres tratadores de erro no app."""
+    app.include_router(publico)
     app.include_router(roteador)
     app.add_exception_handler(RequestValidationError, _pedido_invalido)
+    app.add_exception_handler(auth.NaoAutenticado, _sem_sessao)
     app.add_exception_handler(Exception, _falha_inesperada)

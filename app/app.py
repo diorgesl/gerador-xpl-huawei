@@ -6,18 +6,32 @@ rotas dela. A raiz leva para a SPA. Sem banco: o estado e o peers.yaml.
 """
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
                                RedirectResponse)
 
-from app import api, render
+from app import api, auth, render
 from app import peers as peers_mod
 
 RAIZ = Path(__file__).resolve().parent.parent
 
-app = FastAPI(title="bgpgen")
+
+@asynccontextmanager
+async def ciclo(app: FastAPI):
+    """O que roda uma vez por processo, antes da primeira requisicao.
+
+    Hoje e o bootstrap do admin: o app nasce com login, e sem usuario
+    nenhum nao haveria como entrar. A senha criada sai no log, e o boot
+    seguinte nao imprime nada.
+    """
+    auth.bootstrap()
+    yield
+
+
+app = FastAPI(title="bgpgen", lifespan=ciclo)
 
 # a API JSON em /api, que a SPA consome
 api.instalar(app)

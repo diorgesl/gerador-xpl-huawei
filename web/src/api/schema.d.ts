@@ -4,6 +4,72 @@
  */
 
 export interface paths {
+    "/api/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Entrar
+         * @description Confere a senha e abre a sessao no cookie.
+         *
+         *     Usuario errado e senha errada devolvem a mesma mensagem de proposito:
+         *     quem tenta adivinhar nao descobre qual dos dois acertou.
+         */
+        post: operations["entrar_api_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sair
+         * @description Apaga o cookie. Sem estado no servidor, nao ha mais o que apagar.
+         */
+        post: operations["sair_api_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ler Sessao
+         * @description Quem esta logado agora, sem exigir cookie.
+         *
+         *     E o que a SPA pergunta ao abrir a pagina: um 401 aqui obrigaria a
+         *     tela a adivinhar pelo erro de outra consulta.
+         */
+        get: operations["ler_sessao_api_sessao_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plano": {
         parameters: {
             query?: never;
@@ -670,6 +736,25 @@ export interface components {
              */
             forcar: boolean;
         };
+        /**
+         * LoginPedido
+         * @description Usuario e senha do POST /api/login.
+         *
+         *     Modelo com o extra="forbid" do resto: um nome de campo trocado no
+         *     front nao pode passar em silencio e virar um login vazio.
+         */
+        LoginPedido: {
+            /**
+             * Usuario
+             * @default
+             */
+            usuario: string;
+            /**
+             * Senha
+             * @default
+             */
+            senha: string;
+        };
         /** Membro */
         Membro: {
             /** Id */
@@ -1040,6 +1125,16 @@ export interface components {
             /** Arquivo */
             arquivo: string;
         };
+        /**
+         * SessaoResposta
+         * @description Quem esta logado. E a resposta do login, do logout e do /sessao.
+         */
+        SessaoResposta: {
+            /** Logado */
+            logado: boolean;
+            /** Usuario */
+            usuario?: string | null;
+        };
         /** TabelaTipo */
         TabelaTipo: {
             /** Lp Base */
@@ -1060,6 +1155,124 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    entrar_api_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginPedido"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessaoResposta"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+        };
+    };
+    sair_api_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessaoResposta"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+        };
+    };
+    ler_sessao_api_sessao_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessaoResposta"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+        };
+    };
     ler_plano_api_plano_get: {
         parameters: {
             query?: never;
@@ -1076,6 +1289,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Plano"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */
@@ -1120,6 +1342,15 @@ export interface operations {
                     "application/json": components["schemas"]["RedeAtual"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1156,6 +1387,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeerResumo"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */
@@ -1200,6 +1440,15 @@ export interface operations {
                     "application/json": components["schemas"]["PeerSalvo"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1240,6 +1489,15 @@ export interface operations {
                     "application/json": components["schemas"]["PeerRegistro"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1278,6 +1536,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeerRegistro"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */
@@ -1324,6 +1591,15 @@ export interface operations {
                     "application/json": components["schemas"]["PeerSalvo"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1361,6 +1637,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
             };
             /** @description Not Found */
             404: {
@@ -1400,6 +1685,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeerRegistro"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */
@@ -1446,6 +1740,15 @@ export interface operations {
                     "application/json": components["schemas"]["Previa"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1484,6 +1787,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Saida"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */
@@ -1526,6 +1838,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Prefixos"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */
@@ -1575,6 +1896,15 @@ export interface operations {
                     "application/json": components["schemas"]["GrupoResumo"][];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1617,6 +1947,15 @@ export interface operations {
                     "application/json": components["schemas"]["GrupoSalvo"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1657,6 +1996,15 @@ export interface operations {
                     "application/json": components["schemas"]["GrupoRegistro"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1695,6 +2043,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GrupoRegistro"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */
@@ -1741,6 +2098,15 @@ export interface operations {
                     "application/json": components["schemas"]["GrupoSalvo"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1778,6 +2144,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
             };
             /** @description Not Found */
             404: {
@@ -1828,6 +2203,15 @@ export interface operations {
                     "application/json": components["schemas"]["GrupoRegistro"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1872,6 +2256,15 @@ export interface operations {
                     "application/json": components["schemas"]["Previa"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1912,6 +2305,15 @@ export interface operations {
                     "application/json": components["schemas"]["Saida"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -1948,6 +2350,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Blocos"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */
@@ -1992,6 +2403,15 @@ export interface operations {
                     "application/json": components["schemas"]["Blocos"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -2034,6 +2454,15 @@ export interface operations {
                     "application/json": components["schemas"]["Previa"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
             /** @description Not Found */
             404: {
                 headers: {
@@ -2074,6 +2503,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BlocosTexto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */

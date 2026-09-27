@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import app as servidor
+from app import auth
 from app import peers as mod
 from app import prefixes, render
 
@@ -260,17 +261,19 @@ def _retrato(raiz):
 
 
 @pytest.fixture
-def cliente(out, monkeypatch):
-    """O app apontando para o mesmo tmp_path que o `out` ja patcheia.
+def cliente(out, usuarios_em_tmp, logar, monkeypatch):
+    """O app apontando para o mesmo tmp_path que o `out` ja patcheia, logado.
 
     A exclusao passa pela rota, entao o peers.yaml tambem tem que sair do
     checkout: sem o patch, a rota leria o arquivo de verdade e o teste
     apagaria o grupo do repositorio. O CACHE do bgpq4 entra junto pelo
-    mesmo motivo.
+    mesmo motivo. O admin nasce do bootstrap, e este cliente nao roda o
+    lifespan (nao ha context manager): por isso a chamada explicita.
     """
+    auth.bootstrap()
     monkeypatch.setattr(mod, "PEERS_YAML", out / "peers.yaml")
     monkeypatch.setattr(prefixes, "CACHE", out / ".cache")
-    return TestClient(servidor.app)
+    return logar(TestClient(servidor.app))
 
 
 def test_excluir_grupo_com_membro_e_recusado_sem_tocar_em_arquivo(out, cliente):
