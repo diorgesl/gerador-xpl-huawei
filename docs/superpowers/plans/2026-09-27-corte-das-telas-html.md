@@ -1488,14 +1488,23 @@ O que fica em aberto, e vale registrar:
 - **A tela de lista nao entra.** A Task 1 faz o que a spec nomeia para `/peers`: a casca com a lista na barra e um estado vazio no corpo. Se o operador quiser
   uma tabela no corpo, com ASN e grupo em coluna, isso e uma tela nova, e nao
   este corte.
+- A tela de lista continua nao existindo no corpo: decidido em 2026-09-27 como
+  estado vazio, e a lista e a barra lateral.
 - **O buraco da origem no upstream continua aberto.** O peer de upstream aceita
   `origem` fora da tabela do tipo, e o bloco sai carimbando o que o operador
   digitou. A Task 2 deixa o caso medido e testado, e nao consertado: fechar isso
   mexe no `validate.py`, que a spec poe fora do corte.
+- A origem fora da tabela nos tres upstreams do cadastro real continua la: o
+  aviso mostra, e corrigir e decisao de rede.
 - **O grafo do graphify so fica em dia na Task 5.** Entre a Task 4 e ela, o
   `graphify-out/` descreve um repositorio que mudou.
+- O `graphify update .` no checkout principal nao e desta leva: ele sai no
+  merge, como a tabela de pendencias da leva registra.
 - **O e2e e o unico que exercita o 307 com um navegador.** Os testes do
   `test_web.py` fixam o cabecalho com o TestClient; quem segue o redirect de
   verdade e o Playwright e o HEALTHCHECK do container.
+- O 307 continua exercitado com um navegador so pelo e2e, e o HEALTHCHECK segue
+  a corrente dos testes; a leva de 2026-09-27 nao mexe no `app/app.py` nem no
+  `Dockerfile`.
 
 ---

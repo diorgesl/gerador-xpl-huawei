@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { PainelSaida, type AbaSaida } from "@/components/PainelSaida"
 import { cliente } from "@/api/cliente"
-import { chaves, lerRecusa, recusaComMarca, useBlocos } from "@/api/consultas"
+import { chaves, lerRecusa, recusaComMarca, temRecusa, useBlocos } from "@/api/consultas"
 import { avisarFalhaDeRede, falhaDoServidor } from "@/lib/aviso"
 import { copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
@@ -73,7 +73,13 @@ export function PrefixosTela() {
       if (r.error) {
         // o 5xx e falha do servidor, e nao do texto: o aviso com o caminho de
         // volta entra junto, e o "tentar de novo" repete o mesmo PUT
-        if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => salvar.mutate())
+        if (falhaDoServidor(r.response.status)) {
+          avisarFalhaDeRede(() => salvar.mutate())
+          // Sem corpo de recusa nao ha o que mostrar no painel, e o `_corpo`
+          // do lerRecusa ("resposta inesperada da API") seria ruido em cima do
+          // aviso: e o mesmo caminho do peer e do grupo
+          if (!temRecusa(r.error)) return
+        }
         // Sem o refetch da previa daqui: ele subiria o `dataUpdatedAt` dela e a
         // marca da recusa chegaria vencida, apagando no mesmo instante a lista
         // que ela acabou de escrever. Os erros do salvar ficam ate a proxima
@@ -103,7 +109,11 @@ export function PrefixosTela() {
         if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => consultar.mutate(forcar))
         // a mensagem do bgpq4 nao e de um campo: ela sai ao lado dos botoes, e
         // nao no editor nem no painel
-        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros._corpo ?? lida.erros._ ?? "a consulta ao IRR falhou"))
+        //
+        // O `_corpo` do lerRecusa fica fora desta corrente: ele e o texto de
+        // quando o corpo nao tem forma de recusa, e nao diz nada sobre a
+        // consulta. O recado proprio e a mensagem que sobra
+        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros._ ?? "a consulta ao IRR falhou"))
         return
       }
       // so o recado do IRR sai: os erros que o salvar deixou na tela ficam com
@@ -162,7 +172,17 @@ export function PrefixosTela() {
   // A tela publica o que ela sabe fazer para a paleta: gravar e copiar o bloco
   // aberto. Nao ha duplicar: os prefixos do AS sao um registro so, e nao uma
   // lista de registros como os peers e os grupos
-  const blocoAberto = abas[0]?.conteudo ?? null
+  //
+  // O bloco aberto e o da aba que o painel avisa pelo `aoTrocarAba`: com a aba
+  // de remocao aberta, a copia da paleta tem que ser a dela, e nao a da
+  // originacao, que e a primeira
+  //
+  // O `?? abas[0]` e o fallback do proprio painel para quando a aba corrente
+  // sai da lista (a de remocao sai se o registro deixar de ter o bloco de
+  // undo), e e ele que impede a paleta de oferecer a copia de um bloco que nao
+  // e o da tela
+  const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
+  const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
   // O salvamento exige o texto conhecido: enquanto o GET /api/blocos nao
   // responde, os dois editores estao vazios e o backend ACEITA esse vazio
   // (`validar_blocos` nao tem o que apontar), gravando um out/blocos.txt sem
@@ -176,10 +196,21 @@ export function PrefixosTela() {
   // Uma falha de rede nao pode passar: sem o registro a tela fica com os dois
   // editores vazios, o painel dizendo que esta gerando uma previa que nao vem,
   // e os botoes do IRR levariam a um rascunho que o salvar nao aceita
-  if (blocos.isError) {
+  //
+  // O aviso sobrevive ao tentar de novo, e nao so ao erro: o TanStack zera o
+  // `error` de uma consulta sem dado quando ela e refeita (o estado volta a
+  // `pending`), entao sem o `retentando` o clique cairia no formulario dos dois
+  // editores vazios - como se o registro tivesse sumido - ate a resposta
+  // chegar, e o botao que desabilita so existiria depois disso. O
+  // `errorUpdateCount` e o que resta da falha depois do refetch, e o
+  // `data === undefined` deixa de fora o refetch de fundo de quem ja tem dado
+  const tentando = blocos.isFetching
+  const retentando = tentando && blocos.data === undefined && blocos.errorUpdateCount > 0
+  if (blocos.isError || retentando) {
     return (
       <Falha
         mensagem="não deu para falar com a API"
+        tentando={tentando}
         aoTentar={() => void blocos.refetch()}
       />
     )
@@ -246,6 +277,7 @@ export function PrefixosTela() {
       <div ref={blocoRef} className="min-w-0">
         <PainelSaida
           abas={abas}
+          aoTrocarAba={setAbaAtiva}
           sujo={sujo}
           carregando={previa.isFetching}
           erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}

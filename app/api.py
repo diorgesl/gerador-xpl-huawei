@@ -1,9 +1,10 @@
 """API JSON do bgpgen, montada em /api.
 
 A regra continua no formulario.py, no validate.py e no render.py. As rotas
-daqui convertem o JSON no dicionario de texto que o formulario HTML mandaria e
-chamam os mesmos helpers das rotas HTML, entao a mensagem de erro, o default
-de cada campo e o bloco gerado sao os mesmos nas duas telas.
+daqui convertem o JSON no dicionario de texto do POST e chamam os helpers
+desses tres modulos, entao a mensagem de erro, o default de cada campo e o
+bloco gerado saem do mesmo lugar: o formulario em texto do POST/PUT vira Peer,
+e o Peer vira JSON de volta.
 """
 
 from dataclasses import replace
@@ -34,7 +35,7 @@ def _lista(valores):
 
 
 def dados_do_formulario(modelo):
-    """Modelo -> o dicionario de texto que o formulario HTML mandaria.
+    """Modelo -> o dicionario de texto que o formulario.py le.
 
     Caixa marcada vira "on" e desmarcada fica fora, como no POST do
     navegador; lista vira uma linha por item, como na textarea.
@@ -52,7 +53,7 @@ def dados_do_formulario(modelo):
 
 
 def modelo_do_peer(peer):
-    """Peer -> o formulario em JSON, como a tela HTML o preencheria."""
+    """Peer -> o formulario em JSON que o PeerRegistro carrega."""
     campos = dict(
         id=_texto(peer.id), apelido=peer.apelido, nome=peer.nome,
         tipo=peer.tipo, grupo_id=_texto(peer.grupo_id),
@@ -82,7 +83,7 @@ def modelo_do_peer(peer):
 
 
 def modelo_do_grupo(grupo):
-    """Grupo -> o formulario em JSON, como a tela HTML o preencheria."""
+    """Grupo -> o formulario em JSON que o GrupoRegistro carrega."""
     ix = grupo.tipo == "ix"
     campos = dict(
         id=_texto(grupo.id), nome=grupo.nome, tipo=grupo.tipo,
@@ -138,8 +139,8 @@ def _avisos(avisos):
 def _falha(status, erros, avisos=()):
     """A recusa de toda rota: {"erros": {campo: mensagem}, "avisos": [...]}.
 
-    O erros_para_dict deixa o primeiro erro de cada campo vencer, como na tela
-    HTML: o erro de conversao do formulario vem antes do da validacao.
+    O erros_para_dict deixa o primeiro erro de cada campo vencer: o erro de
+    conversao do formulario vem antes do da validacao.
     """
     corpo = ErroResposta(erros=validate.erros_para_dict(erros),
                          avisos=_avisos(avisos))
@@ -147,8 +148,8 @@ def _falha(status, erros, avisos=()):
 
 
 def _modelo_rede(rede):
-    # o namespace em branco e o estado "nao declarado", como no cabecalho da
-    # tela HTML: o ASN de 16 bits usa o proprio numero
+    # o namespace em branco e o estado "nao declarado": o ASN de 16 bits usa
+    # o proprio numero
     politica = "" if rede.politica == rede.asn else str(rede.politica)
     return RedeAtual(asn=rede.ASN, politica=politica)
 
@@ -172,7 +173,7 @@ def ler_plano():
         aprendizado_min=plan.APRENDIZADO_MIN,
         aprendizado_max=plan.APRENDIZADO_MAX,
         # o 3xxx e um espaco so: o que foi cadastrado num grupo tambem e
-        # sugerido no peer, como na tela HTML
+        # sugerido no peer
         pop_usados=form._usados(peers, "pop"),
         aprendizado_usados=form._usados(peers + grupos, "aprendizado"),
         campos_por_tipo={c: list(t) for c, t in form.CAMPOS_POR_TIPO.items()},
@@ -183,7 +184,8 @@ def ler_plano():
 
 @roteador.put("/rede", response_model=RedeAtual)
 def gravar_rede(pedido: RedeForm):
-    """O AS da rede no topo do peers.yaml, com as conferencias do POST /asn."""
+    """O AS da rede no topo do peers.yaml, pelas conferencias do
+    _asn_do_formulario."""
     asn, politica, erros = form._asn_do_formulario(
         {"asn_rede": pedido.asn, "asn_politica": pedido.politica})
     if not erros:
@@ -245,7 +247,7 @@ def copiar_peer(ident: int):
 
 
 def _peer_do_pedido(formulario, peers, grupos, anterior):
-    """(peer, erros) do formulario, pelo mesmo caminho do POST /peer.
+    """(peer, erros) do formulario, pelo mesmo caminho do POST /api/peers.
 
     A propria entrada fica na lista: quem a dispensa e o validar, pelo
     registro `anterior`, que por isso tem que ser o objeto desta mesma lista.
@@ -292,9 +294,8 @@ def criar_peer(formulario: PeerForm):
 def atualizar_peer(ident: int, formulario: PeerForm):
     """Atualiza o registro do ID da URL.
 
-    O ID do corpo e editavel, como na tela HTML: se o operador o trocou, o
-    registro da URL passa ao ID novo, e o validar recusa o que ja for de
-    outro peer ou grupo.
+    O ID do corpo e editavel: se o operador o trocou, o registro da URL passa
+    ao ID novo, e o validar recusa o que ja for de outro peer ou grupo.
     """
     peers = _peers()
     anterior = peers_mod.achar_id(peers, ident)
@@ -342,8 +343,8 @@ def previa_peer(formulario: PeerForm,
 
     O `id` e o do registro que a tela esta editando, e falta no peer novo. O
     erro de validacao volta em 200 e sem bloco. A remocao fica de fora: ela
-    desfaz o que esta no equipamento, e o que esta no equipamento e o
-    registro salvo, que o GET /peers/{id}/saida devolve.
+    desfaz o que esta no equipamento, e o que esta no equipamento e o registro
+    salvo, que o GET /api/peers/{ident}/saida devolve.
     """
     peers, grupos, rede = _peers(), _grupos(), _rede()
     anterior = peers_mod.achar_id(peers, ident) if ident is not None else None
@@ -368,8 +369,8 @@ def saida_peer(ident: int):
     grupo = _grupo_do_peer(peer, _grupos())
     if peer.grupo_id is not None and grupo is None:
         # o yaml aponta para um grupo que saiu (edicao a mao, gravacao pela
-        # metade): sem ele o membro perde o que herdava. O erro e o mesmo do
-        # GET /saida/{token} da tela HTML
+        # metade): sem ele o membro perde o que herdava, e a rota recusa com
+        # 422 no lugar da Saida
         return _falha(422, [validate.Erro("grupo_id", "grupo nao encontrado")])
     rede = _rede()
     return Saida(bloco=render.render_peer(peer, grupo=grupo, rede=rede),
@@ -383,9 +384,8 @@ def saida_peer(ident: int):
 def consultar_irr(pedido: IrrPedido):
     """Os prefixos do ASN no IRR, pelo bgpq4, sem gravar nada.
 
-    E o POST /bgpq4 da tela HTML sem o formulario inteiro: o que a consulta
-    precisa e o ASN e o token, e o resultado vai para os campos de prefixo da
-    tela, que o operador ainda edita antes de salvar.
+    A consulta precisa so do ASN e do apelido: o resultado vai para os campos
+    de prefixo da tela, que o operador ainda edita antes de salvar.
     """
     bruto = pedido.asn.strip()
     if bruto and not (bruto.isascii() and bruto.isdigit()):
@@ -413,13 +413,12 @@ def _registro_grupo(grupo, peers):
 
 
 def _grupo_do_pedido(formulario, grupos, peers, anterior):
-    """(grupo, erros) do formulario, pelo mesmo caminho do POST /grupo.
+    """(grupo, erros) do formulario, pelo mesmo caminho do POST /api/grupos.
 
-    Duas diferencas da tela HTML, as duas porque la o ID escondido e a
-    identidade do grupo, e aqui quem diz qual grupo se edita e a URL:
+    Duas regras do ID, as duas porque quem diz qual grupo se edita e a URL:
     - editando, vale o ID da URL e o do corpo e ignorado;
-    - criando, ID que ja e de outro grupo e erro. O validar_grupo nao confere
-      isso, porque na tela HTML um POST com ID existente atualiza o grupo.
+    - criando, ID que ja e de outro grupo e erro. O validar_grupo so confere o
+      ID contra os peers, que dividem o mesmo espaco do eixo 5PPA.
     """
     dados = dados_do_formulario(formulario)
     if anterior is not None:
@@ -510,8 +509,8 @@ def excluir_grupo(ident: int):
     membros = [m.token for m in _membros(grupo, _peers())]
     if membros:
         # o membro sem filtro proprio herda a politica do grupo: apagar o
-        # grupo por baixo dele deixa a saida dele estourando. A mesma recusa
-        # do POST /grupo/{nome}/excluir da tela HTML
+        # grupo por baixo dele deixa a saida dele estourando, e por isso a
+        # recusa vem antes de a lista ser gravada
         return _falha(409, [validate.Erro(
             "membros", "o grupo ainda tem peers membros: %s. Tire-os do grupo "
                        "antes de excluir." % ", ".join(membros))])
@@ -549,7 +548,7 @@ def saida_grupo(ident: int):
     if grupo is None:
         return _nao_encontrado("grupo")
     rede = _rede()
-    # a tela HTML do grupo nao tem bloco de remocao, e a API tambem nao
+    # o grupo nao tem bloco de remocao: o Saida sai com o remover nulo
     return Saida(bloco=render.render_grupo(grupo, rede=rede),
                  criar_lista=_criar_lista_do_grupo(grupo, rede),
                  arquivo=grupo.arquivo().name)
@@ -569,7 +568,7 @@ def _originacao(blocos, rede):
 
 
 def _resposta_blocos(blocos, rede):
-    """O texto dos editores e os dois blocos, como a secao da tela HTML.
+    """O texto dos editores e os dois blocos que o /api/blocos devolve.
 
     A remocao cobre o cadastro inteiro, e nao so o que esta em servico: o
     prefixo que acabou de sair do ar e o que mais provavelmente ainda esta
@@ -595,7 +594,7 @@ def salvar_blocos(pedido: BlocosTexto):
     if erros:
         return _falha(422, erros)
     peers_mod.gravar_blocos(blocos, _yaml())
-    # o arquivo de onde o operador cola, com os ativos, como o POST /blocos
+    # o arquivo de onde o operador cola, com os ativos
     render.escrever_blocos(form._ativos(blocos), rede)
     return _resposta_blocos(blocos, rede)
 
@@ -645,8 +644,7 @@ async def _pedido_invalido(request: Request, exc: RequestValidationError):
     """Corpo, caminho ou query fora do modelo, no formato das outras recusas.
 
     O erro nao e de um campo do formulario, e por isso vai na chave _corpo.
-    Fora de /api a resposta continua a padrao do FastAPI, que e o que as rotas
-    HTML sempre devolveram.
+    Fora de /api a resposta continua a padrao do FastAPI.
     """
     if not request.url.path.startswith("/api/"):
         return await request_validation_exception_handler(request, exc)

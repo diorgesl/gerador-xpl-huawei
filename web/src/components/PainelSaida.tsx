@@ -23,6 +23,9 @@ type Props = {
   sujo: boolean
   carregando: boolean
   erro: string | null
+  // A aba ativa e do painel, e a tela so precisa saber qual e para publicar a
+  // copia certa para a paleta. Por isso o aviso, e nao o estado controlado
+  aoTrocarAba?: (id: string) => void
   // A tela recebe a aba inteira, e nao so o texto, porque o "salvar e copiar"
   // precisa saber qual bloco copiar depois que o salvar confirmar. O booleano
   // de volta e "o texto foi para a area de transferencia": salvar recusado e
@@ -39,7 +42,7 @@ function Estado({ previa, salvo, sujo }: { previa: string; salvo: string | null;
   return <>{plural(incluidas, "linha incluída", "linhas incluídas")}, {plural(removidas, "removida", "removidas")}</>
 }
 
-export function PainelSaida({ abas, sujo, carregando, erro, onCopiar, onSalvarECopiar }: Props) {
+export function PainelSaida({ abas, sujo, carregando, erro, aoTrocarAba, onCopiar, onSalvarECopiar }: Props) {
   const [copiado, setCopiado] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [modoDiff, setModoDiff] = useState(false)
@@ -78,7 +81,15 @@ export function PainelSaida({ abas, sujo, carregando, erro, onCopiar, onSalvarEC
         <div className="flex flex-wrap items-center justify-between gap-2">
           <TabsList>
             {abas.map((a) => (
-              <TabsTrigger key={a.id} value={a.id}>{a.rotulo}</TabsTrigger>
+              // O `onClick` do Base UI nao e substituido por este (os dois
+              // rodam): e por aqui que a tela fica sabendo qual aba esta aberta
+              <TabsTrigger
+                key={a.id}
+                value={a.id}
+                onClick={() => { setAbaAtual(a.id); aoTrocarAba?.(a.id) }}
+              >
+                {a.rotulo}
+              </TabsTrigger>
             ))}
           </TabsList>
           <p className="text-xs text-muted-foreground" aria-live="polite">

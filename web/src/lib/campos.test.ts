@@ -95,6 +95,20 @@ describe("o mapeamento do erro para o campo", () => {
     }
   })
 
+  it("chave que nao e campo do formulario nao vira campo", () => {
+    // o `id` nao existe no formulario do grupo, e uma chave nova do backend
+    // tambem nao: as duas prometiam um link que nao levava a lugar nenhum e
+    // fechavam o painel de saida, que pergunta so se ha campo
+    expect(camposDoErro("id", "parceiro", true)).toEqual([])
+    expect(camposDoErro("campo_que_nao_existe", "cliente")).toEqual([])
+  })
+
+  it("o id do peer continua sendo campo", () => {
+    // a guarda e por formulario, e nao uma lista de proibidos: o mesmo `id`
+    // e campo na tela do peer
+    expect(camposDoErro("id", "cliente")).toEqual(["id"])
+  })
+
   it("campo simples do formulario mapeia nele mesmo", () => {
     expect(camposDoErro("asn", "cliente")).toEqual(["asn"])
     expect(camposDoErro("route_limit", "cliente")).toEqual(["route_limit"])

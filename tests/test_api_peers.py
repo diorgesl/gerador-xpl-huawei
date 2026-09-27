@@ -105,7 +105,11 @@ def test_asn_repetido_e_recusado_no_campo(api):
     r = api.post("/api/peers", json=dict(
         CLIENTE, sessao_v4_remoto="198.51.100.3", prefixos_v4=["45.169.240.0/22"]))
     assert r.status_code == 422
-    assert r.json()["erros"]["asn"] == "ASN ja usado pelo peer Cliente ACME"
+    # o CLIENTE nao tem apelido, entao o token dos dois e o ASN e e ele que
+    # colide: o campo do erro e o apelido, que e o que resolve
+    assert r.json()["erros"]["apelido"] == (
+        "o ASN 268127 ja e o token do peer Cliente ACME: de um apelido a este "
+        "peer")
 
 
 def test_nome_com_acento_volta_422_no_campo(api, tmp_path):

@@ -123,11 +123,17 @@ const SEM_CAMPO = ["bgpq4", "_corpo", "_", "membros", "confirmado"]
 
 export function camposDoErro(chave: string, tipo: string, deGrupo = false): string[] {
   if (SEM_CAMPO.includes(chave)) return []
-  if (ERRO_PARA_CAMPO[chave]) return ERRO_PARA_CAMPO[chave]
+  const daTela = (deGrupo ? SECOES_GRUPO : SECOES_PEER).flatMap((s) => s.campos)
+  const eCampo = (campo: string) => daTela.includes(campo)
+  if (ERRO_PARA_CAMPO[chave]) return ERRO_PARA_CAMPO[chave].filter(eCampo)
   // no grupo do IX o aprendizado mora no campo do bloco do IX: a tela antiga
   // tinha a mesma volta, com a ancora trocando pelo tipo
   if (deGrupo && chave === "aprendizado" && tipo === "ix") return ["aprendizado_ix"]
-  return [chave]
+  // Chave que nao e campo DESTE formulario nao vira campo: o `id` existe no
+  // peer e nao no grupo, e uma chave nova do backend nao existe em nenhum.
+  // Sem esta guarda o resumo prometia um link que nao levava a lugar nenhum e
+  // o painel de saida fechava sem desenhar campo
+  return eCampo(chave) ? [chave] : []
 }
 
 export function campoDoErro(chave: string, tipo: string, deGrupo = false): string | null {

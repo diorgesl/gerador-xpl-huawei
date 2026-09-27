@@ -33,8 +33,8 @@ def erros_para_dict(erros):
     """Um erro por campo, e o primeiro que apareceu para aquele campo.
 
     A ordem da lista e a ordem das checagens, e o primeiro erro e o mais
-    perto do valor que o operador digitou: os erros de campo do app.py vem
-    antes dos do validar, que so ve o que sobrou do int(). Com o dict
+    perto do valor que o operador digitou: os erros de campo do formulario.py
+    vem antes dos do validar, que so ve o que sobrou do int(). Com o dict
     deixando o ultimo vencer, um "abc" no aprendizado de um grupo de
     upstream mostrava "ponto de aprendizado 3xxx obrigatorio" no lugar do
     "valor numerico invalido" do proprio campo.
@@ -64,6 +64,20 @@ def avisos(peer, peers, rede=None):
         saida.append(Erro(
             "route_limit",
             "a tabela do plano sugere %d para %s" % (sugerido, peer.tipo)))
+    # O grupo confere a origem contra a tabela do proprio tipo e o peer nao
+    # (o peer so olha a faixa 1xxx, e so nos tipos downstream). O resultado e
+    # um upstream com origem de cliente, que carimba a rota mentindo sobre a
+    # procedencia. Aqui e aviso, e nao erro: fechar isso trancaria cadastro
+    # que ja existe no peers.yaml, e trocar a origem desses peers e decisao de
+    # rede, nao de app (spec 2026-09-27, "Por que a origem vira aviso").
+    if peer.tipo not in plan.TIPOS_DOWNSTREAM:
+        permitidas = plan.ORIGENS_POR_TIPO.get(peer.tipo, ())
+        if peer.origem is not None and permitidas and peer.origem not in permitidas:
+            saida.append(Erro(
+                "origem",
+                "origem %d nao esta na tabela do %s: o plano usa %s"
+                % (peer.origem, peer.tipo,
+                   ", ".join(str(o) for o in permitidas))))
     _avisa_communities(peer, saida, rede)
     return saida
 
@@ -438,7 +452,7 @@ def validar_grupo(grupo, grupos, peers, anterior=None):
         # mais estrito que o caminho do peer de proposito: ORIGENS_POR_TIPO
         # diz quais origens cada tipo carrega, e um grupo de upstream com
         # origem de cliente carimba a rota mentindo sobre a procedencia. O
-        # peer fica como esta; alinha-lo e mudanca separada (ver a spec).
+        # grupo recusa isso; o peer avisa, pela mesma tabela, no avisos().
         permitidas = plan.ORIGENS_POR_TIPO.get(grupo.tipo, ())
         if grupo.origem is None or grupo.origem not in permitidas:
             erros.append(Erro(
@@ -516,10 +530,10 @@ def validar(peer, peers, anterior=None, grupos=None):
     erros = []
 
     # o tipo escolhe o template do render e as tabelas do plano. O formulario
-    # so oferece os quatro, mas o POST nao passa pelo portao do /peer/novo, e
-    # um tipo fora da lista gravava o peer para estourar depois, com
-    # TemplateNotFound: o mesmo estrago da origem em branco, com o mesmo
-    # caminho de gravacao antes do render. O peer_do_formulario ja cai no
+    # so oferece os quatro, mas o POST nao passa pelo portao do
+    # GET /api/peers/novo: um tipo fora da lista gravava o peer para estourar
+    # depois, com TemplateNotFound: o mesmo estrago da origem em branco, com o
+    # mesmo caminho de gravacao antes do render. O peer_do_formulario ja cai no
     # cliente; esta checagem e o que barra um Peer montado por fora.
     if peer.tipo not in plan.TIPOS:
         erros.append(Erro("tipo", "tipo desconhecido: %s" % peer.tipo))
@@ -692,16 +706,32 @@ def validar(peer, peers, anterior=None, grupos=None):
         if outro.id == peer.id:
             erros.append(Erro("id", "ID ja usado pelo peer %s" % outro.nome))
         if outro.token == peer.token:
-            # o token e o ASN, entao repetir token e quase sempre repetir
-            # ASN: o caso real e o segundo IX, onde o ASN e o do route
-            # server e o apelido e que desempata
-            if peer.tipo in ("ix", "pni") and not peer.apelido:
+            # O token e `apelido or str(asn)`, e o campo do erro segue de onde
+            # ele nasce: com apelido, e o apelido que o operador tem que mexer,
+            # e apontar o ASN mandava trocar um campo que nao resolve (a copia
+            # do ALT recebeu "ASN ja usado", trocou o ASN e o erro continuou).
+            # O ix/pni sem apelido continua no apelido, porque ali o ASN e o
+            # do route server e o apelido e a saida.
+            if peer.apelido:
+                erros.append(Erro(
+                    "apelido",
+                    "o apelido %s ja e o token do peer %s"
+                    % (peer.apelido, outro.nome)))
+            elif peer.tipo in ("ix", "pni"):
                 erros.append(Erro(
                     "apelido",
                     "apelido obrigatorio: o ASN %d e o do route server e ja "
                     "esta no peer %s" % (peer.asn, outro.nome)))
             else:
-                erros.append(Erro("asn", "ASN ja usado pelo peer %s" % outro.nome))
+                # Sem apelido o token E o ASN, e por isso ele colide: nao ha
+                # trava no ASN (dois peers do mesmo cliente sao legitimos), o
+                # que nao pode e repetir o token, que e o nome do peer no
+                # equipamento e nos arquivos de out/. O campo e o apelido
+                # porque e ele que resolve
+                erros.append(Erro(
+                    "apelido",
+                    "o ASN %d ja e o token do peer %s: de um apelido a este "
+                    "peer" % (peer.asn, outro.nome)))
         for fam in familias:
             remoto = (peer.sessoes[fam] or {}).get("remoto")
             outro_remoto = (outro.sessoes.get(fam) or {}).get("remoto")

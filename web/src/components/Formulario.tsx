@@ -116,7 +116,7 @@ export function Formulario<T extends FieldValues>({
                 ctx={ctx}
                 bruto={valores[campo.nome]}
                 erro={erroDoCampo(campo.nome, erros, tipo, deGrupo)}
-                aviso={avisos.find((a) => a.campo === campo.nome)?.mensagem}
+                avisos={avisos.filter((a) => a.campo === campo.nome).map((a) => a.mensagem)}
                 nota={pertenceAoTipo(campo.nome, camposPorTipo, tipo)
                   ? undefined
                   : `o bloco de ${tipo} não usa este campo`}
@@ -182,12 +182,12 @@ function AreaTexto({ id, bruto, linhas, mono, aoMudar }: {
   )
 }
 
-function CampoRender({ campo, ctx, bruto, erro, aviso, nota, aoMudar, aoTrocarTipo, aoTrocarClasse }: {
+function CampoRender({ campo, ctx, bruto, erro, avisos, nota, aoMudar, aoTrocarTipo, aoTrocarClasse }: {
   campo: CampoTabela
   ctx: Contexto
   bruto: unknown
   erro?: string
-  aviso?: string
+  avisos?: string[]
   nota?: string
   aoMudar: (nome: string, valor: unknown) => void
   aoTrocarTipo: (tipo: string) => void
@@ -226,7 +226,7 @@ function CampoRender({ campo, ctx, bruto, erro, aviso, nota, aoMudar, aoTrocarTi
               else if (id === "classe") aoTrocarClasse(valor)
             }}
           >
-            <SelectTrigger id={id}>
+            <SelectTrigger id={id} className="w-full min-w-0">
               {/* Medido: o Value do Base UI mostra o VALOR cru quando nao
                   recebe funcao, entao a tabela de campos gastaria o rotulo
                   ("1100 - cliente de transito") para o operador ler "1100".
@@ -271,7 +271,7 @@ function CampoRender({ campo, ctx, bruto, erro, aviso, nota, aoMudar, aoTrocarTi
   }
 
   return (
-    <Campo nome={id} rotulo={rotulo} ajuda={campo.ajuda} erro={erro} aviso={aviso}
+    <Campo nome={id} rotulo={rotulo} ajuda={campo.ajuda} erro={erro} avisos={avisos}
       nota={nota} largo={campo.largo || campo.tipo === "area"}>
       {controle()}
     </Campo>

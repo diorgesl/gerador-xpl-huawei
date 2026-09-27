@@ -29,6 +29,28 @@ describe("o resumo do topo do formulario", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it("um erro que cobre varios campos leva a secao, e nao ao primeiro campo", async () => {
+    // o teste de `prefixos` pode ser o v4 ou o v6, e a mensagem nao diz qual:
+    // prometer o campo v4 era pior que levar ao topo da secao
+    const aoIrPara = vi.fn()
+    render(
+      <ResumoErros
+        erros={{ prefixos: "prefixo invalido: 2001:db8::/129" }}
+        tipo="cliente"
+        aoIrPara={aoIrPara}
+      />,
+    )
+    await userEvent.click(screen.getByRole("button", { name: /prefixo invalido/ }))
+    expect(aoIrPara).toHaveBeenCalledWith(null, "prefixos")
+  })
+
+  it("um erro de um campo so continua indo no campo", async () => {
+    const aoIrPara = vi.fn()
+    render(<ResumoErros erros={{ asn: "ASN ja usado" }} tipo="cliente" aoIrPara={aoIrPara} />)
+    await userEvent.click(screen.getByRole("button", { name: /ASN ja usado/ }))
+    expect(aoIrPara).toHaveBeenCalledWith("asn", "identificacao")
+  })
+
   it("o icone acompanha a mensagem, para o erro nao depender so da cor", () => {
     // a spec pede icone alem da cor no erro e no aviso: o matiz do aviso e
     // vizinho do badge de parceiro, e quem nao distingue cor precisa do sinal
