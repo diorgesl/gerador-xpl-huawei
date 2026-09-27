@@ -5,6 +5,7 @@ import { Paleta } from "@/components/Paleta"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
+import { sessaoVencida } from "@/api/cliente"
 import { useGrupos, usePeers, usePlano } from "@/api/consultas"
 import { baixar } from "@/lib/copiar"
 import { ProvedorAcoes } from "./acoes"
@@ -29,6 +30,9 @@ export function Casca() {
 
   const baixarBase = useCallback(async () => {
     const resposta = await fetch("/base.txt")
+    // o fetch cru nao passa pelo cliente, entao o 401 de sessao vencida
+    // precisa do aviso aqui: sem ele o clique nao faria nada, calado
+    if (sessaoVencida(resposta)) return
     // sem a conferencia, um 500 do servidor salvaria a pagina de erro com o
     // nome do bloco base
     if (!resposta.ok) return

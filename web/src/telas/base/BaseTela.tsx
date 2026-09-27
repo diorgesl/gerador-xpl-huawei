@@ -3,6 +3,7 @@ import { Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CodigoXpl } from "@/components/CodigoXpl"
 import { Falha } from "@/components/Falha"
+import { sessaoVencida } from "@/api/cliente"
 import { baixar, copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
 
@@ -13,6 +14,9 @@ export function BaseTela() {
     queryKey: ["base"],
     queryFn: async () => {
       const r = await fetch("/base.txt")
+      // o fetch cru nao passa pelo cliente: sem esta linha, a sessao vencida
+      // viraria uma falha de servidor cujo tentar de novo nunca passa
+      if (sessaoVencida(r)) throw new Error("sessao expirada")
       if (!r.ok) throw new Error("falha ao ler o base.txt")
       return r.text()
     },

@@ -376,3 +376,70 @@ def test_o_lifespan_cria_o_admin(api_anonimo, usuarios_em_tmp):
     # que e o caminho de verdade do boot
     assert usuarios_em_tmp.exists()
     assert auth.conferir(auth.NOME_ADMIN, SENHA)
+
+
+def test_hash_truncado_e_erro_com_nome_do_arquivo(caminho):
+    """Um base64 cortado decodifica em menos bytes e nao estoura sozinho.
+
+    Sem a conferencia de tamanho, ele viraria "usuario ou senha invalidos", e
+    o operador procuraria o problema na senha em vez de no arquivo.
+    """
+    auth.bootstrap()
+    dados = auth.carregar()
+    registro = dados["usuarios"][auth.NOME_ADMIN]
+    registro["hash"] = registro["hash"][:20]
+    auth.escrever(dados)
+
+    with pytest.raises(ValueError) as erro:
+        auth.conferir(auth.NOME_ADMIN, SENHA)
+
+    assert str(caminho) in str(erro.value)
+
+
+def test_salt_com_lixo_e_erro_com_nome_do_arquivo(caminho):
+    auth.bootstrap()
+    dados = auth.carregar()
+    dados["usuarios"][auth.NOME_ADMIN]["salt"] = "!!!!"
+    auth.escrever(dados)
+
+    with pytest.raises(ValueError) as erro:
+        auth.conferir(auth.NOME_ADMIN, SENHA)
+
+    assert str(caminho) in str(erro.value)
+
+
+def test_parametro_de_scrypt_torto_e_erro_com_nome_do_arquivo(caminho):
+    auth.bootstrap()
+    dados = auth.carregar()
+    dados["usuarios"][auth.NOME_ADMIN]["n"] = 1000
+    auth.escrever(dados)
+
+    with pytest.raises(ValueError) as erro:
+        auth.conferir(auth.NOME_ADMIN, SENHA)
+
+    assert str(caminho) in str(erro.value)
+
+
+def test_segredo_torto_e_erro_com_nome_do_arquivo(caminho):
+    auth.bootstrap()
+    dados = auth.carregar()
+    dados["segredo"] = "!!!!"
+    auth.escrever(dados)
+
+    with pytest.raises(ValueError) as erro:
+        auth.da_requisicao(_pedido("admin.1.x"))
+
+    assert str(caminho) in str(erro.value)
+
+
+def test_reescrever_arquivo_frouxo_aperta_a_permissao(caminho):
+    # um arquivo criado a mao, ou restaurado de um backup, nasce com a umask
+    # de quem o criou. O boot o reescreve, e a permissao tem que acompanhar:
+    # e o arquivo que guarda o segredo que assina os cookies
+    caminho.write_text("", encoding="utf-8")
+    caminho.chmod(0o644)
+
+    auth.bootstrap()
+
+    modo = stat.S_IMODE(caminho.stat().st_mode)
+    assert modo == 0o600, oct(modo)

@@ -15,6 +15,28 @@ export function quandoPerderSessao(fn: () => void) {
   aoPerderSessao = fn
 }
 
+/** Chama o aviso registrado, se houver. */
+export function avisarPerdaDeSessao() {
+  aoPerderSessao?.()
+}
+
+/**
+ * A leitura de uma resposta que saiu por fetch cru, fora deste cliente.
+ *
+ * O /base.txt e texto puro e nao esta no schema, entao as duas telas que o
+ * buscam (a Casca, no "baixar o bloco base" da paleta, e a tela do bloco
+ * base) leem a resposta na mao. Sem esta conferencia, o 401 de uma sessao
+ * vencida nao teria o mesmo destino das consultas: viraria uma falha de
+ * servidor com um tentar de novo que nunca passa.
+ *
+ * Devolve true quando a sessao caiu, e quem chamou para por ali.
+ */
+export function sessaoVencida(resposta: Response): boolean {
+  if (resposta.status !== 401) return false
+  avisarPerdaDeSessao()
+  return true
+}
+
 // baseUrl vazio de proposito: o caminho do schema ja comeca com /api, e a
 // mesma build roda pelo proxy do Vite (5173) e pelo uvicorn (8000). Com host
 // no codigo, um dos dois quebra.
@@ -38,6 +60,6 @@ cliente.use({
     if (response.status !== 401) return
     const caminho = new URL(request.url, "http://localhost").pathname
     if (caminho === "/api/login") return
-    aoPerderSessao?.()
+    avisarPerdaDeSessao()
   },
 })

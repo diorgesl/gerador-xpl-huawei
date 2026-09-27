@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { quandoPerderSessao } from "@/api/cliente"
 import { montarRota } from "@/teste/roteador"
 import { BaseTela } from "./BaseTela"
 
@@ -59,5 +60,16 @@ describe("a tela do bloco base", () => {
     const tentar = screen.getByRole("button", { name: /tentar de novo/i })
     fireEvent.click(tentar)
     await waitFor(() => expect(chamadas.mock.calls.length).toBeGreaterThan(2), { timeout: 3000 })
+  })
+
+  it("o 401 no /base.txt avisa que a sessao caiu", async () => {
+    // sem o aviso, a sessao vencida viraria "nao deu para falar com a API" e
+    // um tentar de novo que nunca passa, sem caminho para a tela de login
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 401 })))
+    let avisos = 0
+    quandoPerderSessao(() => { avisos += 1 })
+    montarRota([{ path: "/base", element: <BaseTela /> }], "/base")
+
+    await waitFor(() => expect(avisos).toBe(1))
   })
 })

@@ -14,6 +14,7 @@ o requirements.txt nao ganha linha.
 """
 
 import base64
+import binascii
 import hashlib
 import hmac
 import os
@@ -38,6 +39,11 @@ SCRYPT_N = 16384
 SCRYPT_R = 8
 SCRYPT_P = 1
 DKLEN = 32
+
+# Os tamanhos do que vai no arquivo, conferidos na leitura: e por eles que um
+# valor truncado a mao aparece como erro de arquivo, e nao como senha errada
+TAM_SALT = 16
+TAM_SEGREDO = 32
 
 # sete dias, desde o login. Nao ha renovacao deslizante: a validade e a
 # mesma do primeiro ao ultimo pedido da sessao
@@ -83,6 +89,9 @@ def escrever(dados, caminho=None):
     caminho.parent.mkdir(parents=True, exist_ok=True)
     texto = yaml.safe_dump(dados, allow_unicode=False, sort_keys=False)
     descritor = os.open(caminho, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    # o modo do open vale so na criacao: um arquivo que ja existia com a umask
+    # frouxa de quem o criou continuaria frouxo, e e ele que guarda o segredo
+    os.fchmod(descritor, 0o600)
     with os.fdopen(descritor, "w", encoding="utf-8") as arquivo:
         arquivo.write(texto)
 
@@ -92,9 +101,18 @@ def _b64(bruto):
 
 
 def _de_b64(texto):
-    # o padding sai na escrita e volta aqui: sem ele o base64url nao fecha
-    # o ultimo grupo, e o b64decode recusa
-    return base64.urlsafe_b64decode(texto + "=" * (-len(texto) % 4))
+    """O base64url do arquivo, sem perdoar caractere fora do alfabeto.
+
+    O b64decode e permissivo por padrao: ele descarta o lixo em silencio, e um
+    valor colado pela metade decodifica em menos bytes sem estourar. Com o
+    validate, o lixo estoura aqui; o truncado, na conferencia de tamanho de
+    quem chama. Nos dois casos o erro sai nomeando o arquivo.
+
+    O padding sai na escrita e volta aqui: sem ele o base64url nao fecha o
+    ultimo grupo.
+    """
+    return base64.b64decode(texto + "=" * (-len(texto) % 4),
+                            altchars=b"-_", validate=True)
 
 
 def _hash(senha, salt, n=None, r=None, p=None):
@@ -120,6 +138,30 @@ def _registro(caminho, usuario):
     return registro
 
 
+def _campos_do_hash(caminho, usuario, registro):
+    """O salt, o hash e os parametros do scrypt, conferidos.
+
+    A conferencia e o que separa "arquivo torto" de "senha errada": um hash
+    truncado decodifica em menos bytes sem estourar, e sem olhar o tamanho a
+    senha certa seria recusada com "usuario ou senha invalidos", mandando o
+    operador procurar o problema no lugar errado.
+    """
+    try:
+        salt = _de_b64(registro["salt"])
+        resumo = _de_b64(registro["hash"])
+        n, r, p = int(registro["n"]), int(registro["r"]), int(registro["p"])
+    except (binascii.Error, ValueError, TypeError) as exc:
+        raise ValueError("%s: usuario %s com campo torto: %s"
+                         % (caminho, usuario, exc)) from exc
+    if len(salt) != TAM_SALT or len(resumo) != DKLEN:
+        raise ValueError("%s: usuario %s com salt ou hash de tamanho errado"
+                         % (caminho, usuario))
+    if n < 2 or n & (n - 1) or r < 1 or p < 1:
+        raise ValueError("%s: usuario %s com parametro de scrypt invalido"
+                         % (caminho, usuario))
+    return salt, resumo, n, r, p
+
+
 def gerar_senha():
     """A senha do admin novo: 12 bytes sorteados, 16 caracteres."""
     return secrets.token_urlsafe(12)
@@ -131,9 +173,9 @@ def criar_admin(senha, caminho=None):
     O arquivo inteiro e reescrito: e o primeiro boot, nao ha nada para
     preservar.
     """
-    salt = secrets.token_bytes(16)
+    salt = secrets.token_bytes(TAM_SALT)
     dados = {
-        "segredo": _b64(secrets.token_bytes(32)),
+        "segredo": _b64(secrets.token_bytes(TAM_SEGREDO)),
         "usuarios": {
             NOME_ADMIN: {"salt": _b64(salt), "hash": _b64(_hash(senha, salt)),
                          "n": SCRYPT_N, "r": SCRYPT_R, "p": SCRYPT_P},
@@ -186,12 +228,12 @@ def conferir(usuario, senha, caminho=None):
     e segredo: ele sai impresso no boot e a tela o preenche sozinho, entao
     nao ha o que esconder no tempo de resposta.
     """
+    caminho = _caminho(caminho)
     registro = _registro(caminho, usuario)
     if registro is None:
         return False
-    obtido = _hash(senha, _de_b64(registro["salt"]),
-                   registro["n"], registro["r"], registro["p"])
-    return hmac.compare_digest(obtido, _de_b64(registro["hash"]))
+    salt, resumo, n, r, p = _campos_do_hash(caminho, usuario, registro)
+    return hmac.compare_digest(_hash(senha, salt, n, r, p), resumo)
 
 
 def _segredo(caminho=None):
@@ -207,6 +249,12 @@ def _segredo(caminho=None):
         return None
     if not dados.get("segredo"):
         raise ValueError("%s: sem a chave segredo" % caminho)
+    try:
+        segredo = _de_b64(dados["segredo"])
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("%s: segredo torto: %s" % (caminho, exc)) from exc
+    if len(segredo) != TAM_SEGREDO:
+        raise ValueError("%s: segredo de tamanho errado" % caminho)
     return dados["segredo"]
 
 

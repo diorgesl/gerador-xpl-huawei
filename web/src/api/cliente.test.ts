@@ -79,6 +79,29 @@ describe("o cliente avisa quando a sessao caiu", () => {
   })
 })
 
+describe("a resposta crua de um fetch fora do cliente", () => {
+  // o /base.txt e texto puro e nao esta no schema: ele sai por fetch cru nas
+  // duas telas, e por isso nao passa pelo middleware do cliente
+  async function comStatus(status: number) {
+    vi.stubGlobal("Request", Requisicao)
+    vi.resetModules()
+    const modulo = await import("./cliente")
+    let avisos = 0
+    modulo.quandoPerderSessao(() => { avisos += 1 })
+    const parar = modulo.sessaoVencida(new Response("", { status }))
+    return { parar, avisos }
+  }
+
+  it("o 401 manda parar e avisa", async () => {
+    expect(await comStatus(401)).toEqual({ parar: true, avisos: 1 })
+  })
+
+  it("o 200 e o 500 nao avisam nem mandam parar", async () => {
+    expect(await comStatus(200)).toEqual({ parar: false, avisos: 0 })
+    expect(await comStatus(500)).toEqual({ parar: false, avisos: 0 })
+  })
+})
+
 describe("a leitura da recusa", () => {
   it("le o corpo no formato da API", () => {
     expect(lerRecusa({ erros: { asn: "ASN ja usado" }, avisos: [] })).toEqual({
