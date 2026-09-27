@@ -1,10 +1,13 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import "@/estilo/tokens.css"
-import App from "@/App"
+import { Provedores } from "./provedores"
+import { Roteador } from "./roteador"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <Provedores>
+      <Roteador />
+    </Provedores>
   </StrictMode>,
 )
