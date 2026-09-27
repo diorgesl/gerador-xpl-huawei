@@ -706,16 +706,32 @@ def validar(peer, peers, anterior=None, grupos=None):
         if outro.id == peer.id:
             erros.append(Erro("id", "ID ja usado pelo peer %s" % outro.nome))
         if outro.token == peer.token:
-            # o token e o ASN, entao repetir token e quase sempre repetir
-            # ASN: o caso real e o segundo IX, onde o ASN e o do route
-            # server e o apelido e que desempata
-            if peer.tipo in ("ix", "pni") and not peer.apelido:
+            # O token e `apelido or str(asn)`, e o campo do erro segue de onde
+            # ele nasce: com apelido, e o apelido que o operador tem que mexer,
+            # e apontar o ASN mandava trocar um campo que nao resolve (a copia
+            # do ALT recebeu "ASN ja usado", trocou o ASN e o erro continuou).
+            # O ix/pni sem apelido continua no apelido, porque ali o ASN e o
+            # do route server e o apelido e a saida.
+            if peer.apelido:
+                erros.append(Erro(
+                    "apelido",
+                    "o apelido %s ja e o token do peer %s"
+                    % (peer.apelido, outro.nome)))
+            elif peer.tipo in ("ix", "pni"):
                 erros.append(Erro(
                     "apelido",
                     "apelido obrigatorio: o ASN %d e o do route server e ja "
                     "esta no peer %s" % (peer.asn, outro.nome)))
             else:
-                erros.append(Erro("asn", "ASN ja usado pelo peer %s" % outro.nome))
+                # Sem apelido o token E o ASN, e por isso ele colide: nao ha
+                # trava no ASN (dois peers do mesmo cliente sao legitimos), o
+                # que nao pode e repetir o token, que e o nome do peer no
+                # equipamento e nos arquivos de out/. O campo e o apelido
+                # porque e ele que resolve
+                erros.append(Erro(
+                    "apelido",
+                    "o ASN %d ja e o token do peer %s: de um apelido a este "
+                    "peer" % (peer.asn, outro.nome)))
         for fam in familias:
             remoto = (peer.sessoes[fam] or {}).get("remoto")
             outro_remoto = (outro.sessoes.get(fam) or {}).get("remoto")

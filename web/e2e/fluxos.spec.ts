@@ -75,8 +75,10 @@ test("duplicar e ajustar", async ({ page }) => {
   await expect(page).toHaveURL(/\/peers\/novo\?de=1/)
   await expect(page.getByText(/cópia de ACME/)).toBeVisible()
   // a copia vem com o que o salvar recusaria enquanto nao for ajustado: o
-  // token (o apelido), o endereco remoto e o prefixo do peer 1
-  await expect(page.getByRole("alert").first()).toContainText("ASN ja usado")
+  // token (o apelido), o endereco remoto e o prefixo do peer 1. O peer 1 do
+  // cadastro do e2e tem apelido (ACME), entao a copia colide no apelido, e o
+  // erro aponta o apelido: a mensagem antiga culpava o ASN
+  await expect(page.getByRole("alert").first()).toContainText("ja e o token do peer")
 
   await page.getByLabel("Apelido").fill(`${APELIDO}2`)
   await page.getByLabel("ASN").fill("64502")
