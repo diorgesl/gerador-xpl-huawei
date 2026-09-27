@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { montarRota } from "@/teste/roteador"
 import { BaseTela } from "./BaseTela"
@@ -42,5 +42,22 @@ describe("a tela do bloco base", () => {
     await waitFor(() => expect(chamadas).toHaveBeenCalledTimes(2), { timeout: 3000 })
     expect(screen.getByRole("button", { name: /^copiar$/i })).toBeDisabled()
     expect(screen.getByRole("button", { name: /^baixar$/i })).toBeDisabled()
+  })
+
+  it("a falha do /base.txt sai acima do painel, com o tentar de novo", async () => {
+    // a tela nao troca o corpo pelo aviso como o peer e o grupo fazem: o titulo
+    // e o paragrafo da ordem servem mesmo com o /base.txt fora do ar, entao o
+    // aviso entra acima do painel e o resto da tela fica
+    const chamadas = vi.fn(() => Promise.resolve(new Response("falhou", { status: 500 })))
+    vi.stubGlobal("fetch", chamadas)
+    montarRota([{ path: "/base", element: <BaseTela /> }], "/base")
+    // a espera e a segunda chamada, o retry do cliente: sem ela o caso mediria
+    // o carregando, em que nao ha falha nenhuma para mostrar
+    await waitFor(() => expect(chamadas).toHaveBeenCalledTimes(2), { timeout: 3000 })
+    expect(screen.getByText("não deu para falar com a API")).toBeInTheDocument()
+    expect(screen.getByText(/bloco base primeiro/i)).toBeInTheDocument()
+    const tentar = screen.getByRole("button", { name: /tentar de novo/i })
+    fireEvent.click(tentar)
+    await waitFor(() => expect(chamadas.mock.calls.length).toBeGreaterThan(2), { timeout: 3000 })
   })
 })

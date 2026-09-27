@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CodigoXpl } from "@/components/CodigoXpl"
+import { Falha } from "@/components/Falha"
 import { baixar, copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
 
@@ -50,6 +51,14 @@ export function BaseTela() {
           <Download className="size-4" /> baixar
         </Button>
       </div>
+
+      {/* O aviso entra acima do painel, e nao no lugar do corpo como o peer e o
+          grupo fazem: la nao ha formulario sem o registro, e aqui o titulo e o
+          paragrafo da ordem servem mesmo com o /base.txt fora do ar. A mensagem
+          e a do Falha das outras telas, para a falha ter uma cara so */}
+      {base.isError && (
+        <Falha mensagem="não deu para falar com a API" aoTentar={() => void base.refetch()} />
+      )}
 
       {base.isLoading && <p className="text-sm text-muted-foreground">gerando...</p>}
       {base.data && <CodigoXpl texto={base.data} />}
