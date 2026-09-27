@@ -1443,11 +1443,20 @@ cima do rotulo do POP, e o do prepend por cima do keepalive.
 
 A causa: `web/src/components/ui/select.tsx:43` monta o `SelectTrigger` com
 `w-fit` e `whitespace-nowrap`, e `Formulario.tsx:229` o usa sem classe nenhuma.
-Em `xl` o painel de saida toma `minmax(0, 42rem)` da largura
-(`PeerTela.tsx:388`), entao as tres colunas do formulario ficam com cerca de
-110px cada: o select, que e do tamanho do proprio texto, estoura a celula do
-grid e pinta por cima do vizinho. O `line-clamp-1` que o componente ja poe no
-valor nao ajuda enquanto o gatilho nao tiver largura para clampar.
+Em `xl` o painel de saida toma `minmax(0, 42rem)` da largura (o grid de duas
+colunas da tela esta em `PeerTela.tsx:411`), entao as tres colunas do formulario
+ficam com **88,66px** cada (medido em 2026-09-27; o plano estimava ~110px): o
+select, que e do tamanho do proprio texto, estoura a celula do grid e pinta por
+cima do vizinho. O `line-clamp-1` que o componente ja poe no valor nao ajuda
+enquanto o gatilho nao tiver largura para clampar.
+
+> Nota de execucao (2026-09-27): o Step 1 e o Step 3 abaixo estao na versao que
+> foi executada. A assercao do plano comparava a origem com o POP e foi medida
+> como insatisfazivel — o POP abre a linha de baixo (y=603,5 contra y=516,5) no
+> x=281, e a origem comeca em x=482,33, entao nenhuma largura passaria; a
+> fronteira virou a propria celula. E o `min-w-0` do `Campo.tsx` foi medido
+> INERTE nos tres pontos de uso (o `grid-cols-3` do Tailwind ja emite
+> `repeat(3, minmax(0, 1fr))`, minimo zero): quem conserta e o `w-full`.
 
 **Files:**
 - Modify: `web/src/components/Formulario.tsx:229` (a classe do `SelectTrigger`)
@@ -1464,18 +1473,29 @@ Em `web/e2e/fluxos.spec.ts`, no fim:
 ```ts
 test("um valor longo nao invade a coluna vizinha", async ({ page }) => {
   // No xl o painel de saida toma 42rem, entao cada uma das tres colunas do
-  // formulario fica com ~110px. O select do shadcn nasce `w-fit`: com um valor
-  // longo ele estourava a celula do grid e pintava por cima do campo ao lado.
-  // A medida e a unica prova possivel aqui: jsdom nao calcula layout
+  // formulario fica com 88,66px (medido, e o que a celula da origem mede
+  // abaixo). O select do shadcn nasce `w-fit`: com um valor longo ele estourava
+  // a celula do grid e pintava por cima do campo ao lado. A medida e a unica
+  // prova possivel aqui: jsdom nao calcula layout
   await page.goto("/peers/1")
   const origem = page.getByLabel("Origem da rota")
-  const pop = page.getByLabel("POP")
   await expect(origem).toBeVisible()
 
+  // A celula do grid e a fronteira da coluna, e e ela que a invasao atravessa:
+  // a origem fecha a terceira coluna da linha, e o que ficava por cima era o
+  // painel de saida. O POP nao serve de fronteira: ele abre a linha de baixo
+  // (celula em y=603,5 contra y=516,5 da origem) e comeca a esquerda dela.
+  // Medido antes do conserto: o gatilho terminava em 733,61 e a celula em 570,98
+  const celula = await page.locator('[data-campo="origem"]').boundingBox()
   const a = await origem.boundingBox()
-  const b = await pop.boundingBox()
-  expect(a && b).toBeTruthy()
-  expect(a!.x + a!.width).toBeLessThanOrEqual(b!.x + 1)
+  expect(a && celula).toBeTruthy()
+
+  // A medida so prova algo enquanto a coluna for estreita: a partir de ~245px o
+  // gatilho w-fit cabe sozinho e o caso ficaria verde sem conserto nenhum. Hoje
+  // a celula mede 88,66, entao a folga e grande: a guarda e para o dia em que a
+  // largura mudar, e nao para hoje
+  expect(celula!.width).toBeLessThan(150)
+  expect(a!.x + a!.width).toBeLessThanOrEqual(celula!.x + celula!.width + 1)
 })
 ```
 
@@ -1485,10 +1505,10 @@ test("um valor longo nao invade a coluna vizinha", async ({ page }) => {
 cd web && npm run e2e -- --project=chromium -g "nao invade"
 ```
 
-Expected: FAIL, porque o select passa por cima do POP. Se ele passar de primeira,
-o viewport do caso nao esta reproduzindo o aperto do `xl`: confira que a janela
-tem 1280 de largura (o padrao do `devices["Desktop Chrome"]`) e que as tres
-colunas estao de pe.
+Expected: FAIL, porque o gatilho atravessa a borda da propria celula. Se ele
+passar de primeira, o viewport do caso nao esta reproduzindo o aperto do `xl`:
+confira que a janela tem 1280 de largura (o padrao do `devices["Desktop Chrome"]`)
+e que as tres colunas estao de pe.
 
 - [ ] **Step 3: O gatilho com largura da coluna**
 
@@ -1500,8 +1520,10 @@ Em `web/src/components/Formulario.tsx:229`:
 
 O `w-full` faz o gatilho caber na celula, e o `line-clamp-1` que o componente ja
 aplica ao valor passa a ter efeito: o texto longo e cortado com reticencias em
-vez de vazar. O `min-w-0` e o que permite o gatilho encolher abaixo do proprio
-conteudo dentro do flex do componente.
+vez de vazar. O `min-w-0` fica como defensivo: medido em 2026-09-27, ele e INERTE neste ponto
+de uso (a celula mede 88,66 com e sem a classe), e quem faz o gatilho caber e o
+`w-full`. O componente base (`web/src/components/ui/select.tsx:43`) nasce com
+`w-fit` e `whitespace-nowrap`, sem `min-w-0` nenhum.
 
 - [ ] **Step 4: O item do grid tambem encolhe**
 
@@ -1514,8 +1536,12 @@ Em `web/src/components/Campo.tsx`, o wrapper do campo:
     >
 ```
 
-Sem o `min-w-0` o item do grid tem `min-width: auto`, entao ele se recusa a
-encolher abaixo do conteudo e a coluna inteira estoura em vez de so o campo.
+O `min-w-0` fica (e o que o campo pede de um item de grid), mas ele foi medido
+INERTE nos tres pontos de uso: o `grid-cols-3` do Tailwind emite
+`repeat(3, minmax(0, 1fr))`, ou seja o minimo da trilha ja e zero, e a celula
+mede 88,66 com e sem a classe. A explicacao do `min-width: auto` vale para uma
+trilha `1fr` pura, que nao e a daqui — quem conserta o campo e o `w-full` do
+Step 3.
 
 - [ ] **Step 5: Rodar e ver passar**
 
