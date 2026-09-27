@@ -178,6 +178,10 @@ export function GrupoTela() {
     toast(`gravado em out/${r.data.arquivo}`)
     void consultas.invalidateQueries({ queryKey: chaves.grupos })
     void consultas.invalidateQueries({ queryKey: chaves.peers })
+    // o /api/plano monta as listas de "ja cadastrado" (o POP e o aprendizado)
+    // de peers MAIS grupos: sem invalidar, o grupo recem-gravado nao entra nas
+    // sugestoes ate a janela voltar ao foco
+    void consultas.invalidateQueries({ queryKey: chaves.plano })
     // o criar_lista e o salvo da aba "ao criar" vem de GET /saida, e nao da
     // previa: sem invalidar, a aba continuaria com o de antes do salvar
     void consultas.invalidateQueries({ queryKey: ["saida", "grupo", ident] })
@@ -250,7 +254,7 @@ export function GrupoTela() {
         ))}
 
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" onClick={() => void gravar()} disabled={salvar.isPending}>salvar</Button>
+          <Button size="sm" onClick={() => void gravar()} disabled={salvar.isPending || !inicial.data}>salvar</Button>
           {ident !== null && (
             <Button size="sm" variant="ghost" onClick={() => navegar(`/grupos/novo?de=${ident}`)}>duplicar</Button>
           )}
@@ -326,18 +330,32 @@ export function GrupoTela() {
             </DialogDescription>
           </DialogHeader>
 
-          {errosDoGrupo.membros && (
-            <p role="alert" className="rounded border border-erro-texto/30 bg-erro-fundo p-2 text-xs text-erro-texto">
-              {errosDoGrupo.membros}
+          {/* Toda mensagem da recusa sai, e nao so a dos membros: um 404 traz a
+              chave `_` e um corpo que o lerRecusa nao entende traz `_corpo`, e
+              nos dois o dialogo ficava aberto, mudo, com o operador clicando */}
+          {Object.entries(errosDoGrupo).filter(([, mensagem]) => mensagem).map(([chave, mensagem]) => (
+            <p key={chave} role="alert" className="rounded border border-erro-texto/30 bg-erro-fundo p-2 text-xs text-erro-texto">
+              {mensagem}
             </p>
-          )}
+          ))}
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setExcluindo(false)}>cancelar</Button>
+            {/* o onOpenChange limpa a recusa, e este caminho fechava por fora
+                dele: o texto de antes voltava na abertura seguinte */}
+            <Button variant="ghost" onClick={() => { setExcluindo(false); setErrosDoGrupo({}) }}>cancelar</Button>
             <Button variant="destructive" onClick={() => void excluir()}>excluir</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   )
+}
+
+/**
+ * A tela remonta quando o registro muda, como no peer: sem a chave, os campos
+ * ficam com os valores do registro ANTERIOR e o salvar grava eles no novo.
+ */
+export function TelaDoGrupo() {
+  const { id } = useParams()
+  return <GrupoTela key={id ?? "novo"} />
 }

@@ -1,8 +1,8 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import { Casca } from "./casca"
 import { NaoEncontrado } from "@/telas/NaoEncontrado"
-import { PeerTela } from "@/telas/peers/PeerTela"
-import { GrupoTela } from "@/telas/grupos/GrupoTela"
+import { PeerTela, TelaDoPeer } from "@/telas/peers/PeerTela"
+import { GrupoTela, TelaDoGrupo } from "@/telas/grupos/GrupoTela"
 import { PrefixosTela } from "@/telas/prefixos/PrefixosTela"
 
 // Cada tela entra aqui na task que a cria: a rota de /peers vem junto com a
@@ -20,13 +20,16 @@ const roteador = createBrowserRouter([
     children: [
       { index: true, element: <NaoEncontrado /> },
       // O React Router ordena por especificidade, entao "peers/novo" ganha de
-      // "peers/:id" sem precisar de ordem no arquivo
+      // "peers/:id" sem precisar de ordem no arquivo. A rota por id usa o
+      // TelaDoPeer, e a do grupo pelo TelaDoGrupo, que remontam a tela na troca
+      // de registro: o elemento e reusado quando so o :id muda, e o formulario
+      // sobreviveria com os valores do registro anterior
       { path: "peers", element: <PeerTela /> },
       { path: "peers/novo", element: <PeerTela /> },
-      { path: "peers/:id", element: <PeerTela /> },
+      { path: "peers/:id", element: <TelaDoPeer /> },
       { path: "grupos", element: <GrupoTela /> },
       { path: "grupos/novo", element: <GrupoTela /> },
-      { path: "grupos/:id", element: <GrupoTela /> },
+      { path: "grupos/:id", element: <TelaDoGrupo /> },
       { path: "prefixos", element: <PrefixosTela /> },
       { path: "*", element: <NaoEncontrado /> },
     ],

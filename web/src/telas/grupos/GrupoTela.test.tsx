@@ -1,9 +1,9 @@
-import { screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
 import { Casca } from "@/app/casca"
-import { GrupoTela } from "./GrupoTela"
+import { GrupoTela, TelaDoGrupo } from "./GrupoTela"
 
 const PLANO = {
   rede: { asn: "64512", politica: "65532" },
@@ -50,7 +50,9 @@ const CASCA = [{
   children: [
     { path: "grupos", element: <GrupoTela /> },
     { path: "grupos/novo", element: <GrupoTela /> },
-    { path: "grupos/:id", element: <GrupoTela /> },
+    // a rota por id monta pelo TelaDoGrupo, como no roteador: e ele que remonta
+    // a tela na troca de registro
+    { path: "grupos/:id", element: <TelaDoGrupo /> },
   ],
 }]
 
@@ -71,6 +73,30 @@ describe("a tela do grupo", () => {
     expect(membro).toHaveAttribute("href", "/peers/3")
   })
 
+  it("trocar de registro recarrega o formulario, mesmo sujo", async () => {
+    // O React Router reusa o elemento na troca de :id, entao a instancia do
+    // useForm sobrevive com os valores do registro ANTERIOR, e o efeito de carga
+    // nao roda com o formulario sujo: sem a chave por id, os campos ficam com o
+    // grupo que estava sendo editado, e o salvar grava eles no grupo novo
+    mockFetch({
+      ...BASE,
+      "GET /api/grupos": {
+        corpo: [
+          { id: 2, nome: "OPERADORA", tipo: "upstream", membros: 1 },
+          { id: 9, nome: "OUTRO", tipo: "upstream", membros: 0 },
+        ],
+      },
+      "GET /api/grupos/9": { corpo: { id: 9, nome: "OUTRO", formulario: { ...GRUPO, id: "9", nome: "OUTRO" }, membros: [] } },
+      "GET /api/grupos/9/saida": { corpo: { bloco: "salvo", remover: null, criar_lista: null, arquivo: "grupo-OUTRO.txt" } },
+    })
+    montarRota(CASCA, "/grupos/2")
+    await userEvent.type(await screen.findByLabelText("Nome"), " EDITADO")
+    await userEvent.click(await linkPara("/grupos/9"))
+    await userEvent.click(await screen.findByRole("button", { name: /sair sem salvar/i }))
+    // os campos mostram o registro novo, e nao o que estava sendo editado
+    await waitFor(() => expect(screen.getByLabelText("Nome")).toHaveValue("OUTRO"))
+  })
+
   it("o excluir com membro mostra a recusa do 409 e nao exclui", async () => {
     mockFetch({
       ...BASE,
@@ -86,6 +112,45 @@ describe("a tela do grupo", () => {
     // e o grupo continua na tela, com o dialogo aberto: o 409 nao exclui nem
     // navega para a lista
     expect(screen.getByRole("dialog")).toBeInTheDocument()
+  })
+
+  it("uma recusa que nao e a dos membros tambem aparece no dialogo", async () => {
+    // o dialogo so desenhava a mensagem dos membros, entao um 404 (ou um corpo
+    // que o lerRecusa nao entende, com a chave `_corpo`) ficava em silencio: o
+    // dialogo aberto, sem mensagem e sem toast, e o operador clicando para
+    // sempre
+    mockFetch({
+      ...BASE,
+      "DELETE /api/grupos/2": {
+        status: 404,
+        corpo: { erros: { _: "grupo nao encontrado", membros: "o grupo ainda tem peers membros: BRDIGITAL." }, avisos: [] },
+      },
+    })
+    montarRota(rotas, "/grupos/2")
+    await userEvent.click(await screen.findByRole("button", { name: /mais ações/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /excluir/i }))
+    await userEvent.click(await screen.findByRole("button", { name: /^excluir$/i }))
+    expect(await screen.findByText("grupo nao encontrado")).toBeInTheDocument()
+    expect(screen.getByText(/ainda tem peers membros/)).toBeInTheDocument()
+  })
+
+  it("o cancelar do dialogo limpa a recusa que estava na tela", async () => {
+    // o onOpenChange limpa, e o botao cancelar fechava por fora dele: o texto do
+    // 409 de antes voltava na proxima abertura, sobre outro clique
+    mockFetch({
+      ...BASE,
+      "DELETE /api/grupos/2": { status: 409, corpo: { erros: { membros: "o grupo ainda tem peers membros: BRDIGITAL." }, avisos: [] } },
+    })
+    montarRota(rotas, "/grupos/2")
+    await userEvent.click(await screen.findByRole("button", { name: /mais ações/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /excluir/i }))
+    await userEvent.click(await screen.findByRole("button", { name: /^excluir$/i }))
+    expect(await screen.findByText(/ainda tem peers membros/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: /^cancelar$/i }))
+    await userEvent.click(screen.getByRole("button", { name: /mais ações/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /excluir/i }))
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+    expect(screen.queryByText(/ainda tem peers membros/)).not.toBeInTheDocument()
   })
 
   it("o salvar bem-sucedido nao desfaz o que foi gravado", async () => {
@@ -201,6 +266,54 @@ describe("a tela do grupo", () => {
     expect(peticoes().filter((p) => p.caminho === "/api/grupos/2/saida").length).toBeGreaterThan(1)
   })
 
+  it("o salvar do cabecalho nao grava antes de o registro chegar", async () => {
+    // o botao so olhava o `isPending` do salvar, e enquanto o registro nao chega
+    // o formulario esta em branco: a API recusa um nome vazio, e a recusa pinta
+    // embaixo de um formulario que ninguem tocou
+    mockFetch({
+      ...BASE,
+      "GET /api/grupos/2": { status: 500, corpo: {} },
+      "PUT /api/grupos/2": {
+        corpo: {
+          registro: { id: 2, nome: "OPERADORA", formulario: GRUPO, membros: [] },
+          arquivo: "grupo-OPERADORA.txt", avisos: [],
+        },
+      },
+    })
+    montarRota(rotas, "/grupos/2")
+    // o registro ainda nao chegou (o GET falhou e a consulta esta no retry de 1s
+    // do cliente), e o botao ja esta na tela: e o estado que a guarda cobre
+    const botao = await screen.findByRole("button", { name: /^salvar$/i })
+    expect(botao).toBeDisabled()
+    fireEvent.click(botao)
+    // a tela de falha chega quando o retry se esgota: esperar por ela e esperar
+    // a janela inteira em que o botao esteve na tela sem o registro, e so entao
+    // a ausencia de escrita quer dizer alguma coisa
+    await screen.findByText("não deu para falar com a API", {}, { timeout: 3000 })
+    expect(peticoes().some((p) => p.metodo === "PUT")).toBe(false)
+  })
+
+  it("o salvar recarrega as listas do plano", async () => {
+    // o POP e o aprendizado ja cadastrados saem do /api/plano, que os monta de
+    // peers MAIS grupos: sem invalidar, o grupo recem-gravado nao entra nas
+    // sugestoes ate a janela voltar ao foco
+    mockFetch({
+      ...BASE,
+      "PUT /api/grupos/2": {
+        corpo: {
+          registro: { id: 2, nome: "OPERADORA", formulario: GRUPO, membros: [] },
+          arquivo: "grupo-OPERADORA.txt", avisos: [],
+        },
+      },
+    })
+    montarRota(rotas, "/grupos/2")
+    await screen.findByRole("tab", { name: /bloco do grupo/i })
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar$/i }))
+    await waitFor(() =>
+      expect(peticoes().filter((p) => p.caminho === "/api/plano").length).toBeGreaterThan(1),
+    )
+  })
+
   it("a paleta ve as acoes que a tela publica", async () => {
     // o caminho inteiro da publicacao: a tela publica no ProvedorAcoes da casca
     // e a paleta so oferece o que chegou la. Sem a chamada, "duplicar o
@@ -306,9 +419,29 @@ describe("a tela do grupo", () => {
   })
 
   it("nao tem aba de remocao: o grupo nao gera bloco de remocao", async () => {
-    mockFetch(BASE)
+    // o `remover` entra no corpo de proposito: sem ele a assercao passaria mesmo
+    // com a linha do peer (`if (saida.data?.remover)`) colada nesta tela, porque
+    // o duble nunca devolvia o campo. O endpoint do grupo nao emite um, e a tela
+    // tem que ignorar o que vier
+    mockFetch({
+      ...BASE,
+      "GET /api/grupos/2/saida": {
+        corpo: {
+          bloco: "xpl route-filter UP-OPERADORA-EXPORT-V4", criar_lista: null,
+          arquivo: "grupo-OPERADORA.txt", remover: "undo UP-OPERADORA-IMPORT-V4",
+        },
+      },
+    })
     montarRota(rotas, "/grupos/2")
-    expect(await screen.findByRole("tab", { name: /bloco do grupo/ })).toBeInTheDocument()
+    await screen.findByRole("tab", { name: /bloco do grupo/ })
+    // Duas esperas antes da ausencia, e as duas sao a diferenca entre esta
+    // assercao dizer alguma coisa e nao dizer nada: a primeira e o GET /saida,
+    // que e quem traz o corpo com o `remover`, e a segunda e a promessa da
+    // consulta entrando no estado, que o `act` vazio deixa o React processar.
+    // Medido: sem elas, a linha do peer colada aqui (`if (saida.data?.remover)`)
+    // deixava o caso verde
+    await waitFor(() => expect(peticoes().some((p) => p.caminho === "/api/grupos/2/saida")).toBe(true))
+    await act(async () => {})
     expect(screen.queryByRole("tab", { name: /remoção/ })).not.toBeInTheDocument()
   })
 })
