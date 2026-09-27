@@ -161,6 +161,22 @@ export function visivel(nome: string, valores: Valores, erros: Erros,
   return temValor(valores[nome])
 }
 
+/**
+ * A mensagem que aparece embaixo do campo. A chave do erro e a da API
+ * ("sessoes.v4.local") e o campo e o da tela ("sessao_v4_local"), entao a
+ * chave direta so vale quando as duas coincidem ("asn") e o resto sai do mapa
+ * de campos, o mesmo que o resumo e o `visivel` ja usam. Sem isto o campo da
+ * sessao aparece por causa do erro e fica sem a mensagem embaixo.
+ */
+export function erroDoCampo(nome: string, erros: Erros, tipo: string,
+                            deGrupo = false): string | undefined {
+  if (erros[nome]) return erros[nome]
+  for (const [chave, mensagem] of Object.entries(erros)) {
+    if (mensagem && camposDoErro(chave, tipo, deGrupo).includes(nome)) return mensagem
+  }
+  return undefined
+}
+
 export function secoesComErro(erros: Erros, tipo: string, deGrupo: boolean, secoes = deGrupo ? SECOES_GRUPO : SECOES_PEER) {
   const contagem: Record<string, number> = {}
   for (const s of secoes) contagem[s.id] = 0
