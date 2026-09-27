@@ -303,6 +303,77 @@ describe("a tela do peer", () => {
     expect(screen.queryByText("copiar o bloco aberto")).not.toBeInTheDocument()
   })
 
+  it("a paleta oferece copiar o bloco quando ele existe", async () => {
+    // a direcao que MOSTRA, e nao so a que suprime: sem ela, um `aoCopiarBloco`
+    // sempre indefinido passaria no arquivo inteiro
+    mockFetch(BASE)
+    montarRota(
+      [
+        {
+          path: "/",
+          element: <Casca />,
+          children: [
+            { path: "peers", element: <div>lista de peers</div> },
+            { path: "peers/:id", element: <PeerTela /> },
+          ],
+        },
+      ],
+      "/peers/7",
+    )
+    // o bloco da previa chegou, que e o estado do qual este caso fala
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.keyboard("{Control>}k{/Control}")
+    expect(await screen.findByText("copiar o bloco aberto")).toBeInTheDocument()
+  })
+
+  it("o duplicar do cabecalho pergunta com o formulario sujo", async () => {
+    // o mesmo comando da paleta, e o operador tem que poder dizer nao nos dois:
+    // as duas telas pinavam so o da paleta
+    mockFetch({
+      ...BASE,
+      "GET /api/peers/7/copia": { corpo: { id: 8, token: "268127", formulario: { ...FORMULARIO, id: "8" } } },
+    })
+    montarRota(rotas, "/peers/7")
+    await userEvent.type(await screen.findByLabelText("ASN"), "9")
+    await userEvent.click(screen.getByRole("button", { name: /duplicar/i }))
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
+  it("o Ctrl+S nao salva antes de o registro chegar", async () => {
+    // Na tela de falha o formulario nem esta montado, e o `aoSalvar` publicado
+    // assim mesmo mandava um PUT com o formulario em branco: a API recusa um
+    // nome vazio, e a recusa nao aparece aqui, porque so o formulario a mostra
+    mockFetch({
+      ...BASE,
+      // a API fora do ar e o caso do achado: nada chega, nem o plano nem o
+      // registro
+      "GET /api/plano": { status: 500, corpo: {} },
+      "GET /api/peers/7": { status: 500, corpo: {} },
+      "PUT /api/peers/7": { corpo: { registro: { id: 7, token: "268127", formulario: FORMULARIO }, arquivo: "268127-cliente.txt", avisos: [] } },
+    })
+    montarRota(
+      [
+        {
+          path: "/",
+          element: <Casca />,
+          children: [
+            { path: "peers", element: <div>lista de peers</div> },
+            { path: "peers/:id", element: <PeerTela /> },
+          ],
+        },
+      ],
+      "/peers/7",
+    )
+    // a tela de falha so aparece depois de a consulta do plano gastar o retry
+    // do cliente (um, com o atraso padrao de 1s), que e o mesmo do app
+    await screen.findByText("não deu para falar com a API", {}, { timeout: 3000 })
+    await userEvent.keyboard("{Control>}s{/Control}")
+    // nada de escrita saiu: sem o registro, a tela nao tem o que salvar. A
+    // assercao lista o que saiu, e nao so um booleano: e a lista que diz qual
+    // pedido foi
+    expect(peticoes().filter((p) => p.metodo !== "GET")).toEqual([])
+  })
+
   it("o salvar atualiza a aba de remocao", async () => {
     // a remocao vem de GET /saida, e nao da previa: sem invalidar depois do
     // salvar, a aba continuaria com o bloco de antes, e o copiar dela levaria

@@ -245,7 +245,10 @@ export function PeerTela() {
   // ai o item nem aparece, em vez de aparecer e nao fazer nada
   const blocoAberto = abas[0]?.conteudo ?? null
   usePublicarAcoes({
-    aoSalvar: () => void gravar(),
+    // Sem o dado na tela o formulario nem esta montado: o Ctrl+S mandaria um PUT
+    // com o formulario em branco, e a recusa da API nao apareceria aqui, porque
+    // quem mostra a recusa e o formulario
+    aoSalvar: plano.data && inicial.data ? () => void gravar() : undefined,
     // O duplicar da paleta navega como o do cabecalho, com `navegar` e nao com
     // `irPara`: a copia vem do registro SALVO, entao a alteracao nao salva se
     // perde, e o operador tem que poder dizer nao. O mesmo comando nao pode
