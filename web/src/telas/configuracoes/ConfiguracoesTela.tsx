@@ -153,6 +153,9 @@ export function ConfiguracoesTela() {
               size="sm"
               variant={tema === t ? "secondary" : "ghost"}
               className={cn(tema === t && "ring-1")}
+              // a cor sozinha nao diz nada a quem usa leitor de tela: o
+              // aria-pressed e o que anuncia qual dos tres esta valendo
+              aria-pressed={tema === t}
               onClick={() => trocarTema(t)}
             >
               {t}
