@@ -1,9 +1,11 @@
 import { defineConfig, devices } from "@playwright/test"
 import { fileURLToPath } from "node:url"
+import { SENHA } from "./e2e/senha"
 
 const repo = fileURLToPath(new URL("..", import.meta.url))
 const temp = fileURLToPath(new URL("./e2e/.tmp", import.meta.url))
 const PORTA = 8099
+const SESSAO = fileURLToPath(new URL("./e2e/.tmp/sessao.json", import.meta.url))
 
 export default defineConfig({
   testDir: "./e2e",
@@ -25,12 +27,27 @@ export default defineConfig({
     command: `node ${repo}web/e2e/global-setup.ts && cd ${temp} && BGPGEN_WEB=${repo}web/dist ${repo}.venv/bin/python -m uvicorn app.app:app --port ${PORTA}`,
     url: `http://127.0.0.1:${PORTA}/api/plano`,
     reuseExistingServer: false,
+    // a senha do admin que o bootstrap cria na copia de .tmp. O Playwright
+    // mescla isto sobre o process.env, entao o PATH continua valendo
+    env: { BGPGEN_ADMIN_SENHA: SENHA },
     stdout: "pipe",
   },
   projects: [
+    // o setup loga uma vez pela tela e guarda o cookie; os outros projetos
+    // entram com ele, e os casos que ja existiam seguem sem saber que ha login
+    { name: "setup", testMatch: /entrar\.setup\.ts/ },
     // o chromium roda tudo, incluindo a copia; o webkit roda so a copia, que e
     // onde o Safari pode recusar o writeText depois da requisicao do salvar
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "webkit", use: { ...devices["Desktop Safari"] }, testMatch: /copiar\.spec\.ts/ },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], storageState: SESSAO },
+      dependencies: ["setup"],
+    },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"], storageState: SESSAO },
+      testMatch: /copiar\.spec\.ts/,
+      dependencies: ["setup"],
+    },
   ],
 })

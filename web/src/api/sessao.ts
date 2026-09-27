@@ -35,10 +35,13 @@ export function useEntrar() {
       if (error) throw new Error(mensagemDaRecusa(error))
       return data
     },
-    onSuccess: async () => {
-      // a guarda le a sessao pela chave: sem o invalidate ela continuaria
-      // com o "logado: false" do primeiro render e devolveria para o login
-      await consultas.invalidateQueries({ queryKey: chaves.sessao })
+    onSuccess: (data) => {
+      // A resposta do login ja E a sessao, e e ela que semeia a chave. O
+      // invalidateQueries nao serve aqui: sem observador ativo ele so marca a
+      // consulta como velha e nao refaz nada, entao a guarda montaria em
+      // /peers lendo o "logado: false" que sobrou do redirect anterior e
+      // devolveria para o login.
+      consultas.setQueryData(chaves.sessao, data)
       navegar("/peers", { replace: true })
     },
   })
