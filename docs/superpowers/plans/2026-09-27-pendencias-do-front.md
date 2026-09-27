@@ -1586,10 +1586,11 @@ Cada pendencia registrada nas etapas anteriores e onde ela fecha nesta leva.
 | Os comentarios que citam `_contexto` e "a tela HTML" (revisao do corte) | Task 11 |
 | A mensagem `ASN ja usado` apontando o ASN quando o que colide e o apelido (achado pelo operador, na copia do ALT) | Task 12 |
 | Os campos sobrepostos no formulario, com o select de valor longo pintando por cima do vizinho (achado pelo operador, na mesma tela) | Task 13 |
+| O recado do IRR caindo no `_corpo` generico e a espera do caso dos prefixos (revisao da Task 9) | Task 14 |
 
 ## Fechamento
 
-Ao fim das treze tasks, o que as tres etapas do front deixaram registrado esta
+Ao fim das quatorze tasks, o que as tres etapas do front deixaram registrado esta
 fechado ou decidido, mais os dois achados que o operador trouxe da tela da copia
 do ALT (o erro de token e os campos sobrepostos). Duas coisas continuam em aberto de proposito, e as duas
 estao escritas nos planos das etapas: a tela de lista no corpo (que virou estado
