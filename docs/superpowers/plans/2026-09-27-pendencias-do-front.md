@@ -27,6 +27,7 @@
 | 9 | Dois consertos pequenos | o `_corpo` dos prefixos e o comentario do harness |
 | 10 | e2e | aspas, typecheck, globais de Node, a copia provando o bloco, e a medicao do Safari |
 | 11 | Comentarios e registro | os quinze comentarios obsoletos e onde cada pendencia foi fechada |
+| 12 | O erro de token | a colisao de token aponta o apelido quando e o apelido que colide |
 
 ## Global Constraints
 
@@ -1177,6 +1178,133 @@ git commit -m "Os comentarios deixam de citar as telas que sairam"
 
 ---
 
+### Task 12: O erro de token aponta o campo onde o token nasce
+
+O operador duplicou o ALT (upstream, apelido `ALT`, ASN 53062, membro do grupo
+`ALT_53062`) e levou tres erros: `ASN ja usado pelo peer ALT` no campo do ASN, e
+dois `endereco ja usado pelo peer ALT`. Os dois de endereco sao o esperado numa
+copia (os IPs remotos vieram junto), e o banner da tela ja diz para troca-los.
+
+O primeiro nao. O que colide nao e o ASN: e o **token**, que e
+`apelido or str(asn)` (`peers.py:111-119`) e e o nome do peer no equipamento e
+nos arquivos de `out/`. Como o ALT tem apelido, o token dele e `ALT`, e o da
+copia tambem. Trocar o ASN nao resolve (o token continua `ALT`), e a mensagem
+segue culpando o ASN. Dois peers **podem** ter o mesmo ASN (foi a decisao
+registrada no spec desta leva, em "Por que o ASN repetido fica como esta"); o
+que nao pode e repetir o token.
+
+Hoje `validate.py:695-706` reporta a colisao sempre no campo `asn`, menos para
+`ix`/`pni` sem apelido (que vai para `apelido`, com a mensagem do route server).
+Esta task faz o campo e a mensagem seguirem de onde o token nasce.
+
+**Files:**
+- Modify: `app/validate.py` (o laco de colisao do peer)
+- Modify: `tests/test_validate.py`
+- Modify: `web/e2e/fluxos.spec.ts:79` (a assercao do fluxo "duplicar e ajustar", que espera a mensagem antiga)
+
+**Interfaces:**
+- Produces: a mesma lista de `Erro` do `validar`, com o campo da colisao de token escolhido pela origem do token. A regra nao muda: um registro por token.
+
+- [ ] **Step 1: Escrever o teste que falha**
+
+No fim de `tests/test_validate.py`:
+
+```python
+def test_a_colisao_de_token_aponta_o_campo_onde_o_token_nasce():
+    """Token repetido: o erro aponta o campo que resolve, e nao o ASN sempre.
+
+    O token e `apelido or str(asn)`. Com apelido, e ele que colide: apontar o
+    ASN mandava o operador trocar um campo que nao resolve, e o erro continuava
+    depois da troca, culpando o ASN de novo. Sem apelido, o token e o ASN, e a
+    mensagem antiga continua certa.
+    """
+    com_apelido = um_peer(id=1, apelido="ALT", nome="ALT", tipo="upstream",
+                          asn=53062)
+    copia = um_peer(id=2, apelido="ALT", nome="ALT", tipo="upstream", asn=64500)
+    erros = validate.validar(copia, [com_apelido], grupos=[])
+    assert [(e.campo, e.mensagem) for e in erros if "token" in e.mensagem] == [
+        ("apelido", "o apelido ALT ja e o token do peer ALT")]
+
+    sem_apelido = um_peer(id=3, apelido="", nome="UP A", tipo="upstream",
+                          asn=53062)
+    repetido = um_peer(id=4, apelido="", nome="UP B", tipo="upstream",
+                       asn=53062)
+    erros = validate.validar(repetido, [sem_apelido], grupos=[])
+    assert [(e.campo, e.mensagem) for e in erros if e.campo == "asn"] == [
+        ("asn", "ASN ja usado pelo peer UP A")]
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+```bash
+.venv/bin/python -m pytest tests/test_validate.py -q -k colisao_de_token
+```
+
+Expected: FAIL no primeiro caso, que hoje recebe `("asn", "ASN ja usado pelo peer ALT")`.
+
+- [ ] **Step 3: O campo segue a origem do token**
+
+Em `app/validate.py`, troque o ramo da colisao de token (perto da linha 695):
+
+```python
+        if outro.token == peer.token:
+            # O token e `apelido or str(asn)`, e o campo do erro segue de onde
+            # ele nasce: com apelido, e o apelido que o operador tem que mexer,
+            # e apontar o ASN mandava trocar um campo que nao resolve (a copia
+            # do ALT recebeu "ASN ja usado", trocou o ASN e o erro continuou).
+            # Sem apelido o token e o ASN, e ai a mensagem antiga esta certa. O
+            # ix/pni sem apelido continua no apelido, porque ali o ASN e o do
+            # route server e o apelido e a saida.
+            if peer.apelido:
+                erros.append(Erro(
+                    "apelido",
+                    "o apelido %s ja e o token do peer %s"
+                    % (peer.apelido, outro.nome)))
+            elif peer.tipo in ("ix", "pni"):
+                erros.append(Erro(
+                    "apelido",
+                    "apelido obrigatorio: o ASN %d e o do route server e ja "
+                    "esta no peer %s" % (peer.asn, outro.nome)))
+            else:
+                erros.append(Erro("asn", "ASN ja usado pelo peer %s" % outro.nome))
+```
+
+- [ ] **Step 4: Rodar e ver passar**
+
+```bash
+.venv/bin/python -m pytest tests/test_validate.py tests/test_api_peers.py -q
+```
+
+Expected: PASS. O `test_asn_repetido_e_recusado_no_campo` da API continua no campo `asn`, porque o `CLIENTE` do `dados_api` nao tem apelido.
+
+- [ ] **Step 5: O e2e que esperava a mensagem antiga**
+
+Em `web/e2e/fluxos.spec.ts`, no fluxo "duplicar e ajustar" (linha ~79), a assercao passa a esperar a mensagem nova:
+
+```ts
+  // o peer 1 do cadastro do e2e tem apelido (ACME), entao a copia colide no
+  // apelido, e o erro aponta o apelido: a mensagem antiga culpava o ASN
+  await expect(page.getByRole("alert").first()).toContainText("ja e o token do peer")
+```
+
+- [ ] **Step 6: Rodar a suite e o e2e**
+
+```bash
+.venv/bin/python -m pytest -q
+cd web && npm test && npm run e2e
+```
+
+Expected: PASS nos tres.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/validate.py tests/test_validate.py web/e2e/fluxos.spec.ts
+git commit -m "O erro de token aponta o apelido quando e o apelido que colide"
+```
+
+---
+
 ## Tabela de pendencias
 
 Cada pendencia registrada nas etapas anteriores e onde ela fecha nesta leva.
@@ -1193,11 +1321,12 @@ Cada pendencia registrada nas etapas anteriores e onde ela fecha nesta leva.
 | O buraco da origem no upstream (plano do corte) | Task 1, como aviso |
 | O `graphify update .` no checkout principal (plano do corte) | Feito no merge, fora desta leva |
 | Os comentarios que citam `_contexto` e "a tela HTML" (revisao do corte) | Task 11 |
+| A mensagem `ASN ja usado` apontando o ASN quando o que colide e o apelido (achado pelo operador, na copia do ALT) | Task 12 |
 
 ## Fechamento
 
-Ao fim das onze tasks, o que as tres etapas do front deixaram registrado esta
-fechado ou decidido. Duas coisas continuam em aberto de proposito, e as duas
+Ao fim das doze tasks, o que as tres etapas do front deixaram registrado esta
+fechado ou decidido, mais o achado que o operador trouxe da copia do ALT. Duas coisas continuam em aberto de proposito, e as duas
 estao escritas nos planos das etapas: a tela de lista no corpo (que virou estado
 vazio por decisao) e a origem dos tres upstreams do cadastro real (que o aviso
 mostra e o operador decide).
