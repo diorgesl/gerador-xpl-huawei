@@ -846,8 +846,9 @@ escreveu e um no-op, e a premissa da task estava errada. Com
 `tentando={X.isFetching}` e mais nada, o caso nao passa: no clique o TanStack
 zera o `error` de uma consulta sem dado quando ela e refeita
 (`@tanstack/query-core/query.js:486`), entao o aviso de falha sai da tela, a tela
-volta ao formulario vazio e o botao a desabilitar deixa de existir. E nao existe
-clique duplo hoje, porque o primeiro clique tira o botao da tela.
+volta ao formulario vazio e o botao a desabilitar deixa de existir. E, sem o
+`retentando`, nao existe clique duplo a evitar: o primeiro clique ja tira o botao
+da tela.
 
 O que foi entregue, e o que o criterio de aceite virou: cada um dos cinco
 chamadores calcula

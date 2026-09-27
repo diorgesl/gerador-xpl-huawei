@@ -246,7 +246,7 @@ def copiar_peer(ident: int):
 
 
 def _peer_do_pedido(formulario, peers, grupos, anterior):
-    """(peer, erros) do formulario, pelo mesmo caminho do POST /peer.
+    """(peer, erros) do formulario, pelo mesmo caminho do POST /api/peers.
 
     A propria entrada fica na lista: quem a dispensa e o validar, pelo
     registro `anterior`, que por isso tem que ser o objeto desta mesma lista.
@@ -412,7 +412,7 @@ def _registro_grupo(grupo, peers):
 
 
 def _grupo_do_pedido(formulario, grupos, peers, anterior):
-    """(grupo, erros) do formulario, pelo mesmo caminho do POST /grupo.
+    """(grupo, erros) do formulario, pelo mesmo caminho do POST /api/grupos.
 
     Duas regras do ID, as duas porque quem diz qual grupo se edita e a URL:
     - editando, vale o ID da URL e o do corpo e ignorado;

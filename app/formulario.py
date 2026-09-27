@@ -1,8 +1,8 @@
 """O formulario da tela: o texto do POST vira Peer, Grupo, blocos e AS.
 
-Mora fora do app.py para a API JSON (app/api.py) usar os mesmos helpers das
-rotas HTML sem importar o app.py, que e quem monta a API. O corpo das funcoes
-e o mesmo de quando moravam la.
+Mora fora do app.py para a API JSON (app/api.py) usar os mesmos helpers sem
+importar o app.py, que e quem monta a API. O corpo das funcoes e o mesmo de
+quando moravam la.
 """
 
 import ipaddress
@@ -359,10 +359,11 @@ def grupo_do_formulario(dados, grupos, anterior=None, peers=()):
             # valor da tabela, como se o operador nao tivesse digitado nada:
             # o peer ja devolvia este erro, o grupo nao
             #
-            # o id fica de fora porque ele nao e campo que o operador digita:
-            # e o escondido que diz qual grupo este POST substitui, o mesmo
-            # papel do id_original no formulario do peer, e um id torto ali
-            # ja cai no "cria novo" do _id_do_grupo_no_formulario.
+            # o id fica de fora porque ele nao e campo que o operador digita no
+            # grupo: quem diz qual grupo este POST substitui e a URL, e o id
+            # torto ou em branco vira None e cai no `valores.get("id")` de
+            # baixo, que devolve o do registro anterior quando ha um e o
+            # proximo livre quando nao ha.
             if nome != "id":
                 erros.append(validate.Erro(nome, "valor numerico invalido"))
             valores[nome] = None
