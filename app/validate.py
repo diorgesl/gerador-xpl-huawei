@@ -64,6 +64,20 @@ def avisos(peer, peers, rede=None):
         saida.append(Erro(
             "route_limit",
             "a tabela do plano sugere %d para %s" % (sugerido, peer.tipo)))
+    # O grupo confere a origem contra a tabela do proprio tipo e o peer nao
+    # (o peer so olha a faixa 1xxx, e so nos tipos downstream). O resultado e
+    # um upstream com origem de cliente, que carimba a rota mentindo sobre a
+    # procedencia. Aqui e aviso, e nao erro: fechar isso trancaria cadastro
+    # que ja existe no peers.yaml, e trocar a origem desses peers e decisao de
+    # rede, nao de app (spec 2026-09-27, "Por que a origem vira aviso").
+    if peer.tipo not in plan.TIPOS_DOWNSTREAM:
+        permitidas = plan.ORIGENS_POR_TIPO.get(peer.tipo, ())
+        if peer.origem is not None and permitidas and peer.origem not in permitidas:
+            saida.append(Erro(
+                "origem",
+                "origem %d nao esta na tabela do %s: o plano usa %s"
+                % (peer.origem, peer.tipo,
+                   ", ".join(str(o) for o in permitidas))))
     _avisa_communities(peer, saida, rede)
     return saida
 

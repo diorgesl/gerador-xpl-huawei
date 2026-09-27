@@ -1072,3 +1072,35 @@ def test_prefixo_repetido_na_mesma_familia_e_recusado():
         {"v4": [bloco(), bloco()], "v6": []})
     assert erros[0].campo == "blocos_v4"
     assert "repetido" in erros[0].mensagem
+
+
+def test_origem_fora_da_tabela_do_tipo_e_aviso_nos_tipos_sem_conferencia():
+    """O peer de upstream/ix/pni nao confere a origem contra a tabela do tipo.
+
+    O grupo confere (validar_grupo), e o peer so olha a faixa 1xxx, e so nos
+    tipos downstream. A assimetria esta registrada no proprio codigo como
+    mudanca separada, e esta e ela: aviso, e nao erro, porque fechar trancaria
+    cadastro que ja existe (tres upstreams do peers.yaml real).
+    """
+    for tipo, permitidas in (("upstream", (1400, 1000, 1900)),
+                             ("ix", (1300, 1200, 1000, 1900)),
+                             ("pni", (1500, 1200, 1000, 1900))):
+        # o route_limit do um_peer e o do cliente (50), e nao o da tabela do
+        # tipo: sem alinhar, o aviso do route_limit entra na lista e o assert
+        # de lista exata deixa de falar so da origem
+        limite = plan.ROUTE_LIMIT[tipo]
+        fora = validate.avisos(um_peer(tipo=tipo, origem=1100,
+                                       route_limit=limite), [])
+        assert [e.campo for e in fora] == ["origem"], tipo
+        assert "nao esta na tabela do %s" % tipo in fora[0].mensagem
+        assert str(permitidas[0]) in fora[0].mensagem
+
+        dentro = validate.avisos(um_peer(tipo=tipo, origem=permitidas[0],
+                                         route_limit=limite), [])
+        assert dentro == [], (tipo, "origem da tabela nao pode avisar")
+
+
+def test_origem_no_downstream_nao_ganha_aviso_novo():
+    """Nos downstream a faixa 1xxx ja e erro no validar, e nao aviso aqui."""
+    for origem in (1100, 1120):
+        assert validate.avisos(um_peer(tipo="cliente", origem=origem), []) == []
