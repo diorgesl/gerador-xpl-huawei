@@ -191,3 +191,85 @@ def conferir(usuario, senha, caminho=None):
     obtido = _hash(senha, _de_b64(registro["salt"]),
                    registro["n"], registro["r"], registro["p"])
     return hmac.compare_digest(obtido, _de_b64(registro["hash"]))
+
+
+def _segredo(caminho=None):
+    """O segredo do arquivo, ou None quando o arquivo nao existe.
+
+    Arquivo ausente e o estado "ninguem entrou ainda", e nao arquivo
+    torto: quem chama decide o que fazer (hoje, recusar a sessao). Arquivo
+    presente sem a chave e outra coisa, e o erro diz qual arquivo.
+    """
+    caminho = _caminho(caminho)
+    dados = carregar(caminho)
+    if not dados:
+        return None
+    if not dados.get("segredo"):
+        raise ValueError("%s: sem a chave segredo" % caminho)
+    return dados["segredo"]
+
+
+def seguro():
+    """O atributo Secure do cookie, desligado por padrao.
+
+    O app fala http em 127.0.0.1, e um cookie Secure nao volta por http.
+    Quem puser o app atras de um TLS liga BGPGEN_COOKIE_SEGURO=1.
+    """
+    return os.environ.get("BGPGEN_COOKIE_SEGURO") == "1"
+
+
+def assinatura(usuario, expira, segredo):
+    """O HMAC de "usuario.expira" com o segredo do arquivo."""
+    mensagem = ("%s.%d" % (usuario, expira)).encode("utf-8")
+    return hmac.new(_de_b64(segredo), mensagem, hashlib.sha256).hexdigest()
+
+
+def abrir_sessao(resposta, usuario, caminho=None):
+    """Po o cookie de sessao na resposta do login."""
+    expira = int(time.time()) + VALIDADE
+    valor = "%s.%d.%s" % (usuario, expira,
+                          assinatura(usuario, expira, _segredo(caminho)))
+    resposta.set_cookie(COOKIE, valor, max_age=VALIDADE, httponly=True,
+                        samesite="lax", secure=seguro(), path="/")
+
+
+def fechar_sessao(resposta):
+    resposta.delete_cookie(COOKIE, path="/", httponly=True, samesite="lax",
+                           secure=seguro())
+
+
+def da_requisicao(request, caminho=None):
+    """O usuario do cookie, ou None quando o cookie nao vale.
+
+    Vale o cookie com os tres pedacos, com o prazo no futuro e com a
+    assinatura que fecha com o segredo do arquivo. Trocar o segredo
+    (apagando o arquivo e deixando o app recriar) derruba toda sessao
+    aberta, que e o unico jeito de revogar uma.
+    """
+    valor = request.cookies.get(COOKIE)
+    if not valor:
+        return None
+    partes = valor.rsplit(".", 2)
+    if len(partes) != 3:
+        return None
+    usuario, expira, recebida = partes
+    segredo = _segredo(caminho)
+    if not segredo or not expira.isdigit():
+        return None
+    if int(expira) < time.time():
+        return None
+    if not hmac.compare_digest(recebida, assinatura(usuario, int(expira), segredo)):
+        return None
+    return usuario
+
+
+def exigir_login(request):
+    """A dependencia das rotas protegidas: devolve o usuario ou recusa.
+
+    A recusa e NaoAutenticado, e nao HTTPException: o corpo do 401 e o
+    mesmo das outras recusas da API, e nao o {"detail": ...} do FastAPI.
+    """
+    usuario = da_requisicao(request)
+    if usuario is None:
+        raise NaoAutenticado("sessao expirada ou ausente")
+    return usuario
