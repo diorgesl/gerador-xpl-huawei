@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { contar, estadoDoBloco, marcarLinhas } from "./diff"
+import { contar, estadoDoBloco, marcarLinhas, plural } from "./diff"
 
 const A = "linha 1\nlinha 2\nlinha 3"
 const B = "linha 1\nlinha 2 mudada\nlinha 3"
@@ -42,6 +42,14 @@ describe("a contagem de linhas", () => {
     // prefixo comum, e a contagem sai maior nos dois lados. So acontece com
     // arquivo mexido a mao, porque o gerador sempre fecha a ultima linha
     expect(contar("a\nb\nc", "a")).toEqual({ incluidas: 3, removidas: 1 })
+  })
+})
+
+describe("o texto da contagem", () => {
+  it("uma linha e singular, duas sao plural", () => {
+    expect(plural(1, "linha incluída", "linhas incluídas")).toBe("1 linha incluída")
+    expect(plural(2, "linha incluída", "linhas incluídas")).toBe("2 linhas incluídas")
+    expect(plural(0, "linha incluída", "linhas incluídas")).toBe("0 linhas incluídas")
   })
 })
 

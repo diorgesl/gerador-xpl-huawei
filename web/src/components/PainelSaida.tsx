@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react"
 import { Check, Copy, Download } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CodigoXpl } from "./CodigoXpl"
 import { Diff } from "./Diff"
-import { estadoDoBloco } from "@/lib/diff"
+import { estadoDoBloco, plural } from "@/lib/diff"
 import { baixar } from "@/lib/copiar"
 
 export type AbaSaida = {
@@ -23,12 +24,12 @@ type Props = {
   carregando: boolean
   erro: string | null
   // A tela recebe a aba inteira, e nao so o texto, porque o "salvar e copiar"
-  // precisa saber qual bloco copiar depois que o salvar confirmar
-  onCopiar?: (aba: AbaSaida) => Promise<void> | void
-  onSalvarECopiar?: (aba: AbaSaida) => Promise<void>
+  // precisa saber qual bloco copiar depois que o salvar confirmar. O booleano
+  // de volta e "o texto foi para a area de transferencia": salvar recusado e
+  // copia que caiu no degrau da selecao manual devolvem false
+  onCopiar?: (aba: AbaSaida) => Promise<boolean> | boolean
+  onSalvarECopiar?: (aba: AbaSaida) => Promise<boolean>
 }
-
-const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`
 
 function Estado({ previa, salvo, sujo }: { previa: string; salvo: string | null; sujo: boolean }) {
   const { estado, incluidas, removidas } = estadoDoBloco(previa, salvo, sujo)
@@ -40,6 +41,7 @@ function Estado({ previa, salvo, sujo }: { previa: string; salvo: string | null;
 
 export function PainelSaida({ abas, sujo, carregando, erro, onCopiar, onSalvarECopiar }: Props) {
   const [copiado, setCopiado] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
   const [modoDiff, setModoDiff] = useState(false)
   const [abaAtual, setAbaAtual] = useState(abas[0]?.id ?? "")
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -53,13 +55,18 @@ export function PainelSaida({ abas, sujo, carregando, erro, onCopiar, onSalvarEC
   }
 
   const aba = abas.find((a) => a.id === abaAtual) ?? abas[0]
-  const semBloco = erro !== null || !aba || aba.conteudo === null
-  // o sujo entra junto do estado: com o formulario mexido e a previa ainda
-  // igual ao out/, quem esta para tras e o arquivo, e o salvar e o que o
-  // atualiza. O cabecalho continua dizendo "igual ao salvo", porque ele fala
-  // da previa contra o out/, e nao do formulario
+  // Sem bloco e a aba ATUAL sem conteudo, e nao "alguma coisa deu erro": a
+  // remocao vem do registro salvo e nao depende da previa, entao o erro do
+  // formulario nao pode tirar o botao dela. As abas de previa ja chegam com
+  // conteudo nulo quando a previa recusa, e ai o botao some por conta disso
+  const semBloco = !aba || aba.conteudo === null
+  // Duas razoes para gravar antes de copiar: o formulario tem alteracao nao
+  // salva (o bloco ainda nao esta no peers.yaml, mesmo que o texto da previa
+  // seja igual ao do out/) ou a previa difere do arquivo. O cabecalho continua
+  // falando da previa contra o out/, que e outra pergunta.
   const precisaSalvar = Boolean(
-    aba && !aba.soLeitura && !semBloco && (sujo || estadoDoBloco(aba.conteudo, aba.salvo, sujo).estado !== "igual"),
+    aba && !aba.soLeitura && !semBloco &&
+    (sujo || estadoDoBloco(aba.conteudo, aba.salvo, sujo).estado !== "igual"),
   )
 
   return (
@@ -95,12 +102,28 @@ export function PainelSaida({ abas, sujo, carregando, erro, onCopiar, onSalvarEC
         <div className="flex flex-wrap gap-2 border-t pt-2">
           <Button
             size="sm"
+            disabled={salvando}
             onClick={async () => {
               // a tela e quem copia (ela sabe qual elemento selecionar no
-              // ultimo degrau do fallback). O painel so cuida do rotulo.
-              if (precisaSalvar && onSalvarECopiar) await onSalvarECopiar(aba)
-              else await onCopiar?.(aba)
-              confirmar(aba.id)
+              // ultimo degrau do fallback). O painel so cuida do rotulo, e o
+              // rotulo so confirma o que de fato chegou na area de
+              // transferencia: salvar recusado e copia por selecao devolvem
+              // false, e o botao nao diz "copiado"
+              setSalvando(true)
+              let deuCerto = false
+              try {
+                deuCerto =
+                  precisaSalvar && onSalvarECopiar
+                    ? await onSalvarECopiar(aba)
+                    : (await onCopiar?.(aba)) ?? false
+              } catch {
+                // o salvar ou a copia estouraram fora do caminho previsto: o
+                // texto nao chegou a lugar nenhum, e o operador precisa saber
+                toast.error("nada foi copiado: a operação não terminou")
+              } finally {
+                setSalvando(false)
+              }
+              if (deuCerto) confirmar(aba.id)
             }}
           >
             {copiado === aba.id ? <Check className="size-4" /> : <Copy className="size-4" />}

@@ -16,6 +16,15 @@ export function contar(previa: string, salvo: string) {
 }
 
 /**
+ * O texto da contagem, para o cabecalho do painel e a legenda do diff. Mora
+ * aqui, e nao em cada componente, porque duas copias divergem: a legenda
+ * dizia "1 linhas incluidas" enquanto o cabecalho acertava o singular.
+ */
+export function plural(n: number, um: string, muitos: string) {
+  return `${n} ${n === 1 ? um : muitos}`
+}
+
+/**
  * O estado do bloco em relacao ao arquivo de out/.
  *
  * A diferenca sem edicao nao salva nao e edicao do operador: e o arquivo em

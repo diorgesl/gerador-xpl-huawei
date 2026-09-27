@@ -1,5 +1,8 @@
+import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { baixar, copiar, copiarComAviso } from "./copiar"
+
+vi.mock("sonner", () => ({ toast: vi.fn() }))
 
 function comClipboard(fn: () => Promise<void>) {
   Object.defineProperty(navigator, "clipboard", {
@@ -50,6 +53,7 @@ describe("a copia do bloco", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined })
     vi.spyOn(document, "execCommand").mockReturnValue(false)
     await expect(copiarComAviso("x")).resolves.toBe("selecionado")
+    expect(toast).toHaveBeenCalledWith("o bloco ficou selecionado: use Ctrl+C para copiar")
   })
 })
 
