@@ -101,6 +101,27 @@ describe("a tela do peer", () => {
     expect(document.querySelector('[data-campo="asn"]')).toHaveTextContent("ASN ja usado pelo peer BRDIGITAL-20G")
   })
 
+  it("uma chave de erro que nao e campo nao fecha o painel", async () => {
+    // o painel pergunta se ha campo no erro para decidir se mostra o bloco;
+    // com uma chave desconhecida ele fechava sem desenhar campo nenhum, e o
+    // operador ficava sem o bloco e sem saber onde corrigir
+    mockFetch({
+      ...BASE,
+      "PUT /api/peers/7": { status: 422, corpo: { erros: { campo_novo: "algo que so o backend conhece" }, avisos: [] } },
+    })
+    montarRota(rotas, "/peers/7")
+    // a previa da montagem responde ANTES do clique: e ela que fecha a janela
+    // da recusa, porque a lista dela substitui a do salvar. Clicar antes disso
+    // mediria a corrida entre as duas, e nao o que o caso quer medir
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+
+    expect(await screen.findByText("algo que so o backend conhece")).toBeInTheDocument()
+    // sem `findBy`: a espera daria tempo de a proxima previa chegar e reabrir o
+    // painel, e o caso passaria sem o painel ter deixado de fechar
+    expect(screen.getByText(/CUST-268127-IMPORT-V4/)).toBeInTheDocument()
+  })
+
   it("o excluir pede confirmacao com o token no texto", async () => {
     mockFetch(BASE)
     montarRota(rotas, "/peers/7")
