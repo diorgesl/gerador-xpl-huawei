@@ -11,7 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import Response
+from fastapi.testclient import TestClient
 
+from app import app as mod
 from app import auth
 
 SENHA = "senha-de-teste"
@@ -292,3 +294,85 @@ def test_o_logout_apaga_o_cookie(api_anonimo):
     assert r.status_code == 200
     assert r.json() == {"logado": False, "usuario": None}
     assert api_anonimo.get("/api/sessao").json()["logado"] is False
+
+
+def test_sem_cookie_o_api_recusa_no_formato_da_api(api_anonimo):
+    r = api_anonimo.get("/api/plano")
+
+    assert r.status_code == 401
+    assert r.json()["erros"]["_"] == "sessao expirada ou ausente"
+    assert r.json()["avisos"] == []
+
+
+def test_com_cookie_o_api_responde_normal(api):
+    assert api.get("/api/plano").status_code == 200
+
+
+def test_o_base_txt_exige_sessao(api_anonimo, logar):
+    # um cliente so, com a sessao entrando no meio: a fixture `api` e o MESMO
+    # objeto do api_anonimo depois do login, entao pedir as duas nao daria
+    # dois clientes, daria um logado
+    assert api_anonimo.get("/base.txt").status_code == 401
+
+    logar(api_anonimo)
+
+    assert api_anonimo.get("/base.txt").status_code == 200
+
+
+def test_o_docs_e_o_openapi_exigem_sessao(api_anonimo, logar):
+    assert api_anonimo.get("/docs").status_code == 401
+    assert api_anonimo.get("/openapi.json").status_code == 401
+
+    logar(api_anonimo)
+
+    assert api_anonimo.get("/docs").status_code == 200
+    assert api_anonimo.get("/openapi.json").status_code == 200
+
+
+def test_o_openapi_fora_da_sessao_nao_vaza_o_schema(api_anonimo):
+    assert "LoginPedido" not in api_anonimo.get("/openapi.json").text
+
+
+def test_os_assets_e_as_rotas_da_spa_seguem_abertos(api_anonimo):
+    # sem cookie: a tela de login precisa carregar antes de existir sessao
+    for rota in ("/peers", "/grupos", "/prefixos", "/base", "/configuracoes",
+                 "/login"):
+        assert api_anonimo.get(rota).status_code in (200, 503), rota
+
+
+def test_o_cookie_adulterado_nao_abre_nada(api_anonimo):
+    api_anonimo.cookies.set(auth.COOKIE, "admin.9999999999." + "0" * 64)
+
+    assert api_anonimo.get("/api/plano").status_code == 401
+
+
+def test_usuarios_yaml_apagado_com_o_app_de_pe_tranca_tudo(api_anonimo, usuarios_em_tmp):
+    api_anonimo.post("/api/login", json={"usuario": auth.NOME_ADMIN, "senha": SENHA})
+    usuarios_em_tmp.unlink()
+
+    # o bootstrap so roda no boot: sem arquivo, nao ha segredo para conferir
+    # nem usuario para autenticar, e o login tambem recusa
+    assert api_anonimo.get("/api/plano").status_code == 401
+    assert api_anonimo.post(
+        "/api/login",
+        json={"usuario": auth.NOME_ADMIN, "senha": SENHA}).status_code == 401
+
+
+def test_usuarios_yaml_torto_vira_500_com_o_nome_do_arquivo(api, logar, usuarios_em_tmp):
+    # o cliente da fixture `api` patcheia os caminhos; este aqui so precisa do
+    # raise_server_exceptions=False, porque o ServerErrorMiddleware do
+    # Starlette responde e depois levanta de novo
+    cliente = logar(TestClient(mod.app, raise_server_exceptions=False))
+    usuarios_em_tmp.write_text("usuarios:\n  admin:\n    salt: x\n")
+
+    r = cliente.post("/api/login", json={"usuario": auth.NOME_ADMIN, "senha": SENHA})
+
+    assert r.status_code == 500
+    assert "usuarios.yaml" in r.json()["erros"]["_"]
+
+
+def test_o_lifespan_cria_o_admin(api_anonimo, usuarios_em_tmp):
+    # ninguem chamou o bootstrap a mao: quem criou o arquivo foi o lifespan,
+    # que e o caminho de verdade do boot
+    assert usuarios_em_tmp.exists()
+    assert auth.conferir(auth.NOME_ADMIN, SENHA)

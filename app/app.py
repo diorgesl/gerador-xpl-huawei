@@ -9,7 +9,8 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
                                RedirectResponse)
 
@@ -31,10 +32,27 @@ async def ciclo(app: FastAPI):
     yield
 
 
-app = FastAPI(title="bgpgen", lifespan=ciclo)
+# docs_url, openapi_url e redoc_url desligados: as duas rotas do docs voltam
+# logo abaixo, atras do login. O app.openapi() continua valendo dentro do
+# processo, que e de onde o npm run api:tipos o le.
+app = FastAPI(title="bgpgen", lifespan=ciclo,
+              docs_url=None, openapi_url=None, redoc_url=None)
 
 # a API JSON em /api, que a SPA consome
 api.instalar(app)
+
+
+@app.get("/openapi.json", include_in_schema=False,
+         dependencies=[Depends(auth.exigir_login)])
+def schema_do_app():
+    return app.openapi()
+
+
+@app.get("/docs", include_in_schema=False,
+         dependencies=[Depends(auth.exigir_login)])
+def docs_do_app():
+    """O Swagger, que so carrega o schema com o cookie no navegador."""
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="bgpgen")
 
 
 def rede():
@@ -51,7 +69,8 @@ def rede():
     return peers_mod.carregar_asn(peers_mod.PEERS_YAML)
 
 
-@app.get("/base.txt", response_class=HTMLResponse)
+@app.get("/base.txt", response_class=HTMLResponse,
+         dependencies=[Depends(auth.exigir_login)])
 def baixar_base():
     # texto puro, e nao HTML: e o mesmo corpo de antes do corte, montado na
     # hora do download (nao ha arquivo em out/ com uma versao antiga dele)
@@ -122,11 +141,16 @@ def raiz():
 
 # As rotas da SPA.
 #
+# O /login entra na lista: o servidor e quem responde o index.html de um F5
+# na tela de login, e sem a linha o recarregamento da 404 antes de o React
+# existir.
+#
 # Fora do openapi(): elas devolvem o index.html, nao JSON, e nao acrescentam
 # nada ao contrato que o front consome. Como o web/src/api/schema.d.ts e
 # gerado do app.openapi(), deixa-las dentro mexeria no schema por uma rota que
 # nao e da API - o test_tipos_api.py pega isso na hora.
-for _rota in ("/peers", "/grupos", "/prefixos", "/base", "/configuracoes"):
+for _rota in ("/peers", "/grupos", "/prefixos", "/base", "/configuracoes",
+              "/login"):
     app.add_api_route(_rota, pagina_spa, methods=["GET"],
                       include_in_schema=False)
 for _rota in ("/peers", "/grupos"):

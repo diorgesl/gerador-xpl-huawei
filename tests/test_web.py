@@ -30,8 +30,12 @@ def web(dist, api):
     return api
 
 
+# O /login entra na lista porque e o unico caso em que a rota do servidor e
+# o caminho de entrada: quem abre o app sem sessao e mandado para la, e um F5
+# nessa tela bate no uvicorn antes de o React existir. Sem a linha, o
+# recarregamento da 404 e a tela de login so funciona por navegacao interna.
 ROTAS_DA_SPA = ["/peers", "/peers/7", "/peers/novo", "/grupos", "/grupos/2",
-                "/prefixos", "/base", "/configuracoes"]
+                "/prefixos", "/base", "/configuracoes", "/login"]
 
 
 @pytest.mark.parametrize("rota", ROTAS_DA_SPA)
