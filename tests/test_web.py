@@ -47,6 +47,33 @@ def test_o_asset_sai_do_build(web):
     assert r.text == "console.log(1)"
 
 
+def test_o_favicon_sai_da_raiz_do_build(web, dist):
+    """O favicon sai na raiz do dist, e nao em /assets.
+
+    O index.html que o Vite gera linka /favicon.svg, entao sem esta rota o
+    navegador pede um arquivo que ninguem serve, com o build inteiro no lugar.
+    A rota e deste arquivo, e nao um curinga da raiz: um curinga engoliria as
+    telas antigas do singular, que moram em /peer/... e /grupo/...
+    """
+    (dist / "favicon.svg").write_text("<svg>icone</svg>")
+    r = web.get("/favicon.svg")
+    assert r.status_code == 200
+    assert r.text == "<svg>icone</svg>"
+
+
+def test_sem_favicon_no_build_a_rota_responde_404(web, dist):
+    """A outra direcao, e o que a guarda do `is_file()` esta segurando.
+
+    Sem ela o FileResponse do Starlette estoura na hora de mandar o arquivo, e
+    um build que nao gerou o favicon derruba a requisicao em vez de dizer que
+    nao tem. Medido com a guarda fora: 500. Os dois casos sao precisos juntos:
+    este sozinho passa com a rota nem existindo, porque o 404 da rota nao
+    mapeada e igual, e o de cima sozinho passa sem guarda nenhuma.
+    """
+    assert not (dist / "favicon.svg").exists()
+    assert web.get("/favicon.svg").status_code == 404
+
+
 def test_o_asset_nao_sai_do_diretorio_do_build(web, dist):
     """O `..` percent-encoded tem que parar na conferencia do caminho resolvido.
 

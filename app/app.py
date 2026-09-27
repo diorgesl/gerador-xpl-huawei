@@ -310,6 +310,21 @@ def assets_do_build(caminho: str):
     return FileResponse(alvo)
 
 
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon_do_build():
+    """O icone do build, que o Vite deixa na raiz do dist e nao em /assets.
+
+    O index.html gerado linka /favicon.svg, entao sem esta rota o navegador
+    pede um arquivo que ninguem serve, mesmo com o build inteiro no lugar. E
+    um arquivo so, e nao um curinga da raiz do build: um curinga engoliria as
+    telas antigas do singular, que moram em /peer/... e /grupo/....
+    """
+    alvo = _dir_web() / "favicon.svg"
+    if not alvo.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(alvo)
+
+
 # As rotas da SPA. Os nomes estao no plural de proposito: nenhum deles colide
 # com as rotas HTML, que sao /peer/... e /grupo/... no singular.
 #
