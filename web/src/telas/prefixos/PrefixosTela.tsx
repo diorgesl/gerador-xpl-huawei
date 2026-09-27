@@ -109,7 +109,11 @@ export function PrefixosTela() {
         if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => consultar.mutate(forcar))
         // a mensagem do bgpq4 nao e de um campo: ela sai ao lado dos botoes, e
         // nao no editor nem no painel
-        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros._corpo ?? lida.erros._ ?? "a consulta ao IRR falhou"))
+        //
+        // O `_corpo` do lerRecusa fica fora desta corrente: ele e o texto de
+        // quando o corpo nao tem forma de recusa, e nao diz nada sobre a
+        // consulta. O recado proprio e a mensagem que sobra
+        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros._ ?? "a consulta ao IRR falhou"))
         return
       }
       // so o recado do IRR sai: os erros que o salvar deixou na tela ficam com

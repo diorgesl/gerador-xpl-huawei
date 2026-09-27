@@ -303,6 +303,9 @@ describe("a tela dos prefixos proprios", () => {
     // aviso que dizia o que fazer
     mockFetch({ ...BASE, "PUT /api/blocos": { status: 500, corpo: "sem forma" } })
     montarRota(rotas, "/prefixos")
+    // o botao so habilita com o registro na mao: sem esta espera o clique pode
+    // cair antes, nao sair pedido nenhum, e o caso falhar por tempo
+    await screen.findByLabelText(/IPv4/)
     await userEvent.click(await screen.findByRole("button", { name: /^salvar/i }))
 
     expect(await screen.findByText(/não deu para falar com a API/)).toBeInTheDocument()
@@ -329,6 +332,19 @@ describe("a tela dos prefixos proprios", () => {
     await waitFor(() =>
       expect(document.querySelector('[data-campo="blocos_v4"]')).toHaveTextContent("linha 1: community fora da faixa numerica"),
     )
+  })
+
+  it("um 5xx fora do modelo na consulta ao IRR usa o recado do IRR", async () => {
+    // o `_corpo` do lerRecusa ("resposta inesperada da API") e o que sobra
+    // quando o corpo nao tem forma de recusa, e ele nao diz nada sobre o IRR:
+    // no ramo do salvar a Task 9 ja o tinha tirado, e aqui ficou
+    mockFetch({ ...BASE, "POST /api/blocos/irr": { status: 500, corpo: "sem forma" } })
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    await userEvent.click(screen.getByRole("button", { name: /consultar IRR/i }))
+
+    expect(await screen.findByText(/a consulta ao IRR falhou/)).toBeInTheDocument()
+    expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
   })
 
   it("a rede fora na consulta ao IRR avisa com tentar de novo", async () => {
