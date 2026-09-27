@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import { Casca } from "./casca"
 import { NaoEncontrado } from "@/telas/NaoEncontrado"
+import { PeerTela } from "@/telas/peers/PeerTela"
 
 // Cada tela entra aqui na task que a cria: a rota de /peers vem junto com a
 // lista, a de /grupos com a tela de grupo, e assim por diante. Ate la o link
@@ -16,6 +17,11 @@ const roteador = createBrowserRouter([
     element: <Casca />,
     children: [
       { index: true, element: <NaoEncontrado /> },
+      // O React Router ordena por especificidade, entao "peers/novo" ganha de
+      // "peers/:id" sem precisar de ordem no arquivo
+      { path: "peers", element: <PeerTela /> },
+      { path: "peers/novo", element: <PeerTela /> },
+      { path: "peers/:id", element: <PeerTela /> },
       { path: "*", element: <NaoEncontrado /> },
     ],
   },

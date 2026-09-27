@@ -1,5 +1,5 @@
 import { namespace, opcoesPorTipo, opcoesUsadas, type Opcao } from "@/lib/campos"
-import type { Plano } from "@/api/consultas"
+import type { PeerForm, Plano } from "@/api/consultas"
 
 // O `Opcao` sai daqui junto dos tipos de campo: o `Formulario` e o
 // `FormularioPeer` o importam deste arquivo, e o campos.ts e anterior a ele.
@@ -119,3 +119,15 @@ export const CAMPOS_PEER: Campo[] = [
   { nome: "sessao_v6_local", rotulo: "IPv6 local", tipo: "texto", secao: "sessoes", mono: true },
   { nome: "sessao_v6_remoto", rotulo: "IPv6 remoto", tipo: "texto", secao: "sessoes", mono: true },
 ]
+
+/** O formulario vazio, com os defaults que a API tambem usa. */
+export const CAMPO_BRANCO: PeerForm = {
+  id: "", apelido: "", nome: "", tipo: "cliente", grupo_id: "", asn: "", descricao: "",
+  classe: "", lp_base: "300", origem: "1100", pop: "", aprendizado: "", ix_id: "",
+  route_limit: "50", prepend_base: "0", timer_keepalive: "", timer_hold: "",
+  bfd: true, graceful_restart: true, default_route: false, bh_upstream: "",
+  prefixos_v4: [], prefixos_v6: [], te_prefixos_v4: [], te_prefixos_v6: [],
+  ap_block: [], ap_te: [], ap_allowed: [], ap_prefer: [],
+  communities: [], large_communities: [],
+  sessao_v4_local: "", sessao_v4_remoto: "", sessao_v6_local: "", sessao_v6_remoto: "",
+}

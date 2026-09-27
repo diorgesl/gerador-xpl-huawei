@@ -22,6 +22,33 @@ if (!window.matchMedia) {
   })) as unknown as typeof window.matchMedia
 }
 
+// O jsdom nao implementa Request, e o do Node recusa URL relativa, que e a
+// forma que o openapi-fetch monta (baseUrl vazio + o caminho do schema). Este
+// duble guarda o que o cliente le depois de montar o pedido.
+class Requisicao {
+  url: string
+  method: string
+  headers: Headers
+  body: BodyInit | null | undefined
+
+  constructor(entrada: string, init: RequestInit = {}) {
+    this.url = String(entrada)
+    this.method = init.method ?? "GET"
+    this.headers = new Headers(init.headers)
+    this.body = init.body
+  }
+
+  async json() {
+    return JSON.parse(String(this.body ?? "null"))
+  }
+
+  async text() {
+    return String(this.body ?? "")
+  }
+}
+
+globalThis.Request = Requisicao as unknown as typeof Request
+
 // as primitivas do shadcn usam estas tres APIs, que o jsdom nao tem
 if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false
