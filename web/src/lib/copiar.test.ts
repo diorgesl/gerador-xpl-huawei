@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { copiar } from "./copiar"
+import { baixar, copiar } from "./copiar"
 
 function comClipboard(fn: () => Promise<void>) {
   Object.defineProperty(navigator, "clipboard", {
@@ -44,5 +44,22 @@ describe("a copia do bloco", () => {
     await expect(copiar("xpl route-filter X", alvo)).resolves.toBe("selecionado")
     expect(document.getSelection()?.toString()).toBe("xpl route-filter X")
     alvo.remove()
+  })
+})
+
+describe("o download do bloco", () => {
+  it("cria um link com o nome do arquivo de out/ e clica nele", () => {
+    const cliques: HTMLAnchorElement[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      cliques.push(this)
+    })
+    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() })
+
+    baixar("xpl route-filter X", "CLIENTE-268127.txt")
+
+    expect(cliques).toHaveLength(1)
+    expect(cliques[0].download).toBe("CLIENTE-268127.txt")
+    expect(cliques[0].href).toContain("blob:x")
+    vi.unstubAllGlobals()
   })
 })

@@ -1,15 +1,36 @@
+import { useCallback, useState } from "react"
 import { Outlet, useNavigate } from "react-router-dom"
 import { BarraLateral } from "@/components/BarraLateral"
+import { Paleta } from "@/components/Paleta"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
 import { useGrupos, usePeers, usePlano } from "@/api/consultas"
+import { baixar } from "@/lib/copiar"
+import { ProvedorAcoes } from "./acoes"
+import { useAtalhos } from "./atalhos"
+import type { AcoesDaTela } from "./acoes-contexto"
 
 export function Casca() {
   const plano = usePlano()
   const peers = usePeers()
   const grupos = useGrupos()
   const navegar = useNavigate()
+
+  const [paletaAberta, setPaletaAberta] = useState(false)
+  // o que a tela aberta publica: a paleta e o Ctrl+S leem daqui
+  const [acoes, setAcoes] = useState<AcoesDaTela>({})
+
+  const abrirPaleta = useCallback(() => setPaletaAberta(true), [])
+  useAtalhos({ aoSalvar: acoes.aoSalvar, aoAbrirPaleta: abrirPaleta })
+
+  const duplicar = acoes.aoDuplicar
+  const copiarBloco = acoes.aoCopiarBloco
+
+  const baixarBase = useCallback(async () => {
+    const texto = await fetch("/base.txt").then((r) => r.text())
+    baixar(texto, "base.txt")
+  }, [])
 
   const barra = (
     <BarraLateral
@@ -39,9 +60,21 @@ export function Casca() {
           <span className="font-semibold">bgpgen</span>
         </header>
         <main className="min-w-0 flex-1">
-          <Outlet />
+          <ProvedorAcoes acoes={acoes} definir={setAcoes}>
+            <Outlet />
+          </ProvedorAcoes>
         </main>
       </div>
+
+      <Paleta
+        aberta={paletaAberta}
+        aoFechar={() => setPaletaAberta(false)}
+        peers={peers.data ?? []}
+        grupos={grupos.data ?? []}
+        aoDuplicar={duplicar}
+        aoCopiarBloco={copiarBloco}
+        aoBaixarBase={baixarBase}
+      />
     </div>
   )
 }

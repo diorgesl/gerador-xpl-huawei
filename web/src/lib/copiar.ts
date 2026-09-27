@@ -44,3 +44,16 @@ function selecionar(alvo?: HTMLElement | null) {
   selecao.removeAllRanges()
   selecao.addRange(intervalo)
 }
+
+/** O bloco como arquivo .txt, com o nome que ele tem em out/. */
+export function baixar(texto: string, arquivo: string) {
+  const blob = new Blob([texto], { type: "text/plain;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = arquivo
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
