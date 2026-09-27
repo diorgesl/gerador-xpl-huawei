@@ -1238,6 +1238,14 @@ Hoje `validate.py:695-706` reporta a colisao sempre no campo `asn`, menos para
 `ix`/`pni` sem apelido (que vai para `apelido`, com a mensagem do route server).
 Esta task faz o campo e a mensagem seguirem de onde o token nasce.
 
+> Nota de execucao (2026-09-27): o operador levantou, com a tela do ALT na mao,
+> que "nao pode ter trava no ASN, pois um mesmo cliente pode ter mais de um
+> peer". Nao havia trava — o validador compara tokens, e a spec desta leva ja
+> registrava que o mesmo ASN com apelidos diferentes e legitimo —, mas o ramo do
+> peer **sem apelido** ainda mandava o operador mexer no ASN. A emenda entrou na
+> execucao, antes do commit: os Steps 1, 2, 3 e 4 abaixo ja estao na versao
+> emendada, e o conjunto de recusas ficou igual (mudaram o campo e a mensagem).
+
 **Files:**
 - Modify: `app/validate.py` (o laco de colisao do peer)
 - Modify: `tests/test_validate.py`
@@ -1256,8 +1264,10 @@ def test_a_colisao_de_token_aponta_o_campo_onde_o_token_nasce():
 
     O token e `apelido or str(asn)`. Com apelido, e ele que colide: apontar o
     ASN mandava o operador trocar um campo que nao resolve, e o erro continuava
-    depois da troca, culpando o ASN de novo. Sem apelido, o token e o ASN, e a
-    mensagem antiga continua certa.
+    depois da troca, culpando o ASN de novo. Sem apelido, o token e o ASN, e
+    quem resolve e dar um apelido: o campo do erro e o apelido, e a mensagem
+    diz isso, em vez de mandar mexer num ASN que pode muito bem repetir (um
+    mesmo cliente em dois POPs e dois peers legitimos).
     """
     com_apelido = um_peer(id=1, apelido="ALT", nome="ALT", tipo="upstream",
                           asn=53062)
@@ -1271,8 +1281,9 @@ def test_a_colisao_de_token_aponta_o_campo_onde_o_token_nasce():
     repetido = um_peer(id=4, apelido="", nome="UP B", tipo="upstream",
                        asn=53062)
     erros = validate.validar(repetido, [sem_apelido], grupos=[])
-    assert [(e.campo, e.mensagem) for e in erros if e.campo == "asn"] == [
-        ("asn", "ASN ja usado pelo peer UP A")]
+    assert [(e.campo, e.mensagem) for e in erros if e.campo == "apelido"] == [
+        ("apelido",
+         "o ASN 53062 ja e o token do peer UP A: de um apelido a este peer")]
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
@@ -1281,7 +1292,8 @@ def test_a_colisao_de_token_aponta_o_campo_onde_o_token_nasce():
 .venv/bin/python -m pytest tests/test_validate.py -q -k colisao_de_token
 ```
 
-Expected: FAIL no primeiro caso, que hoje recebe `("asn", "ASN ja usado pelo peer ALT")`.
+Expected: FAIL nos dois casos: o primeiro recebe `("asn", "ASN ja usado pelo peer ALT")`
+e o segundo, `("asn", "ASN ja usado pelo peer UP A")`.
 
 - [ ] **Step 3: O campo segue a origem do token**
 
@@ -1293,9 +1305,8 @@ Em `app/validate.py`, troque o ramo da colisao de token (perto da linha 695):
             # ele nasce: com apelido, e o apelido que o operador tem que mexer,
             # e apontar o ASN mandava trocar um campo que nao resolve (a copia
             # do ALT recebeu "ASN ja usado", trocou o ASN e o erro continuou).
-            # Sem apelido o token e o ASN, e ai a mensagem antiga esta certa. O
-            # ix/pni sem apelido continua no apelido, porque ali o ASN e o do
-            # route server e o apelido e a saida.
+            # O ix/pni sem apelido continua no apelido, porque ali o ASN e o
+            # do route server e o apelido e a saida.
             if peer.apelido:
                 erros.append(Erro(
                     "apelido",
@@ -1307,7 +1318,15 @@ Em `app/validate.py`, troque o ramo da colisao de token (perto da linha 695):
                     "apelido obrigatorio: o ASN %d e o do route server e ja "
                     "esta no peer %s" % (peer.asn, outro.nome)))
             else:
-                erros.append(Erro("asn", "ASN ja usado pelo peer %s" % outro.nome))
+                # Sem apelido o token E o ASN, e por isso ele colide: nao ha
+                # trava no ASN (dois peers do mesmo cliente sao legitimos), o
+                # que nao pode e repetir o token, que e o nome do peer no
+                # equipamento e nos arquivos de out/. O campo e o apelido
+                # porque e ele que resolve
+                erros.append(Erro(
+                    "apelido",
+                    "o ASN %d ja e o token do peer %s: de um apelido a este "
+                    "peer" % (peer.asn, outro.nome)))
 ```
 
 - [ ] **Step 4: Rodar e ver passar**
@@ -1316,7 +1335,11 @@ Em `app/validate.py`, troque o ramo da colisao de token (perto da linha 695):
 .venv/bin/python -m pytest tests/test_validate.py tests/test_api_peers.py -q
 ```
 
-Expected: PASS. O `test_asn_repetido_e_recusado_no_campo` da API continua no campo `asn`, porque o `CLIENTE` do `dados_api` nao tem apelido.
+Expected: PASS. Tres testes que prendiam o campo antigo mudam junto, na mesma
+classe, porque o `CLIENTE` do `dados_api` nao tem apelido:
+`test_validate.py::test_asn_repetido_e_erro`,
+`::test_asn_renomeado_para_um_ja_usado_e_erro_no_modo_edicao` e
+`test_api_peers.py::test_asn_repetido_e_recusado_no_campo`.
 
 - [ ] **Step 5: O e2e que esperava a mensagem antiga**
 
