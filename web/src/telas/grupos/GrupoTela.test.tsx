@@ -42,6 +42,24 @@ const rotas = [
   { path: "/grupos/:id", element: <GrupoTela /> },
 ]
 
+// As rotas da casca com a tela do grupo dentro: quem guarda o que a tela publica
+// e navega pelos links da barra lateral e a casca, entao os casos do guarda e da
+// paleta montam por aqui
+const CASCA = [{
+  path: "/", element: <Casca />,
+  children: [
+    { path: "grupos", element: <GrupoTela /> },
+    { path: "grupos/novo", element: <GrupoTela /> },
+    { path: "grupos/:id", element: <GrupoTela /> },
+  ],
+}]
+
+/** O link da barra lateral que leva ao registro, e nao o texto dele. */
+async function linkPara(destino: string) {
+  const links = await screen.findAllByRole("link")
+  return links.find((l) => l.getAttribute("href") === destino) as HTMLElement
+}
+
 // A limpeza do `unstubAllGlobals` e o resto do que cada caso deixa para tras sao
 // do arnes, que os registra uma vez por arquivo (web/src/teste/roteador.tsx)
 
@@ -108,6 +126,44 @@ describe("a tela do grupo", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
   })
 
+  it("a saida que o operador pede continua perguntando", async () => {
+    // O guarda existe para a navegacao que o OPERADOR pede. Sem esta prova, um
+    // `permitir` sempre verdadeiro deixaria a suite verde, e a alteracao nao
+    // salva se perderia sem aviso. Aqui a navegacao vem de um link da barra
+    // lateral, que e o caminho de verdade
+    mockFetch({
+      ...BASE,
+      "GET /api/grupos": {
+        corpo: [
+          { id: 2, nome: "OPERADORA", tipo: "upstream", membros: 1 },
+          { id: 9, nome: "OUTRA OPERADORA", tipo: "upstream", membros: 0 },
+        ],
+      },
+    })
+    montarRota(CASCA, "/grupos/2")
+    await userEvent.type(await screen.findByLabelText("Nome"), " NOVA")
+    await userEvent.click(await linkPara("/grupos/9"))
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
+  it("a marca da navegacao propria nao fica presa no destino de mesmo caminho", async () => {
+    // O 404 do salvar manda para /grupos, que e o mesmo caminho onde o grupo
+    // novo ja esta: com a marca chaveada pelo pathname o efeito nao roda de
+    // novo, ela fica presa em true, e dali em diante o guarda fica desligado em
+    // silencio, ate numa navegacao que o operador pede
+    mockFetch({
+      ...BASE,
+      "GET /api/grupos/novo": { corpo: { id: 8, nome: "", formulario: { ...GRUPO, id: "8", nome: "" }, membros: [] } },
+      "POST /api/grupos": { status: 404, corpo: { erros: { _: "registro nao encontrado" }, avisos: [] } },
+    })
+    montarRota(CASCA, "/grupos")
+    await userEvent.type(await screen.findByLabelText("Nome"), "NOVO")
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    await screen.findByText(/registro não encontrado/)
+    await userEvent.click(await linkPara("/grupos/2"))
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
   it("o salvar atualiza a aba ao criar", async () => {
     // o criar_lista e o `salvo` da aba "ao criar" vem de GET /saida, e nao da
     // previa: sem invalidar depois do salvar, o painel continuaria comparando o
@@ -153,22 +209,42 @@ describe("a tela do grupo", () => {
       ...BASE,
       "GET /api/grupos/2/copia": { corpo: { id: 8, nome: "OPERADORA", formulario: { ...GRUPO, id: "8" }, membros: [] } },
     })
-    montarRota(
-      [{
-        path: "/", element: <Casca />,
-        children: [
-          { path: "grupos/novo", element: <GrupoTela /> },
-          { path: "grupos/:id", element: <GrupoTela /> },
-        ],
-      }],
-      "/grupos/2",
-    )
+    montarRota(CASCA, "/grupos/2")
     await screen.findByRole("tab", { name: /bloco do grupo/i })
     await userEvent.keyboard("{Control>}k{/Control}")
     expect(await screen.findByText("copiar o bloco aberto")).toBeInTheDocument()
     await userEvent.click(screen.getByText("duplicar o registro aberto"))
     // e a acao publicada leva ao destino dela, que e o grupo novo com a copia
     expect(await screen.findByText(/cópia de OPERADORA/)).toBeInTheDocument()
+  })
+
+  it("o duplicar da paleta pergunta como o do cabecalho", async () => {
+    // o mesmo comando nao pode perguntar num lugar e nao no outro: a copia vem
+    // do registro SALVO, entao a alteracao nao salva se perde de qualquer jeito,
+    // e o operador tem que poder dizer nao
+    mockFetch(BASE)
+    montarRota(CASCA, "/grupos/2")
+    await userEvent.type(await screen.findByLabelText("Nome"), " NOVA")
+    await userEvent.keyboard("{Control>}k{/Control}")
+    await userEvent.click(await screen.findByText("duplicar o registro aberto"))
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
+  it("sem bloco aberto, o copiar da paleta nem aparece", async () => {
+    // a previa em erro chega com conteudo nulo: sem a guarda, o item apareceria
+    // e o clique nao faria nada. A espera e pelo erro na tela, e nao pelo item
+    // ausente, que estaria ausente tambem antes de a previa responder
+    mockFetch({
+      ...BASE,
+      "POST /api/grupos/previa": {
+        corpo: { erros: { nome: "nome obrigatório" }, avisos: [], bloco: null, criar_lista: null, arquivo: null, salvo: null },
+      },
+    })
+    montarRota(CASCA, "/grupos/2")
+    await screen.findByRole("button", { name: "nome obrigatório" })
+    await userEvent.keyboard("{Control>}k{/Control}")
+    expect(await screen.findByText("duplicar o registro aberto")).toBeInTheDocument()
+    expect(screen.queryByText("copiar o bloco aberto")).not.toBeInTheDocument()
   })
 
   it("o Ctrl+S da casca salva pelo que a tela publicou", async () => {
@@ -183,16 +259,7 @@ describe("a tela do grupo", () => {
         },
       },
     })
-    montarRota(
-      [{
-        path: "/", element: <Casca />,
-        children: [
-          { path: "grupos/novo", element: <GrupoTela /> },
-          { path: "grupos/:id", element: <GrupoTela /> },
-        ],
-      }],
-      "/grupos/2",
-    )
+    montarRota(CASCA, "/grupos/2")
     await screen.findByRole("tab", { name: /bloco do grupo/i })
     await userEvent.keyboard("{Control>}s{/Control}")
     await waitFor(() =>

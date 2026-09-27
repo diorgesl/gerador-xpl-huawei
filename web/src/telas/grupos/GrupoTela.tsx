@@ -35,10 +35,14 @@ export function GrupoTela() {
   // ref porque o `useBlocker` le no momento da navegacao, e nao no render
   // seguinte: com um booleano, a navegacao deste instante veria o valor velho
   const saindoDeProposito = useRef(false)
-  const { pathname } = useLocation()
+  const local = useLocation()
+  // A chave da localizacao muda a cada navegacao, inclusive quando o destino e
+  // o MESMO caminho (o 404 de /grupos redireciona para /grupos). Com o pathname, a
+  // marca ficaria presa em true no primeiro caso desses e o guarda ficaria
+  // desligado pelo resto da vida da tela, em silencio
   useEffect(() => {
     saindoDeProposito.current = false
-  }, [pathname])
+  }, [local.key])
 
   const irPara = useCallback(
     (destino: string, opcoes?: { replace?: boolean }) => {
@@ -208,11 +212,14 @@ export function GrupoTela() {
   }
 
   // A paleta oferece o que a tela aberta sabe fazer: sem esta publicacao, o
-  // "duplicar o registro aberto" e o "copiar o bloco aberto" nao aparecem
+  // "duplicar o registro aberto" e o "copiar o bloco aberto" nao aparecem. O
+  // duplicar navega como o do cabecalho (com `navegar`), e o copiar so aparece
+  // quando ha bloco, pelas mesmas razoes que valem na tela do peer
+  const blocoAberto = abas[0]?.conteudo ?? null
   usePublicarAcoes({
     aoSalvar: () => void gravar(),
-    aoDuplicar: ident === null ? undefined : () => irPara(`/grupos/novo?de=${ident}`),
-    aoCopiarBloco: () => { const aba = abas[0]; if (aba?.conteudo) void copiarComAviso(aba.conteudo, blocoRef.current) },
+    aoDuplicar: ident === null ? undefined : () => navegar(`/grupos/novo?de=${ident}`),
+    aoCopiarBloco: blocoAberto ? () => void copiarComAviso(blocoAberto, blocoRef.current) : undefined,
   })
 
   const falhou = (plano.isError || inicial.isError) && inicial.error?.message !== "nao_encontrado"
