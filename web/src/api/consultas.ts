@@ -15,9 +15,31 @@ export type Blocos = components["schemas"]["Blocos"]
 export type RedeAtual = components["schemas"]["RedeAtual"]
 export type Recusa = { erros: Record<string, string>; avisos: { campo: string; mensagem: string }[] }
 
+/**
+ * O corpo que o `lerRecusa` entende. Quem nao for isto e resposta fora do
+ * modelo, e nela a mensagem e o aviso da escrita (`_corpo` seria o texto de um
+ * campo que nao existe).
+ */
+export function temRecusa(corpo: unknown): boolean {
+  return Boolean(corpo) && typeof corpo === "object" && "erros" in (corpo as object)
+}
+
 export function lerRecusa(corpo: unknown): Recusa {
-  if (corpo && typeof corpo === "object" && "erros" in corpo) return corpo as Recusa
+  if (temRecusa(corpo)) return corpo as Recusa
   return { erros: { _corpo: "resposta inesperada da API" }, avisos: [] }
+}
+
+/**
+ * A recusa da escrita com a marca do evento, que e o que decide ate quando ela
+ * vale: a proxima previa que responder substitui a lista de erros dela.
+ *
+ * A marca sai daqui, e nao do corpo do callback da mutacao, por duas razoes: o
+ * literal era o mesmo em quatro lugares, e a regra `react-hooks/purity` do lint
+ * le o callback do `onSuccess` como codigo de render quando ele chama um helper
+ * de outro modulo, e ai o `Date.now()` vira erro.
+ */
+export function recusaComMarca(corpoErro: unknown, irr: string | null = null) {
+  return { em: Date.now(), erros: lerRecusa(corpoErro).erros, irr }
 }
 
 export const chaves = {

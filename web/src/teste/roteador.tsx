@@ -1,6 +1,7 @@
 import { cleanup, render } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { RouterProvider, createMemoryRouter, type RouteObject } from "react-router-dom"
+import { toast } from "sonner"
 import { afterEach, beforeEach, vi } from "vitest"
 import { Provedores } from "@/app/provedores"
 
@@ -12,7 +13,12 @@ export type Pedido = {
   corpo: unknown
 }
 
-export type Resposta = { status?: number; corpo: unknown }
+/**
+ * O que o duble devolve para uma rota. O `rede` e a escrita que nem chegou ao
+ * servidor: o `openapi-fetch` RE-LANCA a excecao do fetch nessa hora, em vez de
+ * devolver o `{error}` das recusas, e o `corpo` nao existe nesse caminho.
+ */
+export type Resposta = { status?: number; corpo?: unknown; rede?: true }
 
 // O que o fetch de mentira viu fica no modulo, e nao no fechamento de cada
 // `mockFetch`, porque quem limpa e quem acusa sao os dois ganchos abaixo,
@@ -32,6 +38,11 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  // O que a tela avisou fica no modulo do sonner, e nao na arvore que a limpeza
+  // automatica desmonta: sem esta linha os toasts de um caso aparecem no
+  // seguinte, e uma assercao por texto acha o do caso anterior - "gravado em
+  // out/" e "registro nao encontrado" sao do mesmo arquivo em varios casos
+  toast.dismiss()
   const faltando = semMapa
   semMapa = []
   // Uma rota fora do mapa devolvia 404 em silencio, e a tela lia aquilo como um
@@ -88,6 +99,9 @@ export function mockFetch(mapa: Record<string, Resposta>) {
       semMapa.push(chave)
       return Promise.resolve(new Response("{}", { status: 404 }))
     }
+    // A escrita que o navegador nem conseguiu mandar. A mensagem e a do
+    // navegador de verdade, e nao uma invencao: e ela que a tela ve
+    if (achado.rede) return Promise.reject(new TypeError("Failed to fetch"))
     const status = achado.status ?? 200
     // 204 e companhia nao podem ter corpo: o construtor do Response recusa
     // qualquer coisa ali, inclusive a string "null" de um corpo nulo
