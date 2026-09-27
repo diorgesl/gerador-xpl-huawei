@@ -29,6 +29,7 @@
 | 11 | Comentarios e registro | os quinze comentarios obsoletos e onde cada pendencia foi fechada |
 | 12 | O erro de token | a colisao de token aponta o apelido quando e o apelido que colide |
 | 13 | O campo que invade a coluna | o select de valor longo para de pintar por cima do vizinho |
+| 14 | As sobras da tela dos prefixos | o recado do IRR deixa de mostrar o `_corpo`, e o caso da Task 9 espera o registro antes de clicar |
 
 ## Global Constraints
 
@@ -1440,6 +1441,87 @@ quebrou de visual.
 ```bash
 git add web/src/components/Formulario.tsx web/src/components/Campo.tsx web/e2e/fluxos.spec.ts
 git commit -m "O campo de valor longo para de invadir a coluna vizinha"
+```
+
+---
+
+### Task 14: As duas sobras da tela dos prefixos
+
+A revisao da Task 9 achou duas coisas que nao pertencem ao brief dela: o recado do IRR ainda cai no `_corpo` generico antes do recado proprio, e o caso que ela escreveu clica no salvar sem esperar o registro chegar.
+
+**Files:**
+- Modify: `web/src/telas/prefixos/PrefixosTela.tsx:112` (a corrente do recado do IRR)
+- Modify: `web/src/telas/prefixos/PrefixosTela.test.tsx` (o caso novo e a espera do caso da Task 9)
+
+- [ ] **Step 1: Escrever o teste que falha**
+
+```tsx
+  it("um 5xx fora do modelo na consulta ao IRR usa o recado do IRR", async () => {
+    // o `_corpo` do lerRecusa ("resposta inesperada da API") e o que sobra
+    // quando o corpo nao tem forma de recusa, e ele nao diz nada sobre o IRR:
+    // no ramo do salvar a Task 9 ja o tinha tirado, e aqui ficou
+    mockFetch({ ...BASE, "POST /api/blocos/irr": { status: 500, corpo: "sem forma" } })
+    montarRota(rotas, "/prefixos")
+    await screen.findByLabelText(/IPv4/)
+    await userEvent.click(screen.getByRole("button", { name: /consultar IRR/i }))
+
+    expect(await screen.findByText(/a consulta ao IRR falhou/)).toBeInTheDocument()
+    expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
+  })
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+```bash
+cd web && npx vitest run src/telas/prefixos/PrefixosTela.test.tsx -t "fora do modelo"
+```
+
+Expected: FAIL: o que aparece na tela e o texto do `_corpo`.
+
+- [ ] **Step 3: O `_corpo` sai da corrente**
+
+Em `web/src/telas/prefixos/PrefixosTela.tsx:112`:
+
+```tsx
+        // O `_corpo` do lerRecusa fica fora desta corrente: ele e o texto de
+        // quando o corpo nao tem forma de recusa, e nao diz nada sobre a
+        // consulta. O recado proprio e a mensagem que sobra
+        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros._ ?? "a consulta ao IRR falhou"))
+```
+
+- [ ] **Step 4: Rodar e ver passar**
+
+```bash
+cd web && npx vitest run src/telas/prefixos/PrefixosTela.test.tsx -t "fora do modelo"
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: A espera que faltava no caso da Task 9**
+
+No caso "um 5xx sem corpo de recusa nao mostra o texto de resposta inesperada", depois do `montarRota`:
+
+```tsx
+    montarRota(rotas, "/prefixos")
+    // o botao so habilita com o registro na mao: sem esta espera o clique pode
+    // cair antes, nao sair pedido nenhum, e o caso falhar por tempo
+    await screen.findByLabelText(/IPv4/)
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar/i }))
+```
+
+- [ ] **Step 6: A suite do front e o lint**
+
+```bash
+cd web && npm test && npm run lint
+```
+
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add web/src/telas/prefixos/PrefixosTela.tsx web/src/telas/prefixos/PrefixosTela.test.tsx
+git commit -m "O recado do IRR nao mostra mais o texto de corpo fora do modelo"
 ```
 
 ---
