@@ -56,15 +56,16 @@ const BRANCO: PeerForm = {
   sessao_v6_local: "", sessao_v6_remoto: "",
 }
 
-function Montar({ iniciais = {}, erros = {}, avisos = [] }: {
+function Montar({ iniciais = {}, erros = {}, avisos = [], plano = PLANO }: {
   iniciais?: Partial<PeerForm>
   erros?: Record<string, string>
   avisos?: { campo: string; mensagem: string }[]
+  plano?: Plano
 }) {
   const form = useForm<PeerForm>({ defaultValues: { ...BRANCO, ...iniciais } })
   return (
     <Provedores>
-      <FormularioPeer form={form} plano={PLANO} grupos={[]} erros={erros} avisos={avisos} aoIrPara={vi.fn()} />
+      <FormularioPeer form={form} plano={plano} grupos={[]} erros={erros} avisos={avisos} aoIrPara={vi.fn()} />
     </Provedores>
   )
 }
@@ -134,6 +135,31 @@ describe("o formulario do peer", () => {
   it("mostra o aviso em ambar, sem tom de erro", () => {
     render(<Montar avisos={[{ campo: "route_limit", mensagem: "route-limit alto para o tipo" }]} />)
     expect(screen.getByText("route-limit alto para o tipo")).toBeInTheDocument()
+  })
+
+  it("o aviso aparece mesmo com erro no mesmo campo", () => {
+    // a API devolve os dois (route-limit fora da tabela e abaixo do minimo, por
+    // exemplo), e nenhum outro lugar da tela desenha aviso: engolir o aviso por
+    // causa do erro perde a informacao que o operador precisa ver
+    render(
+      <Montar
+        erros={{ route_limit: "route-limit abaixo do minimo" }}
+        avisos={[{ campo: "route_limit", mensagem: "route-limit fora da tabela do tipo" }]}
+      />,
+    )
+    const campo = document.querySelector('[data-campo="route_limit"]')
+    expect(campo).toHaveTextContent("route-limit abaixo do minimo")
+    expect(campo).toHaveTextContent("route-limit fora da tabela do tipo")
+  })
+
+  it("um mapa de campos vazio cai na tabela local", () => {
+    // com `??` so, o mapa vazio da API passaria como verdadeiro e o
+    // `pertenceAoTipo` responderia true para todo campo com tipo: a visibilidade
+    // e a nota parariam de valer sem avisar. O ap_allowed de um cliente e o
+    // campo que denuncia, porque so a nota explica a presenca dele
+    render(<Montar plano={{ ...PLANO, campos_por_tipo: {} }} iniciais={{ ap_allowed: ["15169"] }} />)
+    const campo = document.querySelector('[data-campo="ap_allowed"]')
+    expect(campo).toHaveTextContent("o bloco de cliente não usa este campo")
   })
 
   it("uma entrada por linha, com a contagem no rotulo", () => {
