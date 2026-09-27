@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { useWatch, type FieldValues, type Path, type UseFormReturn } from "react-hook-form"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -29,7 +29,6 @@ type Props<T extends FieldValues> = {
   avisos: Aviso[]
   deGrupo?: boolean
   aoIrPara: (campo: string | null, secao: string | null) => void
-  aoTrocarClasse?: (classe: string) => void
   // A secao de prefixos tem os botoes de consultar o IRR, que sao acao da tela
   // e nao do formulario: quem desenha a secao e o Formulario, e quem sabe o que
   // fazer com o resultado e a tela
@@ -47,6 +46,17 @@ export function Formulario<T extends FieldValues>({
   const tipo = String(valores.tipo ?? "cliente")
   const contagem = secoesComErro(erros, tipo, deGrupo, secoes)
   const ctx: Contexto = { plano, tipo, grupos }
+
+  // A mesma lista serve o indice e os fieldsets, e a secao sem campo visivel
+  // sai das duas: quem decide se ela existe na tela e o campo dentro dela
+  const visiveisPorSecao = secoes
+    .map((secao) => ({
+      secao,
+      visiveis: campos.filter(
+        (c) => c.secao === secao.id && visivel(c.nome, valores, erros, camposPorTipo, tipo, deGrupo),
+      ),
+    }))
+    .filter((s) => s.visiveis.length > 0)
 
   const por = (nome: string, valor: unknown) =>
     form.setValue(nome as Path<T>, valor as never, { shouldDirty: true })
@@ -79,55 +89,97 @@ export function Formulario<T extends FieldValues>({
     <div className="flex flex-col gap-4">
       <ResumoErros erros={erros} tipo={tipo} deGrupo={deGrupo} aoIrPara={aoIrPara} />
 
+      {/* O indice e os fieldsets saem da MESMA lista: uma secao sem campo
+          visivel nao vira fieldset, e um link para ela nao levaria a lugar
+          nenhum (o peer novo nao tem campo em "te" nem em "aspath") */}
       <nav aria-label="Seções do formulário" className="flex flex-wrap gap-2 text-xs">
-        {secoes.map((s) => (
-          <a key={s.id} href={`#secao-${s.id}`} className="rounded border px-2 py-0.5 hover:bg-accent">
+        {visiveisPorSecao.map(({ secao }) => (
+          <a key={secao.id} href={`#secao-${secao.id}`} className="rounded border px-2 py-0.5 hover:bg-accent">
             {/* o espaco entre as duas expressoes tem que estar escrito, e na
                 mesma linha: o JSX come o texto que so tem espaco e quebra de
-                linha, e o nome acessivel sairia "Identificação(1)" */}
-            {s.rotulo} {contagem[s.id] > 0 && <span className="text-erro-texto">({contagem[s.id]})</span>}
+                linha, e o nome acessivel sairia "Identificacao(1)" */}
+            {secao.rotulo} {contagem[secao.id] > 0 && <span className="text-erro-texto">({contagem[secao.id]})</span>}
           </a>
         ))}
       </nav>
 
-      {secoes.map((secao) => {
-        const visiveis = campos.filter(
-          (c) => c.secao === secao.id && visivel(c.nome, valores, erros, camposPorTipo, tipo, deGrupo),
-        )
-        if (visiveis.length === 0) return null
-        return (
-          <fieldset key={secao.id} id={`secao-${secao.id}`} className="rounded border p-3">
-            <legend className="px-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-              {secao.rotulo}
-            </legend>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {visiveis.map((campo) => (
-                <CampoRender
-                  key={campo.nome}
-                  campo={campo}
-                  ctx={ctx}
-                  bruto={valores[campo.nome]}
-                  erro={erroDoCampo(campo.nome, erros, tipo, deGrupo)}
-                  aviso={avisos.find((a) => a.campo === campo.nome)?.mensagem}
-                  nota={pertenceAoTipo(campo.nome, camposPorTipo, tipo)
-                    ? undefined
-                    : `o bloco de ${tipo} não usa este campo`}
-                  aoMudar={por}
-                  aoTrocarTipo={aoTrocarTipo}
-                  aoTrocarClasse={aoTrocarClasse}
-                />
-              ))}
-            </div>
-            {acaoDaSecao?.(secao)}
-          </fieldset>
-        )
-      })}
+      {visiveisPorSecao.map(({ secao, visiveis }) => (
+        <fieldset key={secao.id} id={`secao-${secao.id}`} className="rounded border p-3">
+          <legend className="px-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+            {secao.rotulo}
+          </legend>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {visiveis.map((campo) => (
+              <CampoRender
+                key={campo.nome}
+                campo={campo}
+                ctx={ctx}
+                bruto={valores[campo.nome]}
+                erro={erroDoCampo(campo.nome, erros, tipo, deGrupo)}
+                aviso={avisos.find((a) => a.campo === campo.nome)?.mensagem}
+                nota={pertenceAoTipo(campo.nome, camposPorTipo, tipo)
+                  ? undefined
+                  : `o bloco de ${tipo} não usa este campo`}
+                aoMudar={por}
+                aoTrocarTipo={aoTrocarTipo}
+                aoTrocarClasse={aoTrocarClasse}
+              />
+            ))}
+          </div>
+          {acaoDaSecao?.(secao)}
+        </fieldset>
+      ))}
     </div>
   )
 }
 
 function linhasDe(valor: unknown): string[] {
   return Array.isArray(valor) ? (valor as string[]) : []
+}
+
+/**
+ * O campo de lista, uma entrada por linha.
+ *
+ * O texto cru mora aqui, no rascunho, e nao no array: com o `value` saindo do
+ * array filtrado, a quebra de linha digitada some (o Enter vira "\n", o filtro
+ * tira, e o React reescreve o campo sem ela), e a linha seguinte cola na
+ * anterior. Medido: digitar "a", Enter, "b" deixava o campo com "ab" no lugar
+ * de "a\nb". O array filtrado sobe a cada tecla, entao a previa continua ao
+ * vivo.
+ *
+ * O que se mostra e o rascunho enquanto ele representar o mesmo array que o
+ * formulario tem, e o valor do formulario quando nao representa mais: o reset
+ * do salvar e a consulta ao IRR escrevem no formulario, e nao na tela, e o
+ * campo tem que acompanhar. A escolha sai do render, e nao de um efeito que
+ * chama setState: essa forma e erro nesta configuracao
+ * (react-hooks/set-state-in-effect), e a derivacao nao sincroniza estado
+ * nenhum.
+ */
+function AreaTexto({ id, bruto, linhas, mono, aoMudar }: {
+  id: string
+  bruto: unknown
+  linhas: number
+  mono?: boolean
+  aoMudar: (nome: string, valor: unknown) => void
+}) {
+  const externo = linhasDe(bruto).join("\n")
+  const [texto, setTexto] = useState(externo)
+  const digitado = texto.split("\n").filter((l) => l.trim() !== "").join("\n")
+  const valor = digitado === externo ? texto : externo
+
+  return (
+    <Textarea
+      id={id}
+      rows={linhas}
+      spellCheck={false}
+      className={mono ? "dado" : undefined}
+      value={valor}
+      onChange={(e) => {
+        setTexto(e.target.value)
+        aoMudar(id, e.target.value.split("\n").filter((l) => l.trim() !== ""))
+      }}
+    />
+  )
 }
 
 function CampoRender({ campo, ctx, bruto, erro, aviso, nota, aoMudar, aoTrocarTipo, aoTrocarClasse }: {
@@ -197,13 +249,12 @@ function CampoRender({ campo, ctx, bruto, erro, aviso, nota, aoMudar, aoTrocarTi
         )
       case "area":
         return (
-          <Textarea
+          <AreaTexto
             id={id}
-            rows={campo.linhas ?? 3}
-            spellCheck={false}
-            className={campo.mono ? "dado" : undefined}
-            value={linhasDe(bruto).join("\n")}
-            onChange={(e) => aoMudar(id, e.target.value.split("\n").filter((l) => l.trim() !== ""))}
+            bruto={bruto}
+            linhas={campo.linhas ?? 3}
+            mono={campo.mono}
+            aoMudar={aoMudar}
           />
         )
       default:

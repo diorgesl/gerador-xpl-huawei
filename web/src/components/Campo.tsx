@@ -34,7 +34,11 @@ export function Campo({ nome, rotulo, ajuda, erro, aviso, nota, largo, children 
           {erro}
         </p>
       )}
-      {aviso && !erro && (
+      {/* O aviso aparece mesmo com erro no mesmo campo: a API devolve os dois
+          (route-limit fora da tabela e abaixo do minimo, por exemplo), e o
+          erro e o unico lugar da tela que mostra aviso: engolir o aviso por
+          causa do erro perde a informacao que o operador precisa ver */}
+      {aviso && (
         <p className="flex items-start gap-1 text-xs text-aviso-texto">
           <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
           {aviso}

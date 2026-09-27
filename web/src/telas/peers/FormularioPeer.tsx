@@ -31,12 +31,20 @@ export function FormularioPeer({ form, plano, grupos, erros, avisos, erroIrr, ao
   aoIrPara: (campo: string | null, secao: string | null) => void
   aoConsultarIrr?: (forcar: boolean) => void
 }) {
+  // O mapa vazio vale como ausente: com `??` so, um `campos_por_tipo: {}` da
+  // API cairia como verdadeiro, o `pertenceAoTipo` responderia true para os
+  // quinze campos com tipo, e toda a regra de visibilidade e a nota parariam
+  // de valer em silencio
+  const camposPorTipo = Object.keys(plano.campos_por_tipo ?? {}).length > 0
+    ? plano.campos_por_tipo
+    : CAMPOS_POR_TIPO
+
   return (
     <Formulario
       form={form}
       campos={CAMPOS_PEER}
       secoes={SECOES_PEER}
-      camposPorTipo={plano.campos_por_tipo ?? CAMPOS_POR_TIPO}
+      camposPorTipo={camposPorTipo}
       cascataCampos={CASCATA_PEER}
       plano={plano}
       grupos={grupos}

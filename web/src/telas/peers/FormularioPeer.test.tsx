@@ -70,11 +70,33 @@ function Montar({ iniciais = {}, erros = {}, avisos = [] }: {
 }
 
 describe("o formulario do peer", () => {
-  it("mostra as oito secoes no indice", () => {
+  it("o indice lista as secoes que a tela mostra, com o rotulo delas", () => {
     render(<Montar />)
-    for (const rotulo of ["Identificação", "Política", "Limites e timers", "Prefixos anunciados", "Exceção de TE", "AS-path", "CL-PEER", "Sessões"]) {
+    // as oito secoes da tabela, menos as duas que o peer de cliente nao tem
+    // campo para mostrar: o indice e os fieldsets saem da mesma lista
+    for (const rotulo of ["Identificação", "Política", "Limites e timers", "Prefixos anunciados", "CL-PEER", "Sessões"]) {
       expect(screen.getByRole("link", { name: new RegExp(rotulo, "i") })).toBeInTheDocument()
     }
+  })
+
+  it("nao lista a secao que ficou sem campo nenhum", () => {
+    // um link para uma secao que nao esta na tela nao leva a lugar nenhum: o
+    // cliente nao tem campo em "te" nem em "aspath", e os dois sairiam do
+    // indice apontando para id que nao existe
+    render(<Montar />)
+    expect(screen.queryByRole("link", { name: /Exceção de TE/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: /AS-path/ })).not.toBeInTheDocument()
+  })
+
+  it("a lista aceita uma linha por vez, com o Enter no meio", async () => {
+    // digitar "a", Enter, "b" deixava o campo com "ab": o value saia do array
+    // filtrado, e a quebra digitada sumia antes de o proximo caractere entrar
+    render(<Montar iniciais={{ prefixos_v4: [] }} />)
+    const campo = screen.getByLabelText(/IPv4 \(0\)/)
+    await userEvent.type(campo, "45.169.232.0/22{enter}45.169.236.0/23")
+    expect(campo).toHaveValue("45.169.232.0/22\n45.169.236.0/23")
+    // e o array subiu com as duas, que e o que a contagem no rotulo mostra
+    expect(screen.getByLabelText(/IPv4 \(2\)/)).toBeInTheDocument()
   })
 
   it("esconde o campo que nao pertence ao tipo", () => {
