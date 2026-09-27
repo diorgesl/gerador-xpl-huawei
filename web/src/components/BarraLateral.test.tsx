@@ -61,6 +61,20 @@ describe("a barra lateral", () => {
     expect(screen.getByText("4")).toBeInTheDocument()
   })
 
+  it("o menu novo chama o destino de cada item", async () => {
+    // o Item do Base UI dispara o clique pelo onClick: com o onSelect do Radix
+    // (que o Base UI nao tem) o clique fechava o menu e nao chamava ninguem, e
+    // nada acusava, porque o onSelect e prop valida no div
+    const aoNovo = vi.fn()
+    montar({ aoNovo })
+    await userEvent.click(screen.getByRole("button", { name: /novo/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "peer cliente" }))
+    expect(aoNovo).toHaveBeenCalledWith("/peers/novo?tipo=cliente")
+    await userEvent.click(screen.getByRole("button", { name: /novo/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "grupo upstream" }))
+    expect(aoNovo).toHaveBeenCalledWith("/grupos/novo?tipo=upstream")
+  })
+
   it("a busca esconde o que nao casa", async () => {
     montar()
     await userEvent.type(screen.getByRole("searchbox"), "acme")

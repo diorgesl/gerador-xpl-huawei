@@ -68,14 +68,17 @@ export function BarraLateral({ peers, grupos, asn, aoNovo }: Props) {
           </span>
           <ChevronDown className="size-4" />
         </DropdownMenuTrigger>
+        {/* o Item do Base UI nao tem onSelect (o do Radix tinha): o clique e o
+            onClick, e o onSelect nao dispara nunca. Os dois mapas abaixo usam
+            o mesmo */}
         <DropdownMenuContent align="start">
           {TIPOS.map((t) => (
-            <DropdownMenuItem key={t} onSelect={() => aoNovo(`/peers/novo?tipo=${t}`)}>
+            <DropdownMenuItem key={t} onClick={() => aoNovo(`/peers/novo?tipo=${t}`)}>
               peer {t}
             </DropdownMenuItem>
           ))}
           {TIPOS.map((t) => (
-            <DropdownMenuItem key={`g-${t}`} onSelect={() => aoNovo(`/grupos/novo?tipo=${t}`)}>
+            <DropdownMenuItem key={`g-${t}`} onClick={() => aoNovo(`/grupos/novo?tipo=${t}`)}>
               grupo {t}
             </DropdownMenuItem>
           ))}
