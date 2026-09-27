@@ -275,8 +275,12 @@ export function GrupoTela() {
   // O bloco aberto e o da aba que o painel avisa pelo `aoTrocarAba`, e nao o da
   // primeira aba: com o quadro "ao criar" na tela, a copia da paleta tem que
   // levar o que o operador esta vendo
+  //
+  // O `?? abas[0]` e o fallback do proprio painel para quando a aba corrente
+  // sai da lista, e e ele que impede a paleta de oferecer a copia de um bloco
+  // que nao e o da tela
   const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
-  const blocoAberto = abas.find((a) => a.id === abaAtiva)?.conteudo ?? null
+  const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
   usePublicarAcoes({
     // O Ctrl+S nao pode gravar numa tela que ainda nao tem o registro: enquanto
     // o plano ou o registro nao chegaram, o formulario esta em branco e o PUT

@@ -302,10 +302,16 @@ export function PeerTela() {
   // A aba corrente vem do painel pelo `aoTrocarAba`: a copia da paleta tem que
   // ser a da aba que o operador esta vendo, e nao a primeira do painel
   //
+  // O `?? abas[0]` e o mesmo fallback que o painel faz quando a aba corrente
+  // sai da lista (o quadro "ao criar" some quando a previa deixa de mandar o
+  // `criar_lista`): sem ele, a tela acharia que nao ha bloco nenhum enquanto o
+  // painel mostra o da primeira aba, e a paleta ofereceria a copia de um bloco
+  // que nao e o da tela - ou nenhuma
+  //
   // O bloco aberto pode nao existir (a previa em erro chega com conteudo nulo):
   // ai o item nem aparece, em vez de aparecer e nao fazer nada
   const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
-  const blocoAberto = abas.find((a) => a.id === abaAtiva)?.conteudo ?? null
+  const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
   usePublicarAcoes({
     // Sem o dado na tela o formulario nem esta montado: o Ctrl+S mandaria um PUT
     // com o formulario em branco, e a recusa da API nao apareceria aqui, porque

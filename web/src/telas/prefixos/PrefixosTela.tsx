@@ -166,8 +166,13 @@ export function PrefixosTela() {
   // O bloco aberto e o da aba que o painel avisa pelo `aoTrocarAba`: com a aba
   // de remocao aberta, a copia da paleta tem que ser a dela, e nao a da
   // originacao, que e a primeira
+  //
+  // O `?? abas[0]` e o fallback do proprio painel para quando a aba corrente
+  // sai da lista (a de remocao sai se o registro deixar de ter o bloco de
+  // undo), e e ele que impede a paleta de oferecer a copia de um bloco que nao
+  // e o da tela
   const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
-  const blocoAberto = abas.find((a) => a.id === abaAtiva)?.conteudo ?? null
+  const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
   // O salvamento exige o texto conhecido: enquanto o GET /api/blocos nao
   // responde, os dois editores estao vazios e o backend ACEITA esse vazio
   // (`validar_blocos` nao tem o que apontar), gravando um out/blocos.txt sem

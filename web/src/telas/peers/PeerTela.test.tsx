@@ -413,6 +413,53 @@ describe("a tela do peer", () => {
     await waitFor(() => expect(escrever).toHaveBeenCalledWith("undo peer 198.51.100.2"))
   })
 
+  it("a copia da paleta segue o painel quando a aba aberta sai da lista", async () => {
+    // O quadro "ao criar" so existe enquanto a previa manda o `criar_lista`, e
+    // trocar o tipo e o que o derruba. Com a aba aberta saindo da lista, o
+    // painel cai na primeira: a tela tem que cair na mesma, senao a paleta
+    // oferece a copia de um bloco que nao e o que esta na tela (ou nao oferece
+    // nada, com um bloco na tela). O texto de cada aba e distinto para a
+    // assercao dizer QUAL foi copiado
+    const escrever = vi.fn()
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: escrever } })
+    const respostaDaPrevia = (criar: string | null) => ({
+      corpo: {
+        erros: {}, avisos: [], arquivo: "268127-cliente.txt", salvo: null,
+        bloco: "xpl route-filter CUST-268127-IMPORT-V4\nend-filter",
+        criar_lista: criar,
+      },
+    })
+    const mapa: Record<string, Resposta> = {
+      ...BASE,
+      // o seletor de tipo so oferece o que o plano lista
+      "GET /api/plano": { corpo: { ...PLANO, tipos: ["cliente", "upstream"] } },
+      "POST /api/peers/previa": respostaDaPrevia("xpl community-list CL-PEER-7"),
+    }
+    mockFetch(mapa)
+    montarRota(cascaComPeer, "/peers/7")
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("tab", { name: /ao criar o peer/i }))
+    expect(screen.getByText(/CL-PEER-7/)).toBeInTheDocument()
+
+    // a previa seguinte ja nao traz o quadro "ao criar". O mapa troca antes do
+    // clique no tipo, que e a alteracao que dispara a previa (400ms depois)
+    mapa["POST /api/peers/previa"] = respostaDaPrevia(null)
+    await userEvent.click(screen.getByLabelText("Tipo"))
+    await userEvent.click(await screen.findByRole("option", { name: "upstream" }))
+
+    // o estado do qual o caso fala: a aba aberta saiu, e o painel esta na
+    // primeira, que tem bloco
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /ao criar o peer/i })).not.toBeInTheDocument())
+    expect(screen.getByRole("tab", { name: /bloco do peer/i })).toHaveAttribute("aria-selected", "true")
+
+    await userEvent.keyboard("{Control>}k{/Control}")
+    await userEvent.click(await screen.findByText("copiar o bloco aberto"))
+
+    await waitFor(() =>
+      expect(escrever).toHaveBeenCalledWith("xpl route-filter CUST-268127-IMPORT-V4\nend-filter"),
+    )
+  })
+
   it("o duplicar do cabecalho pergunta com o formulario sujo", async () => {
     // o mesmo comando da paleta, e o operador tem que poder dizer nao nos dois:
     // as duas telas pinavam so o da paleta
