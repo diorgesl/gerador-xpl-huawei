@@ -202,6 +202,18 @@ export function GrupoTela() {
       // acabou de escrever. Os erros do salvar ficam ate a proxima previa
       // responder, que e quando a lista de la substitui a de ca
       setRecusa(recusaComMarca(r.error))
+      // A recusa por `id` acontece quando o formulario em branco foi aberto
+      // com um id que outro registro tomou no meio do caminho. O formulario do
+      // grupo nao tem esse campo, entao sem esta linha a unica saida era
+      // recarregar a tela e perder o que foi digitado: a tela rebusca o
+      // proximo livre e o operador so clica em salvar de novo
+      if (recusaComMarca(r.error).erros.id && ident === null) {
+        const livre = await cliente.GET("/api/grupos/novo", { params: { query: { tipo } } })
+        // o id do formulario e texto (o `GrupoForm.id`) e o do registro e
+        // numero: sem o String o `tsc -b` reprova a linha, e a tela ja
+        // converte assim no `String(r.data.registro.id)` do salvamento
+        if (livre.data) form.setValue("id", String(livre.data.id), { shouldDirty: true })
+      }
       return null
     }
     setRecusa(null)
