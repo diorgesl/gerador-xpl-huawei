@@ -303,10 +303,12 @@ describe("a tela dos prefixos proprios", () => {
     // aviso que dizia o que fazer
     mockFetch({ ...BASE, "PUT /api/blocos": { status: 500, corpo: "sem forma" } })
     montarRota(rotas, "/prefixos")
-    // o botao so habilita com o registro na mao: sem esta espera o clique pode
-    // cair antes, nao sair pedido nenhum, e o caso falhar por tempo
-    await screen.findByLabelText(/IPv4/)
-    await userEvent.click(await screen.findByRole("button", { name: /^salvar/i }))
+    // o botao so habilita com o registro na mao, e o clique antes disso nao
+    // sai: a espera e a do estado, e nao a da existencia do formulario, que
+    // existe desde o primeiro render
+    const botao = await screen.findByRole("button", { name: /^salvar/i })
+    await waitFor(() => expect(botao).toBeEnabled())
+    await userEvent.click(botao)
 
     expect(await screen.findByText(/não deu para falar com a API/)).toBeInTheDocument()
     expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
