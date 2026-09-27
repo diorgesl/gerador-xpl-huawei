@@ -164,9 +164,10 @@ test("a raiz cai na lista", async ({ page }) => {
 
 test("um valor longo nao invade a coluna vizinha", async ({ page }) => {
   // No xl o painel de saida toma 42rem, entao cada uma das tres colunas do
-  // formulario fica com ~110px. O select do shadcn nasce `w-fit`: com um valor
-  // longo ele estourava a celula do grid e pintava por cima do campo ao lado.
-  // A medida e a unica prova possivel aqui: jsdom nao calcula layout
+  // formulario fica com 88,66px (medido, e o que a celula da origem mede
+  // abaixo). O select do shadcn nasce `w-fit`: com um valor longo ele estourava
+  // a celula do grid e pintava por cima do campo ao lado. A medida e a unica
+  // prova possivel aqui: jsdom nao calcula layout
   await page.goto("/peers/1")
   const origem = page.getByLabel("Origem da rota")
   await expect(origem).toBeVisible()
@@ -179,5 +180,11 @@ test("um valor longo nao invade a coluna vizinha", async ({ page }) => {
   const celula = await page.locator('[data-campo="origem"]').boundingBox()
   const a = await origem.boundingBox()
   expect(a && celula).toBeTruthy()
+
+  // A medida so prova algo enquanto a coluna for estreita: a partir de ~245px o
+  // gatilho w-fit cabe sozinho e o caso ficaria verde sem conserto nenhum. Hoje
+  // a celula mede 88,66, entao a folga e grande: a guarda e para o dia em que a
+  // largura mudar, e nao para hoje
+  expect(celula!.width).toBeLessThan(150)
   expect(a!.x + a!.width).toBeLessThanOrEqual(celula!.x + celula!.width + 1)
 })
