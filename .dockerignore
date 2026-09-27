@@ -15,6 +15,9 @@ __pycache__/
 # saida gerada e cache do bgpq4: derivados do peers.yaml e do IRR
 out/
 
+# o login: hash da senha e o segredo do cookie, que sao do disco de quem roda
+usuarios.yaml
+
 # grafo do graphify: material de navegacao do checkout, nao do app
 graphify-out/
 .superpowers/

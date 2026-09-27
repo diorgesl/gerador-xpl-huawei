@@ -33,6 +33,10 @@ out/*.txt
 
 peers.yaml
 
+# o login: hash da senha e o segredo que assina o cookie. O arquivo nasce
+# no primeiro boot do app, e nao vem do repositorio
+usuarios.yaml
+
 # excecao: o cadastro do e2e e fixture do repositorio; o peers.yaml
 # ignorado acima e o do equipamento
 !web/e2e/peers.yaml
