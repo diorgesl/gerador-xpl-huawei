@@ -15,9 +15,11 @@ export function useAtalhos({ aoSalvar, aoAbrirPaleta }: Acoes) {
     const aoTeclar = (evento: KeyboardEvent) => {
       if (!evento.ctrlKey && !evento.metaKey) return
       const tecla = evento.key.toLowerCase()
-      if (tecla === "s" && aoSalvar) {
+      if (tecla === "s") {
+        // o app e dono do Ctrl+S: o dialogo de salvar a pagina do navegador
+        // nunca aparece por cima, nem numa tela que nao tem o que salvar
         evento.preventDefault()
-        aoSalvar()
+        aoSalvar?.()
       } else if (tecla === "k") {
         evento.preventDefault()
         aoAbrirPaleta()

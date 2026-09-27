@@ -25,18 +25,17 @@ export function Paleta({ aberta, aoFechar, peers, grupos, aoDuplicar, aoCopiarBl
 
   // o atalho de tema muda com o que esta escolhido: com o sistema, a terceira
   // opcao e "usar o tema do sistema"
-  //
-  // O <Command> por dentro do dialogo e o que falta no CommandDialog destes
-  // componentes: sem ele a lista e o campo de busca leem um contexto do cmdk
-  // que nao existe e a paleta morre no primeiro render. Os componentes de ui/
-  // sao gerados e nao se editam, entao a raiz entra aqui.
   return (
     <CommandDialog
       open={aberta}
       onOpenChange={(v) => !v && aoFechar()}
       title="Paleta de comandos"
-      description="Pular para um peer ou um grupo, criar registro ou trocar o tema"
+      description="Busque um peer, um grupo ou uma ação"
     >
+      {/* o CommandDialog do ui nao traz a raiz do cmdk (o upstream do shadcn
+          traz): sem este <Command> em volta, a paleta morre no render. Os
+          componentes de ui/ sao gerados e nao se editam, entao a raiz entra
+          aqui */}
       <Command>
         <CommandInput placeholder="buscar peer, grupo ou comando" />
         <CommandList>
@@ -108,6 +107,9 @@ export function Paleta({ aberta, aoFechar, peers, grupos, aoDuplicar, aoCopiarBl
             </CommandGroup>
           )}
 
+          {/* escolher o tema nao fecha a paleta, de proposito: o "(atual)" de
+              cada item se move enquanto o operador compara os tres, e o Esc
+              fecha quando ele terminar */}
           <CommandGroup heading="Tema">
             {(["claro", "escuro", "sistema"] as const).map((t) => (
               <CommandItem

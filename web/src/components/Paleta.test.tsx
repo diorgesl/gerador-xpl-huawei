@@ -44,9 +44,10 @@ describe("a paleta de comandos", () => {
   it("lista as acoes de criar", async () => {
     montar()
     expect(screen.getByText(/novo peer cliente/)).toBeInTheDocument()
-    // ha um item de criar por tipo, entao o termo sozinho casaria os cinco:
-    // o assert nomeia um deles
-    expect(screen.getByText(/novo grupo cliente/)).toBeInTheDocument()
+    // um item por tipo de grupo: `getByText(/novo grupo/)` casaria os cinco e
+    // estouraria com "found multiple elements"
+    expect(screen.getByText(/novo grupo upstream/)).toBeInTheDocument()
+    expect(screen.getAllByText(/novo grupo/)).toHaveLength(5)
   })
 
   it("filtra pelo que o operador digita", async () => {

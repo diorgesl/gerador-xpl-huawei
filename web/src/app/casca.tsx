@@ -28,8 +28,11 @@ export function Casca() {
   const copiarBloco = acoes.aoCopiarBloco
 
   const baixarBase = useCallback(async () => {
-    const texto = await fetch("/base.txt").then((r) => r.text())
-    baixar(texto, "base.txt")
+    const resposta = await fetch("/base.txt")
+    // sem a conferencia, um 500 do servidor salvaria a pagina de erro com o
+    // nome do bloco base
+    if (!resposta.ok) return
+    baixar(await resposta.text(), "base.txt")
   }, [])
 
   const barra = (
@@ -60,7 +63,7 @@ export function Casca() {
           <span className="font-semibold">bgpgen</span>
         </header>
         <main className="min-w-0 flex-1">
-          <ProvedorAcoes acoes={acoes} definir={setAcoes}>
+          <ProvedorAcoes definir={setAcoes}>
             <Outlet />
           </ProvedorAcoes>
         </main>
