@@ -452,7 +452,7 @@ def validar_grupo(grupo, grupos, peers, anterior=None):
         # mais estrito que o caminho do peer de proposito: ORIGENS_POR_TIPO
         # diz quais origens cada tipo carrega, e um grupo de upstream com
         # origem de cliente carimba a rota mentindo sobre a procedencia. O
-        # peer fica como esta; alinha-lo e mudanca separada (ver a spec).
+        # grupo recusa isso; o peer avisa, pela mesma tabela, no avisos().
         permitidas = plan.ORIGENS_POR_TIPO.get(grupo.tipo, ())
         if grupo.origem is None or grupo.origem not in permitidas:
             erros.append(Erro(

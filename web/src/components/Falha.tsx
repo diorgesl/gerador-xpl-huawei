@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button"
  * O `tentando` vem do `isFetching` de quem refaz e desabilita o botao enquanto
  * o pedido corre. Quem segura o aviso na tela durante o retry e o `retentando`
  * do chamador: o TanStack zera o `error` de uma consulta sem dado quando ela e
- * refeita, entao sem ele o aviso sairia da tela no clique e o botao
- * desabilitado nem chegaria a existir. Nao ha clique duplo a evitar: o primeiro
- * clique ja tira o botao da tela.
+ * refeita, entao sem ele o aviso sairia da tela no clique. Sem o `retentando`,
+ * o primeiro clique ja tira o botao da tela; com ele, quem barra o segundo
+ * clique e o `disabled`.
  */
 export function Falha({ mensagem, tentando = false, aoTentar }: {
   mensagem: string

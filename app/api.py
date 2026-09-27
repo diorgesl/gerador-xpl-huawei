@@ -1,9 +1,10 @@
 """API JSON do bgpgen, montada em /api.
 
 A regra continua no formulario.py, no validate.py e no render.py. As rotas
-daqui convertem o JSON no dicionario de texto que o formulario HTML mandaria e
-chamam os mesmos helpers das rotas HTML, entao a mensagem de erro, o default
-de cada campo e o bloco gerado sao os mesmos nas duas telas.
+daqui convertem o JSON no dicionario de texto do POST e chamam os helpers
+desse modulo, entao a mensagem de erro, o default de cada campo e o bloco
+gerado saem do mesmo lugar: o formulario em texto do POST/PUT vira Peer, e o
+Peer vira JSON de volta.
 """
 
 from dataclasses import replace
@@ -52,7 +53,7 @@ def dados_do_formulario(modelo):
 
 
 def modelo_do_peer(peer):
-    """Peer -> o formulario em JSON, como a tela HTML o preencheria."""
+    """Peer -> o formulario em JSON que o PeerRegistro carrega."""
     campos = dict(
         id=_texto(peer.id), apelido=peer.apelido, nome=peer.nome,
         tipo=peer.tipo, grupo_id=_texto(peer.grupo_id),
@@ -82,7 +83,7 @@ def modelo_do_peer(peer):
 
 
 def modelo_do_grupo(grupo):
-    """Grupo -> o formulario em JSON, como a tela HTML o preencheria."""
+    """Grupo -> o formulario em JSON que o GrupoRegistro carrega."""
     ix = grupo.tipo == "ix"
     campos = dict(
         id=_texto(grupo.id), nome=grupo.nome, tipo=grupo.tipo,
@@ -147,8 +148,8 @@ def _falha(status, erros, avisos=()):
 
 
 def _modelo_rede(rede):
-    # o namespace em branco e o estado "nao declarado", como no cabecalho da
-    # tela HTML: o ASN de 16 bits usa o proprio numero
+    # o namespace em branco e o estado "nao declarado": o ASN de 16 bits usa
+    # o proprio numero
     politica = "" if rede.politica == rede.asn else str(rede.politica)
     return RedeAtual(asn=rede.ASN, politica=politica)
 
@@ -172,7 +173,7 @@ def ler_plano():
         aprendizado_min=plan.APRENDIZADO_MIN,
         aprendizado_max=plan.APRENDIZADO_MAX,
         # o 3xxx e um espaco so: o que foi cadastrado num grupo tambem e
-        # sugerido no peer, como na tela HTML
+        # sugerido no peer
         pop_usados=form._usados(peers, "pop"),
         aprendizado_usados=form._usados(peers + grupos, "aprendizado"),
         campos_por_tipo={c: list(t) for c, t in form.CAMPOS_POR_TIPO.items()},
@@ -292,9 +293,8 @@ def criar_peer(formulario: PeerForm):
 def atualizar_peer(ident: int, formulario: PeerForm):
     """Atualiza o registro do ID da URL.
 
-    O ID do corpo e editavel, como na tela HTML: se o operador o trocou, o
-    registro da URL passa ao ID novo, e o validar recusa o que ja for de
-    outro peer ou grupo.
+    O ID do corpo e editavel: se o operador o trocou, o registro da URL passa
+    ao ID novo, e o validar recusa o que ja for de outro peer ou grupo.
     """
     peers = _peers()
     anterior = peers_mod.achar_id(peers, ident)
@@ -368,8 +368,8 @@ def saida_peer(ident: int):
     grupo = _grupo_do_peer(peer, _grupos())
     if peer.grupo_id is not None and grupo is None:
         # o yaml aponta para um grupo que saiu (edicao a mao, gravacao pela
-        # metade): sem ele o membro perde o que herdava. O erro e o mesmo do
-        # GET /saida/{token} da tela HTML
+        # metade): sem ele o membro perde o que herdava, e o campo bloco que
+        # o GET /api/peers/{ident}/saida responde sai errado
         return _falha(422, [validate.Erro("grupo_id", "grupo nao encontrado")])
     rede = _rede()
     return Saida(bloco=render.render_peer(peer, grupo=grupo, rede=rede),
@@ -383,9 +383,8 @@ def saida_peer(ident: int):
 def consultar_irr(pedido: IrrPedido):
     """Os prefixos do ASN no IRR, pelo bgpq4, sem gravar nada.
 
-    E o POST /bgpq4 da tela HTML sem o formulario inteiro: o que a consulta
-    precisa e o ASN e o token, e o resultado vai para os campos de prefixo da
-    tela, que o operador ainda edita antes de salvar.
+    A consulta precisa so do ASN e do apelido: o resultado vai para os campos
+    de prefixo da tela, que o operador ainda edita antes de salvar.
     """
     bruto = pedido.asn.strip()
     if bruto and not (bruto.isascii() and bruto.isdigit()):
@@ -415,11 +414,10 @@ def _registro_grupo(grupo, peers):
 def _grupo_do_pedido(formulario, grupos, peers, anterior):
     """(grupo, erros) do formulario, pelo mesmo caminho do POST /grupo.
 
-    Duas diferencas da tela HTML, as duas porque la o ID escondido e a
-    identidade do grupo, e aqui quem diz qual grupo se edita e a URL:
+    Duas regras do ID, as duas porque quem diz qual grupo se edita e a URL:
     - editando, vale o ID da URL e o do corpo e ignorado;
-    - criando, ID que ja e de outro grupo e erro. O validar_grupo nao confere
-      isso, porque na tela HTML um POST com ID existente atualiza o grupo.
+    - criando, ID que ja e de outro grupo e erro. O validar_grupo so confere o
+      ID contra os peers, que dividem o mesmo espaco do eixo 5PPA.
     """
     dados = dados_do_formulario(formulario)
     if anterior is not None:
@@ -510,8 +508,8 @@ def excluir_grupo(ident: int):
     membros = [m.token for m in _membros(grupo, _peers())]
     if membros:
         # o membro sem filtro proprio herda a politica do grupo: apagar o
-        # grupo por baixo dele deixa a saida dele estourando. A mesma recusa
-        # do POST /grupo/{nome}/excluir da tela HTML
+        # grupo por baixo dele deixa a saida dele estourando, e por isso a
+        # recusa vem antes de a lista ser gravada
         return _falha(409, [validate.Erro(
             "membros", "o grupo ainda tem peers membros: %s. Tire-os do grupo "
                        "antes de excluir." % ", ".join(membros))])
@@ -549,7 +547,7 @@ def saida_grupo(ident: int):
     if grupo is None:
         return _nao_encontrado("grupo")
     rede = _rede()
-    # a tela HTML do grupo nao tem bloco de remocao, e a API tambem nao
+    # o grupo nao tem bloco de remocao: o Saida sai sem o campo remover
     return Saida(bloco=render.render_grupo(grupo, rede=rede),
                  criar_lista=_criar_lista_do_grupo(grupo, rede),
                  arquivo=grupo.arquivo().name)
@@ -569,7 +567,7 @@ def _originacao(blocos, rede):
 
 
 def _resposta_blocos(blocos, rede):
-    """O texto dos editores e os dois blocos, como a secao da tela HTML.
+    """O texto dos editores e os dois blocos que o /api/blocos devolve.
 
     A remocao cobre o cadastro inteiro, e nao so o que esta em servico: o
     prefixo que acabou de sair do ar e o que mais provavelmente ainda esta

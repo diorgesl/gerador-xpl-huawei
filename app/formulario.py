@@ -60,10 +60,9 @@ def _usados(registros, campo):
     sugere o que ja foi cadastrado, e o campo continua aceitando valor novo.
     Na primeira vez a lista sai vazia e o campo e um input comum.
 
-    O helper nao soma lado nenhum: ele varre a lista que recebe. Duas telas
-    querem o 3xxx dos dois lados e por isso passam peers + grupos juntos
-    (_contexto e _contexto_grupo); o POP_USADOS passa so os peers, porque a
-    lista de POP (o d-pop) so existe na tela do peer.
+    O helper nao soma lado nenhum: ele varre a lista que recebe. Quem monta a
+    lista e quem chama: o /api/plano passa peers + grupos juntos para o
+    aprendizado (o 3xxx e um espaco so) e so os peers para o POP.
     """
     vistos = set()
     for registro in registros:
@@ -531,9 +530,9 @@ def grupo_em_branco(tipo, peers, grupos):
 # valor ou erro: esconder um campo com valor deixaria um dado gravado sem
 # ninguem ver.
 #
-# A tabela vem do render e da validacao, e nao das tags da tela HTML: um campo
-# pertence a um tipo quando muda a saida daquele tipo ou quando a validacao o
-# exige ali. O test_formulario.py refaz essa conferencia a cada execucao. O
+# A tabela vem do render e da validacao, e nao da tela: um campo pertence a um
+# tipo quando muda a saida daquele tipo ou quando a validacao o exige ali. O
+# test_formulario.py refaz essa conferencia a cada execucao. O
 # default_route muda a saida de todo tipo (o macro e comum), mas o validate so
 # o aceita em cliente e parceiro. O apelido nao esta aqui: a tag dizia "IX e
 # PNI", mas ele muda o token de qualquer tipo, e o cadastro tem upstream com

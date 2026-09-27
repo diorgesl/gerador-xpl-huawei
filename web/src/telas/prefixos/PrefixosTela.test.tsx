@@ -387,10 +387,10 @@ describe("a tela dos prefixos proprios", () => {
 
   it("o tentar de novo desabilita enquanto o pedido corre", async () => {
     // O defeito que este caso mede: no clique o TanStack zera o `error` de uma
-    // consulta sem dado quando ela e refeita, entao sem o `retentando` a tela
-    // pisca o formulario vazio enquanto o retry corre, e o botao aqui medido
-    // nem existe nessa janela. Nao ha clique duplo a evitar: o primeiro clique
-    // ja tira o botao da tela
+    // consulta sem dado quando ela e refeita, e sem o `retentando` a tela pisca
+    // o formulario vazio enquanto o retry corre - e o botao aqui medido nem
+    // existe nessa janela, porque o primeiro clique ja o tira da tela. Com o
+    // `retentando`, quem barra o segundo clique e o `disabled`
     mockFetch({ ...BASE, "GET /api/blocos": { status: 500, corpo: { erros: { _: "boom" }, avisos: [] } } })
     montarRota(rotas, "/prefixos")
     const alvo = () => screen.getByRole("button", { name: /tentar de novo/i })

@@ -92,9 +92,8 @@ export interface paths {
          * Atualizar Peer
          * @description Atualiza o registro do ID da URL.
          *
-         *     O ID do corpo e editavel, como na tela HTML: se o operador o trocou, o
-         *     registro da URL passa ao ID novo, e o validar recusa o que ja for de
-         *     outro peer ou grupo.
+         *     O ID do corpo e editavel: se o operador o trocou, o registro da URL passa
+         *     ao ID novo, e o validar recusa o que ja for de outro peer ou grupo.
          */
         put: operations["atualizar_peer_api_peers__ident__put"];
         post?: never;
@@ -183,9 +182,8 @@ export interface paths {
          * Consultar Irr
          * @description Os prefixos do ASN no IRR, pelo bgpq4, sem gravar nada.
          *
-         *     E o POST /bgpq4 da tela HTML sem o formulario inteiro: o que a consulta
-         *     precisa e o ASN e o token, e o resultado vai para os campos de prefixo da
-         *     tela, que o operador ainda edita antes de salvar.
+         *     A consulta precisa so do ASN e do apelido: o resultado vai para os campos
+         *     de prefixo da tela, que o operador ainda edita antes de salvar.
          */
         post: operations["consultar_irr_api_irr_post"];
         delete?: never;
