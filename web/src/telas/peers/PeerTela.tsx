@@ -23,6 +23,16 @@ import { usePublicarAcoes } from "@/app/acoes-contexto"
 import { FormularioPeer } from "./FormularioPeer"
 import { CAMPO_BRANCO } from "./camposPeer"
 
+/**
+ * A tela remonta quando o registro muda. O React Router reusa o elemento na
+ * troca de `:id`, entao sem a chave o `useForm` sobrevive com os valores do
+ * registro ANTERIOR, e o salvar grava eles no registro novo.
+ */
+export function TelaDoPeer() {
+  const { id } = useParams()
+  return <PeerTela key={id ?? "novo"} />
+}
+
 export function PeerTela() {
   const { id } = useParams()
   const [busca] = useSearchParams()
@@ -283,7 +293,10 @@ export function PeerTela() {
         {grupo && <span className="text-xs text-muted-foreground">grupo {grupo.nome}</span>}
 
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" onClick={() => void gravar()} disabled={salvar.isPending}>salvar</Button>
+          {/* Sem o registro na mao o botao nao salva: a janela entre a montagem e
+              a leitura e a unica em que o cabecalho existe sem o formulario, e o
+              salvar ali mandaria o formulario em branco */}
+          <Button size="sm" onClick={() => void gravar()} disabled={salvar.isPending || !inicial.data}>salvar</Button>
           {ident !== null && (
             <Button size="sm" variant="ghost" onClick={() => navegar(`/peers/novo?de=${ident}`)}>
               duplicar

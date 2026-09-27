@@ -1,9 +1,9 @@
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
 import { Casca } from "@/app/casca"
-import { PeerTela } from "./PeerTela"
+import { PeerTela, TelaDoPeer } from "./PeerTela"
 
 const PLANO = {
   rede: { asn: "64512", politica: "65532" },
@@ -53,6 +53,21 @@ const rotas = [
 
 // A limpeza do `unstubAllGlobals` e o resto do que cada caso deixa para tras sao
 // do arnes, que os registra uma vez por arquivo (web/src/teste/roteador.tsx)
+
+/**
+ * Segura uma leitura ate o caso mandar soltar, e repassa o resto ao arnes: e a
+ * janela em que a tela esta montada sem dado nenhum.
+ */
+function segurarLeitura(chave: string) {
+  const doArnes = globalThis.fetch
+  let liberar: () => void = () => {}
+  const espera = new Promise<void>((resolve) => { liberar = resolve })
+  vi.stubGlobal("fetch", async (entrada: Request) => {
+    if (`${entrada.method} ${String(entrada.url).split("?")[0]}` === chave) await espera
+    return doArnes(entrada)
+  })
+  return () => liberar()
+}
 
 describe("a tela do peer", () => {
   it("abre com o token e o ASN no cabecalho", async () => {
@@ -372,6 +387,62 @@ describe("a tela do peer", () => {
     // assercao lista o que saiu, e nao so um booleano: e a lista que diz qual
     // pedido foi
     expect(peticoes().filter((p) => p.metodo !== "GET")).toEqual([])
+  })
+
+  it("trocar de registro recarrega o formulario, mesmo sujo", async () => {
+    // A instancia do useForm sobrevive a troca de :id (o React Router reusa o
+    // elemento), e o efeito de carga nao roda com o formulario sujo: sem a
+    // chave por id, os campos ficam com os valores do registro ANTERIOR, e o
+    // salvar grava eles no registro novo
+    mockFetch({
+      ...BASE,
+      "GET /api/peers": {
+        corpo: [
+          { id: 7, token: "268127", tipo: "cliente", asn: 268127, apelido: "", nome: "Cliente ACME", grupo_id: null },
+          { id: 9, token: "268128", tipo: "cliente", asn: 268128, apelido: "", nome: "Cliente OUTRO", grupo_id: null },
+        ],
+      },
+      "GET /api/peers/9": { corpo: { id: 9, token: "268128", formulario: { ...FORMULARIO, id: "9", nome: "Cliente OUTRO" } } },
+      "GET /api/peers/9/saida": { corpo: { bloco: "salvo", remover: null, criar_lista: null, arquivo: "268128-cliente.txt" } },
+    })
+    montarRota(
+      [
+        {
+          path: "/",
+          element: <Casca />,
+          children: [
+            { path: "peers", element: <div>lista de peers</div> },
+            // a rota usa o TelaDoPeer, que e o que a casca usa: e a chave dele
+            // que remonta a tela na troca de registro
+            { path: "peers/:id", element: <TelaDoPeer /> },
+          ],
+        },
+      ],
+      "/peers/7",
+    )
+    await userEvent.type(await screen.findByLabelText("ASN"), "9")
+    const outro = (await screen.findAllByRole("link")).find((l) => l.getAttribute("href") === "/peers/9")
+    await userEvent.click(outro as HTMLElement)
+    await userEvent.click(await screen.findByRole("button", { name: /sair sem salvar/i }))
+    // os campos mostram o registro novo, e nao o que estava sendo editado
+    await waitFor(() => expect(screen.getByLabelText("Nome")).toHaveValue("Cliente OUTRO"))
+  })
+
+  it("o salvar do cabecalho espera o registro chegar", async () => {
+    // a janela entre a montagem e a leitura do registro e a unica em que o
+    // cabecalho existe sem o formulario: sem a guarda, o botao mandava o
+    // formulario em branco, e a recusa da API pintava um formulario que o
+    // operador nunca tocou
+    mockFetch(BASE)
+    const soltar = segurarLeitura("GET /api/peers/7")
+    montarRota(rotas, "/peers/7")
+    const salvar = await screen.findByRole("button", { name: /^salvar$/i })
+    await waitFor(() => expect(salvar).toBeDisabled())
+    await userEvent.click(salvar)
+    expect(peticoes().filter((p) => p.metodo !== "GET")).toEqual([])
+    // e a direcao que mostra: com o registro na mao, o botao volta
+    soltar()
+    await waitFor(() => expect(screen.getByRole("button", { name: /^salvar$/i })).toBeEnabled())
   })
 
   it("o salvar atualiza a aba de remocao", async () => {
