@@ -25,6 +25,16 @@ export function BaseTela() {
     aoCopiarBloco: texto ? () => void copiarComAviso(texto, document.querySelector("code")) : undefined,
   })
 
+  // O aviso sobrevive ao tentar de novo, e nao so ao erro: o TanStack zera o
+  // `error` de uma consulta sem dado quando ela e refeita (o estado volta a
+  // `pending`), entao sem o `retentando` o botao que desabilita so existiria
+  // depois da resposta. O `errorUpdateCount` e o que resta da falha depois do
+  // refetch, e o `data === undefined` deixa de fora o refetch de fundo de quem
+  // ja tem o bloco
+  const tentando = base.isFetching
+  const retentando = tentando && base.data === undefined && base.errorUpdateCount > 0
+  const falhou = base.isError || retentando
+
   return (
     <div className="flex min-h-0 flex-col gap-3 p-3">
       <h1 className="text-base font-semibold">Bloco base</h1>
@@ -56,8 +66,8 @@ export function BaseTela() {
           grupo fazem: la nao ha formulario sem o registro, e aqui o titulo e o
           paragrafo da ordem servem mesmo com o /base.txt fora do ar. A mensagem
           e a do Falha das outras telas, para a falha ter uma cara so */}
-      {base.isError && (
-        <Falha mensagem="não deu para falar com a API" aoTentar={() => void base.refetch()} />
+      {falhou && (
+        <Falha mensagem="não deu para falar com a API" tentando={tentando} aoTentar={() => void base.refetch()} />
       )}
 
       {base.isLoading && <p className="text-sm text-muted-foreground">gerando...</p>}

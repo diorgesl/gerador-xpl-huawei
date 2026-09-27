@@ -333,6 +333,28 @@ describe("a tela dos prefixos proprios", () => {
     expect(peticoes().filter((p) => pedidos(p) === "GET /api/blocos").length).toBeGreaterThan(2)
   })
 
+  it("o tentar de novo desabilita enquanto o pedido corre", async () => {
+    // O refetch do TanStack reinicia o pedido em voo: com o botao sempre
+    // clicavel, o clique duplo disparava dois pedidos, e nos peer e grupo
+    // quatro, porque cada um refaz duas consultas
+    mockFetch({ ...BASE, "GET /api/blocos": { status: 500, corpo: { erros: { _: "boom" }, avisos: [] } } })
+    montarRota(rotas, "/prefixos")
+    const alvo = () => screen.getByRole("button", { name: /tentar de novo/i })
+    // O botao so existe depois de o cliente gastar o retry dele (um, com o
+    // atraso padrao de 1s), e quem cobre essa espera e o prazo do `waitFor`: o
+    // quarto argumento do `findBy*` e ignorado nesta montagem (medido: 1003ms
+    // contra os 3003ms do mesmo prazo aqui), e com ele a espera seria de 1s, em
+    // cima do retry
+    await waitFor(() => expect(alvo()).toBeInTheDocument(), { timeout: 3000 })
+    // A leitura presa e a do retry, e nao a da montagem: presa antes do
+    // `montarRota`, a primeira seria a presa, a falha nunca chegaria, e sem
+    // falha nao ha botao - o caso mediria outra coisa
+    const soltar = segurarLeitura("GET /api/blocos")
+    await userEvent.click(alvo())
+    expect(alvo()).toBeDisabled()
+    soltar()
+  })
+
   it("avisa que ha alteracao nao salva ao sair", async () => {
     // a tela que reescreve o registro de originacao inteiro era a unica das
     // quatro sem o guarda: sair com texto digitado perdia o texto em silencio

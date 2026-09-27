@@ -186,10 +186,21 @@ export function PrefixosTela() {
   // Uma falha de rede nao pode passar: sem o registro a tela fica com os dois
   // editores vazios, o painel dizendo que esta gerando uma previa que nao vem,
   // e os botoes do IRR levariam a um rascunho que o salvar nao aceita
-  if (blocos.isError) {
+  //
+  // O aviso sobrevive ao tentar de novo, e nao so ao erro: o TanStack zera o
+  // `error` de uma consulta sem dado quando ela e refeita (o estado volta a
+  // `pending`), entao sem o `retentando` o clique cairia no formulario dos dois
+  // editores vazios - como se o registro tivesse sumido - ate a resposta
+  // chegar, e o botao que desabilita so existiria depois disso. O
+  // `errorUpdateCount` e o que resta da falha depois do refetch, e o
+  // `data === undefined` deixa de fora o refetch de fundo de quem ja tem dado
+  const tentando = blocos.isFetching
+  const retentando = tentando && blocos.data === undefined && blocos.errorUpdateCount > 0
+  if (blocos.isError || retentando) {
     return (
       <Falha
         mensagem="não deu para falar com a API"
+        tentando={tentando}
         aoTentar={() => void blocos.refetch()}
       />
     )

@@ -333,11 +333,24 @@ export function PeerTela() {
 
   // Uma falha de rede nao pode passar: sem o plano a tela fica vazia sem dizer
   // por que. O 404 e outro caminho, o do toast e da volta para /peers.
-  const falhou = (plano.isError || inicial.isError) && inicial.error?.message !== "nao_encontrado"
+  //
+  // O aviso sobrevive ao tentar de novo, e nao so ao erro: o TanStack zera o
+  // `error` de uma consulta sem dado quando ela e refeita (o estado volta a
+  // `pending`), entao sem o `retentando` o clique cairia no formulario em
+  // branco ate a resposta chegar, e o botao que desabilita so existiria depois
+  // disso. O `errorUpdateCount` e o que resta da falha depois do refetch, e o
+  // `data === undefined` deixa de fora o refetch de fundo de quem ja tem dado
+  const tentando = plano.isFetching || inicial.isFetching
+  const retentando = (c: { isFetching: boolean; data: unknown; errorUpdateCount: number }) =>
+    c.isFetching && c.data === undefined && c.errorUpdateCount > 0
+  const falhou =
+    (plano.isError || inicial.isError || retentando(plano) || retentando(inicial)) &&
+    inicial.error?.message !== "nao_encontrado"
   if (falhou) {
     return (
       <Falha
         mensagem="não deu para falar com a API"
+        tentando={tentando}
         aoTentar={() => { void plano.refetch(); void inicial.refetch() }}
       />
     )
