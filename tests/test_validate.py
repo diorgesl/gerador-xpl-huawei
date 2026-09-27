@@ -473,8 +473,9 @@ def test_prefixo_de_te_malformado_e_erro_tambem_no_cliente():
 
 
 # Round 2: o tipo. Ele escolhe o template e as tabelas do plano, e o caminho
-# do POST nao tinha o portao que o /peer/novo tem: um tipo fora de plan.TIPOS
-# validava limpo, gravava o peer e so estourava no render, com TemplateNotFound.
+# do POST nao tinha o portao que o GET /api/peers/novo tem: um tipo fora de
+# plan.TIPOS validava limpo, gravava o peer e so estourava no render, com
+# TemplateNotFound.
 # E antes disso o avisos ja estourava, com KeyError, no ROUTE_LIMIT[peer.tipo]
 # depois do .get devolver None.
 
@@ -657,8 +658,9 @@ def test_grupo_sem_asn_e_sem_prefixo_passa():
 
 def test_grupo_prefixo_malformado_e_erro():
     # o prefixo do grupo vai para o plan.cidr_para_xpl como o do peer. Sem
-    # esta checagem o grupo era gravado assim mesmo e o /saida/grupo/<nome>
-    # estourava para sempre, sem a tela oferecer como consertar.
+    # esta checagem o grupo era gravado assim mesmo e o GET
+    # /api/grupos/{ident}/saida estourava para sempre, sem a tela oferecer
+    # como consertar.
     g = um_grupo(asn=64500,
                  prefixos={"v4": ["203.0.113.0", "lixo"], "v6": []})
     erros = validate.validar_grupo(g, [], [])

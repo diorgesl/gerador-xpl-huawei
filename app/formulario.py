@@ -206,7 +206,12 @@ def _origem_padrao(tipo, classe=None):
 
 
 def _id_do_formulario(dados):
-    """O id que o formulario mandou, ou None se veio vazio ou torto."""
+    """O id que o formulario mandou, ou None se veio vazio ou torto.
+
+    O campo que ele le era o escondido do formulario da tela antiga: nenhum
+    payload de hoje o manda, e a funcao ficou sem chamador junto com o
+    `_anterior`, que era o unico dela.
+    """
     bruto = _texto(dados, "id_original")
     try:
         return int(bruto) if bruto else None
