@@ -51,6 +51,19 @@ const rotas = [
   { path: "/peers/:id", element: <PeerTela /> },
 ]
 
+// A paleta mora na casca, e nao na tela: quem mede a copia da paleta precisa da
+// tela dentro dela. E o mesmo arranjo que os casos da paleta montam a mao
+const cascaComPeer = [
+  {
+    path: "/",
+    element: <Casca />,
+    children: [
+      { path: "peers", element: <div>lista de peers</div> },
+      { path: "peers/:id", element: <PeerTela /> },
+    ],
+  },
+]
+
 // A limpeza do `unstubAllGlobals` e o resto do que cada caso deixa para tras sao
 // do arnes, que os registra uma vez por arquivo (web/src/teste/roteador.tsx)
 
@@ -378,6 +391,26 @@ describe("a tela do peer", () => {
     await screen.findByText(/CUST-268127-IMPORT-V4/)
     await userEvent.keyboard("{Control>}k{/Control}")
     expect(await screen.findByText("copiar o bloco aberto")).toBeInTheDocument()
+  })
+
+  it("a copia da paleta leva o bloco da aba aberta", async () => {
+    // A janela em que o defeito aparece: a tela esta na aba de remocao, e a
+    // copia da paleta levava o bloco da previa. O texto de cada aba e distinto
+    // de proposito, para a assercao dizer QUAL foi copiado
+    const escrever = vi.fn()
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: escrever } })
+    mockFetch({
+      ...BASE,
+      "GET /api/peers/7/saida": { corpo: { bloco: "salvo", remover: "undo peer 198.51.100.2", criar_lista: null, arquivo: "268127-cliente.txt" } },
+    })
+    montarRota(cascaComPeer, "/peers/7")
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("tab", { name: /remoção/i }))
+
+    await userEvent.keyboard("{Control>}k{/Control}")
+    await userEvent.click(await screen.findByText("copiar o bloco aberto"))
+
+    await waitFor(() => expect(escrever).toHaveBeenCalledWith("undo peer 198.51.100.2"))
   })
 
   it("o duplicar do cabecalho pergunta com o formulario sujo", async () => {

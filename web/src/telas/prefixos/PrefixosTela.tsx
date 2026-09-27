@@ -162,7 +162,12 @@ export function PrefixosTela() {
   // A tela publica o que ela sabe fazer para a paleta: gravar e copiar o bloco
   // aberto. Nao ha duplicar: os prefixos do AS sao um registro so, e nao uma
   // lista de registros como os peers e os grupos
-  const blocoAberto = abas[0]?.conteudo ?? null
+  //
+  // O bloco aberto e o da aba que o painel avisa pelo `aoTrocarAba`: com a aba
+  // de remocao aberta, a copia da paleta tem que ser a dela, e nao a da
+  // originacao, que e a primeira
+  const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
+  const blocoAberto = abas.find((a) => a.id === abaAtiva)?.conteudo ?? null
   // O salvamento exige o texto conhecido: enquanto o GET /api/blocos nao
   // responde, os dois editores estao vazios e o backend ACEITA esse vazio
   // (`validar_blocos` nao tem o que apontar), gravando um out/blocos.txt sem
@@ -246,6 +251,7 @@ export function PrefixosTela() {
       <div ref={blocoRef} className="min-w-0">
         <PainelSaida
           abas={abas}
+          aoTrocarAba={setAbaAtiva}
           sujo={sujo}
           carregando={previa.isFetching}
           erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}

@@ -271,7 +271,12 @@ export function GrupoTela() {
   // "duplicar o registro aberto" e o "copiar o bloco aberto" nao aparecem. O
   // duplicar navega como o do cabecalho (com `navegar`), e o copiar so aparece
   // quando ha bloco, pelas mesmas razoes que valem na tela do peer
-  const blocoAberto = abas[0]?.conteudo ?? null
+  //
+  // O bloco aberto e o da aba que o painel avisa pelo `aoTrocarAba`, e nao o da
+  // primeira aba: com o quadro "ao criar" na tela, a copia da paleta tem que
+  // levar o que o operador esta vendo
+  const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
+  const blocoAberto = abas.find((a) => a.id === abaAtiva)?.conteudo ?? null
   usePublicarAcoes({
     // O Ctrl+S nao pode gravar numa tela que ainda nao tem o registro: enquanto
     // o plano ou o registro nao chegaram, o formulario esta em branco e o PUT
@@ -365,6 +370,7 @@ export function GrupoTela() {
         <div ref={blocoRef} className={cn("min-w-0 xl:sticky xl:top-3 xl:self-start", painel === "formulario" && "hidden xl:block")}>
           <PainelSaida
             abas={abas}
+            aoTrocarAba={setAbaAtiva}
             sujo={sujo}
             carregando={previa.isFetching}
             erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}

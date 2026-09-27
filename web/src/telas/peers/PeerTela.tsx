@@ -299,9 +299,13 @@ export function PeerTela() {
   // nao aparece la: sem esta chamada, o "duplicar o registro aberto" e o
   // "copiar o bloco aberto" ficam mortos, que foi o que aconteceu ate aqui
   //
+  // A aba corrente vem do painel pelo `aoTrocarAba`: a copia da paleta tem que
+  // ser a da aba que o operador esta vendo, e nao a primeira do painel
+  //
   // O bloco aberto pode nao existir (a previa em erro chega com conteudo nulo):
   // ai o item nem aparece, em vez de aparecer e nao fazer nada
-  const blocoAberto = abas[0]?.conteudo ?? null
+  const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
+  const blocoAberto = abas.find((a) => a.id === abaAtiva)?.conteudo ?? null
   usePublicarAcoes({
     // Sem o dado na tela o formulario nem esta montado: o Ctrl+S mandaria um PUT
     // com o formulario em branco, e a recusa da API nao apareceria aqui, porque
@@ -409,6 +413,7 @@ export function PeerTela() {
         <div ref={blocoRef} className={cn("min-w-0 xl:sticky xl:top-3 xl:self-start", painel === "formulario" && "hidden xl:block")}>
           <PainelSaida
             abas={abas}
+            aoTrocarAba={setAbaAtiva}
             sujo={sujo}
             carregando={previa.isFetching}
             erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}
