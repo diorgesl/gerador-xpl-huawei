@@ -1,3 +1,16 @@
+# O front e compilado num estagio proprio: a imagem final nao tem node nem
+# node_modules, so o dist.
+FROM node:22-slim AS front
+
+WORKDIR /front
+
+# o lock entra sozinho primeiro: mexer no codigo do front nao refaz o npm ci
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+
+COPY web/ ./
+RUN npm run build
+
 # bgpgen num container. O motivo de existir e o bgpq4: o app chama o binario
 # pelo PATH (prefixes.py) e ele nao vem instalado no macOS. Tem no brew, que
 # hoje traz a 1.16; esta imagem traz a 1.12 do Debian. O ganho da imagem e o
@@ -23,6 +36,12 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+
+# O build sai do estagio do node e fica FORA de /app de proposito: o
+# compose.yaml monta o checkout inteiro em /app, e qualquer coisa que a imagem
+# pusesse ali seria escondida pelo bind mount.
+COPY --from=front /front/dist /srv/web
+ENV BGPGEN_WEB=/srv/web
 
 # a imagem cria o out/ e o usuario, mas os dois sao substituidos quando o
 # compose monta o checkout por cima. Ficam aqui para o "docker run" puro
