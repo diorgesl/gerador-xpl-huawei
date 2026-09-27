@@ -1,9 +1,10 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
-import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
+import { mockFetch, montarRota, peticoes, type Resposta } from "@/teste/roteador"
 import { Casca } from "@/app/casca"
 import { GrupoTela, TelaDoGrupo } from "./GrupoTela"
+import { CAMPO_BRANCO_GRUPO } from "./camposGrupo"
 
 const PLANO = {
   rede: { asn: "64512", politica: "65532" },
@@ -209,6 +210,138 @@ describe("a tela do grupo", () => {
     await userEvent.type(await screen.findByLabelText("Nome"), " NOVA")
     await userEvent.click(await linkPara("/grupos/9"))
     expect(await screen.findByRole("alertdialog")).toHaveTextContent("Sair sem salvar?")
+  })
+
+  it("o criar grupo grava o formulario em branco, e o id do 201 leva a url junto", async () => {
+    // O UNICO fluxo de criacao do branch sem prova: o POST /api/grupos so
+    // aparecia com 404. A fixture serve o formulario em branco, que e o corpo
+    // que sai de uma tela que ninguem tocou: e o id vazio dele o caso que a API
+    // le como "cria novo" (o proximo_id, app/formulario.py), medido e aceito. O
+    // id do 201 e quem move a URL - sem essa volta, o proximo salvar bateria no
+    // 404 de um registro que existe com outro id
+    mockFetch({
+      ...BASE,
+      // o registro em branco que a tela abre: e daqui que sai o corpo do POST
+      "GET /api/grupos/novo": { corpo: { id: 3, nome: "", formulario: { ...CAMPO_BRANCO_GRUPO }, membros: [] } },
+      "POST /api/grupos": {
+        status: 201,
+        corpo: {
+          registro: { id: 3, nome: "NOVO", formulario: { ...GRUPO, id: "3", nome: "NOVO" }, membros: [] },
+          arquivo: "grupo-NOVO.txt", avisos: [],
+        },
+      },
+      "GET /api/grupos/3": { corpo: { id: 3, nome: "NOVO", formulario: { ...GRUPO, id: "3", nome: "NOVO" }, membros: [] } },
+      "GET /api/grupos/3/saida": { corpo: { bloco: "salvo", criar_lista: null, arquivo: "grupo-NOVO.txt" } },
+    })
+    montarRota(rotas, "/grupos/novo")
+    await screen.findByRole("tab", { name: /bloco do grupo/i })
+    await userEvent.click(await screen.findByRole("button", { name: /^salvar$/i }))
+    const post = peticoes().find((p) => p.metodo === "POST")
+    expect(post?.caminho).toBe("/api/grupos")
+    // o corpo inteiro, e nao so o campo que o caso digita: e o id vazio dele a
+    // parte que nada mais exercita
+    expect(post?.corpo).toEqual(CAMPO_BRANCO_GRUPO)
+    expect(await screen.findByText(/gravado em out\/grupo-NOVO.txt/)).toBeInTheDocument()
+    // a URL andou para o id do registro gravado
+    await waitFor(() => expect(peticoes().map((p) => `${p.metodo} ${p.caminho}`)).toContain("GET /api/grupos/3"))
+  })
+
+  it("a rede fora na gravacao avisa com tentar de novo, e o formulario nao perde nada", async () => {
+    // O openapi-fetch RE-LANCA a excecao de rede em vez de devolver `{error}`:
+    // o mutateAsync rejeitava, nenhum onSuccess rodava, e o clique em salvar
+    // nao deixava rastro nenhum na tela
+    const mapa: Record<string, Resposta> = { ...BASE, "PUT /api/grupos/2": { rede: true } }
+    mockFetch(mapa)
+    montarRota(rotas, "/grupos/2")
+    const nome = await screen.findByLabelText("Nome")
+    await userEvent.type(nome, " NOVA")
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    expect(screen.getByLabelText("Nome")).toHaveValue("OPERADORA NOVA")
+    mapa["PUT /api/grupos/2"] = {
+      corpo: { registro: { id: 2, nome: "OPERADORA NOVA", formulario: GRUPO, membros: [] }, arquivo: "grupo-OPERADORA.txt", avisos: [] },
+    }
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
+  })
+
+  it("o 500 na gravacao avisa com tentar de novo, sem apagar o bloco", async () => {
+    // o mesmo caminho do 500 do peer: o corpo sem recusa nao vira mensagem de
+    // campo, e o que sobra e o aviso com o caminho de volta
+    mockFetch({ ...BASE, "PUT /api/grupos/2": { status: 500, corpo: { detail: "falhou" } } })
+    montarRota(rotas, "/grupos/2")
+    await screen.findByText(/UP-OPERADORA-EXPORT-V4/)
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
+    expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
+    expect(screen.getByText(/UP-OPERADORA-EXPORT-V4/)).toBeInTheDocument()
+  })
+
+  it("a rede fora no excluir avisa no dialogo, que fica aberto", async () => {
+    // O excluir le a recusa do corpo, e uma excecao de rede nao tem corpo: sem
+    // o aviso o dialogo ficava aberto e mudo, com o operador clicando
+    mockFetch({ ...BASE, "DELETE /api/grupos/2": { rede: true } })
+    montarRota(rotas, "/grupos/2")
+    await userEvent.click(await screen.findByRole("button", { name: /mais ações/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /excluir/i }))
+    await userEvent.click(await screen.findByRole("button", { name: /^excluir$/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+    // e o grupo continua na tela, com o bloco da previa: a exclusao que nao
+    // chegou nao pode navegar para a lista
+    expect(await screen.findByText(/UP-OPERADORA-EXPORT-V4/)).toBeInTheDocument()
+  })
+
+  it("a consulta ao IRR que falha nao apaga o bloco do painel", async () => {
+    // A chave do bgpq4 nao tem campo: contar o mapa inteiro apagava o painel e
+    // mandava o operador corrigir o que nao tem o que corrigir, e o bloco do
+    // grupo sumia por causa de uma consulta que nao contesta o formulario
+    mockFetch({
+      ...BASE,
+      "POST /api/irr": { status: 502, corpo: { erros: { bgpq4: "bgpq4 falhou: sem resposta do RADB" }, avisos: [] } },
+    })
+    montarRota(rotas, "/grupos/2")
+    // a previa chega primeiro: e ela que traz o bloco, e a recusa do IRR vale
+    // ate a proxima previa responder - clicar antes disso mediria a corrida
+    // entre as duas, e nao o que o caso quer medir
+    await screen.findByText(/UP-OPERADORA-EXPORT-V4/)
+    await userEvent.click(screen.getByRole("button", { name: /^consultar IRR$/i }))
+    // o recado sai na secao de prefixos, ao lado dos botoes do IRR, que e onde
+    // o operador vai procurar o resultado da consulta
+    const secao = document.querySelector("#secao-prefixos") as HTMLElement
+    await waitFor(() =>
+      expect(within(secao).getByText("bgpq4 falhou: sem resposta do RADB")).toBeInTheDocument(),
+    )
+    expect(screen.getByText(/UP-OPERADORA-EXPORT-V4/)).toBeInTheDocument()
+    expect(screen.queryByText(/a prévia volta quando os erros forem corrigidos/)).not.toBeInTheDocument()
+    // e o 502 e um 5xx como outro qualquer: o caminho de volta entra junto
+    expect(screen.getByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
+  })
+
+  it("a previa que falhou diz que nao deu, em vez de gerar para sempre", async () => {
+    // So a tela dos prefixos olhava o isError da previa: aqui o painel ficava
+    // em "gerando previa..." para sempre, e o operador esperava por um bloco
+    // que nao vem. A espera cobre o retry do cliente, que e o mesmo do app
+    mockFetch({ ...BASE, "POST /api/grupos/previa": { status: 500, corpo: { detail: "falhou" } } })
+    montarRota(rotas, "/grupos/2")
+    expect(await screen.findByText(/a prévia volta quando os erros forem corrigidos/, {}, { timeout: 3000 })).toBeInTheDocument()
+    expect(screen.queryByText(/gerando prévia/)).not.toBeInTheDocument()
+  })
+
+  it("/grupos/abc e registro que nao existe, e nao falha de rede", async () => {
+    // o mesmo do peer: o Number("abc") vira NaN, o GET /api/grupos/NaN responde
+    // 422 e o inicial.ts so trata o 404
+    mockFetch({
+      ...BASE,
+      // o caminho com que o pedido sai quando o ident vira NaN, e o que a API
+      // responde nele: e a medida do vermelho, e nao o que a tela pede agora
+      "GET /api/grupos/NaN": { status: 422, corpo: { erros: { _corpo: "path.ident: Input should be a valid integer" }, avisos: [] } },
+    })
+    montarRota(rotas, "/grupos/abc")
+    expect(await screen.findByText(/Registro não encontrado/)).toBeInTheDocument()
+    expect(screen.queryByText("não deu para falar com a API")).not.toBeInTheDocument()
+    // e nem gasta um pedido para um id que nao e id: a leitura nem sai
+    expect(peticoes().some((p) => p.caminho.startsWith("/api/grupos/"))).toBe(false)
   })
 
   it("a marca da navegacao propria nao fica presa no destino de mesmo caminho", async () => {

@@ -1,7 +1,7 @@
-import { screen, waitFor } from "@testing-library/react"
+import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
-import { mockFetch, montarRota, peticoes } from "@/teste/roteador"
+import { mockFetch, montarRota, peticoes, type Resposta } from "@/teste/roteador"
 import { Casca } from "@/app/casca"
 import { PeerTela, TelaDoPeer } from "./PeerTela"
 
@@ -484,6 +484,191 @@ describe("a tela do peer", () => {
     await waitFor(() =>
       expect(peticoes().some((p) => p.caminho === "/api/peers/previa" && p.query === "id=8")).toBe(true),
     )
+  })
+
+  it("a rede fora no salvar avisa com tentar de novo, e o formulario nao perde nada", async () => {
+    // O openapi-fetch RE-LANCA a excecao de rede em vez de devolver `{error}`:
+    // sem ninguem apanhando a excecao, o clique em salvar nao deixava rastro
+    // nenhum na tela (nem toast, nem alerta) e a promessa rejeitada subia
+    // solta. A tabela de Erros da spec nomeia o caso: "500 ou rede fora: toast
+    // com tentar de novo, o formulario nao perde nada"
+    const mapa: Record<string, Resposta> = { ...BASE, "PUT /api/peers/7": { rede: true } }
+    mockFetch(mapa)
+    montarRota(rotas, "/peers/7")
+    const nome = await screen.findByLabelText("Nome")
+    await userEvent.clear(nome)
+    await userEvent.type(nome, "Cliente NOVO")
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    expect(screen.getByLabelText("Nome")).toHaveValue("Cliente NOVO")
+    // a API volta: o "tentar de novo" repete a escrita, e e ela que confirma
+    // que o aviso carrega um caminho de volta, e nao so a frase
+    mapa["PUT /api/peers/7"] = {
+      corpo: { registro: { id: 7, token: "268127", formulario: FORMULARIO }, arquivo: "268127-cliente.txt", avisos: [] },
+    }
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
+    expect(await screen.findByText(/gravado em out\//)).toBeInTheDocument()
+  })
+
+  it("o 500 no salvar avisa com tentar de novo, sem pintar campo nenhum", async () => {
+    // A tabela de Erros da spec poe 500 e rede fora no mesmo caminho. O 500 sem
+    // corpo de recusa nao diz nada sobre campo nenhum, entao o que sobra e o
+    // aviso: o `_corpo` do lerRecusa seria "resposta inesperada da API" embaixo
+    // de um resumo que nao leva a lugar nenhum
+    mockFetch({ ...BASE, "PUT /api/peers/7": { status: 500, corpo: { detail: "falhou" } } })
+    montarRota(rotas, "/peers/7")
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
+    expect(screen.queryByText(/resposta inesperada da API/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/impede o salvar/)).not.toBeInTheDocument()
+    // o bloco da previa continua onde estava: um 5xx nao contesta o formulario
+    expect(screen.getByText(/CUST-268127-IMPORT-V4/)).toBeInTheDocument()
+  })
+
+  it("o 500 que traz a mensagem do servidor mostra as duas coisas", async () => {
+    // O 500 do app nomeia o problema de verdade (o peers.yaml editado a mao,
+    // com arquivo e linha), e essa mensagem nao pode se perder atras do aviso:
+    // o aviso diz o que fazer agora, e a mensagem diz o que corrigir
+    mockFetch({ ...BASE, "PUT /api/peers/7": { status: 500, corpo: { erros: { _: "peers.yaml: linha 12: ASN de 32 bits sem namespace" }, avisos: [] } } })
+    montarRota(rotas, "/peers/7")
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    expect(await screen.findByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
+    expect(screen.getByText(/linha 12: ASN de 32 bits sem namespace/)).toBeInTheDocument()
+  })
+
+  it("a rede fora no salvar e copiar nao culpa a copia", async () => {
+    // A excecao do salvar subia ate o painel, que a apanhava e dizia "nada foi
+    // copiado: a operacao nao terminou": o operador lia isso como problema da
+    // copia, e nao como a gravacao que nao chegou. O recado certo e o da
+    // gravacao, com o caminho de volta
+    mockFetch({ ...BASE, "PUT /api/peers/7": { rede: true } })
+    montarRota(rotas, "/peers/7")
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("button", { name: /salvar e copiar/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    expect(screen.queryByText(/nada foi copiado/)).not.toBeInTheDocument()
+  })
+
+  it("a rede fora no excluir avisa, e o dialogo fica aberto", async () => {
+    // Sem o aviso o dialogo ficava aberto, mudo, com o operador clicando: a
+    // excecao do DELETE subia solta, e nem o lerRecusa nem o toast rodavam
+    mockFetch({ ...BASE, "DELETE /api/peers/7": { rede: true } })
+    montarRota(rotas, "/peers/7")
+    await userEvent.click(await screen.findByRole("button", { name: /mais ações/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /excluir/i }))
+    await userEvent.click(await screen.findByRole("button", { name: /^excluir$/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    // e o peer continua na tela: a exclusao que nao chegou nao pode navegar. A
+    // espera e do bloco, e nao uma leitura direta: os cliques do dialogo correm
+    // na frente da janela de 400ms da previa, e o bloco chega depois deles
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+    expect(await screen.findByText(/CUST-268127-IMPORT-V4/)).toBeInTheDocument()
+  })
+
+  it("a rede fora na consulta ao IRR avisa, e o tentar de novo repete o pedido", async () => {
+    // A consulta nao e gravacao, mas o clique sem resposta e o mesmo buraco: o
+    // bgpq4 leva segundos, e o operador nao tem como saber que nem saiu
+    const mapa: Record<string, Resposta> = { ...BASE, "POST /api/irr": { rede: true } }
+    mockFetch(mapa)
+    montarRota(rotas, "/peers/7")
+    // o "ignorando o cache" existe para dizer que o `forcar` do pedido original
+    // e o que o "tentar de novo" repete, e nao o default do botao
+    await userEvent.click(await screen.findByRole("button", { name: /consultar ignorando o cache/i }))
+    expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
+    mapa["POST /api/irr"] = { corpo: { v4: [], v6: [] } }
+    await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
+    await waitFor(() => expect(peticoes().filter((p) => p.caminho === "/api/irr")).toHaveLength(2))
+    expect(peticoes().filter((p) => p.caminho === "/api/irr").map((p) => p.corpo)).toEqual([
+      expect.objectContaining({ forcar: true }),
+      expect.objectContaining({ forcar: true }),
+    ])
+  })
+
+  it("a consulta ao IRR que falha nao apaga o bloco do painel", async () => {
+    // O erro do bgpq4 nao e de campo nenhum, e contar o mapa inteiro apagava o
+    // painel ("a previa volta quando os erros forem corrigidos") sem nenhum
+    // campo para corrigir: o operador perdia o bloco por causa de uma consulta
+    // que nao contesta o formulario
+    mockFetch({
+      ...BASE,
+      "POST /api/irr": { status: 502, corpo: { erros: { bgpq4: "bgpq4 falhou: sem resposta do RADB" }, avisos: [] } },
+    })
+    montarRota(rotas, "/peers/7")
+    // a previa chega primeiro: e ela que traz o bloco, e a recusa do IRR vale
+    // ate a proxima previa responder - clicar antes disso mediria a corrida
+    // entre as duas, e nao o que o caso quer medir
+    await screen.findByText(/CUST-268127-IMPORT-V4/)
+    await userEvent.click(screen.getByRole("button", { name: /^consultar IRR$/i }))
+    // o recado sai na secao de prefixos, ao lado dos botoes do IRR, que e onde
+    // o operador vai procurar o resultado da consulta
+    const secao = document.querySelector("#secao-prefixos") as HTMLElement
+    await waitFor(() =>
+      expect(within(secao).getByText("bgpq4 falhou: sem resposta do RADB")).toBeInTheDocument(),
+    )
+    expect(screen.getByText(/CUST-268127-IMPORT-V4/)).toBeInTheDocument()
+    expect(screen.queryByText(/a prévia volta quando os erros forem corrigidos/)).not.toBeInTheDocument()
+    // e o 502 e um 5xx como outro qualquer: o caminho de volta entra junto
+    expect(screen.getByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
+  })
+
+  it("a previa que falhou diz que nao deu, em vez de gerar para sempre", async () => {
+    // So a tela dos prefixos olhava o isError da previa: aqui o painel ficava
+    // em "gerando previa..." para sempre, e o operador esperava por um bloco
+    // que nao vem. O retry do cliente gasta a janela antes de desistir, e o
+    // mesmo relogio das outras telas
+    mockFetch({ ...BASE, "POST /api/peers/previa": { status: 500, corpo: { detail: "falhou" } } })
+    montarRota(rotas, "/peers/7")
+    expect(await screen.findByText(/a prévia volta quando os erros forem corrigidos/, {}, { timeout: 3000 })).toBeInTheDocument()
+    expect(screen.queryByText(/gerando prévia/)).not.toBeInTheDocument()
+  })
+
+  it("/peers/abc e registro que nao existe, e nao falha de rede", async () => {
+    // O Number("abc") vira NaN, o GET /api/peers/NaN responde 422, e o inicial.ts
+    // so trata o 404: o operador caia na tela de falha de rede, cujo "tentar de
+    // novo" nunca ia funcionar. Nao e uma consulta que falhou, e um endereco
+    // que nao aponta para registro nenhum
+    mockFetch({
+      ...BASE,
+      // o caminho com que o pedido sai quando o ident vira NaN, e o que a API
+      // responde nele: e a medida do vermelho, e nao o que a tela pede agora
+      "GET /api/peers/NaN": { status: 422, corpo: { erros: { _corpo: "path.ident: Input should be a valid integer" }, avisos: [] } },
+    })
+    montarRota(rotas, "/peers/abc")
+    expect(await screen.findByText(/Registro não encontrado/)).toBeInTheDocument()
+    expect(screen.queryByText("não deu para falar com a API")).not.toBeInTheDocument()
+    // e nem gasta um pedido para um id que nao e id: a leitura nem sai
+    expect(peticoes().some((p) => p.caminho.startsWith("/api/peers/"))).toBe(false)
+  })
+
+  it("o id da URL vence o de da query", async () => {
+    // Com os dois na mao o `de` vencia: o cabecalho dizia "copia de 3", o
+    // formulario trazia os valores do 3, e o salvar fazia PUT /api/peers/7 com
+    // o id 8 do corpo, que a API le como troca de identidade - o peer 7 se
+    // perderia. Nao e alcancavel pela interface, e a regra e a simples: o `de`
+    // so vale quando nao ha id
+    mockFetch({
+      ...BASE,
+      "GET /api/peers/3/copia": {
+        corpo: { id: 8, token: "268127", formulario: { ...FORMULARIO, id: "8", nome: "Cliente COPIADO" } },
+      },
+      "PUT /api/peers/7": {
+        corpo: { registro: { id: 7, token: "268127", formulario: FORMULARIO }, arquivo: "268127-cliente.txt", avisos: [] },
+      },
+    })
+    montarRota(rotas, "/peers/7?de=3")
+    expect(await screen.findByLabelText("Nome")).toHaveValue("Cliente ACME")
+    expect(screen.queryByText(/cópia de/)).not.toBeInTheDocument()
+    expect(peticoes().map((p) => `${p.metodo} ${p.caminho}`)).toContain("GET /api/peers/7")
+    // e o corpo do salvar carrega a identidade do registro aberto, e nao a da
+    // copia que a query pedia
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+    await waitFor(() => expect(peticoes().some((p) => p.metodo === "PUT")).toBe(true))
+    const put = peticoes().find((p) => p.metodo === "PUT")
+    expect(put?.caminho).toBe("/api/peers/7")
+    expect(put?.corpo).toMatchObject({ id: "7" })
   })
 
   it("a consulta ao IRR escreve os prefixos no formulario", async () => {

@@ -11,8 +11,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AvisoNaoSalvo } from "@/components/AvisoNaoSalvo"
 import { Falha } from "@/components/Falha"
 import { PainelSaida, type AbaSaida } from "@/components/PainelSaida"
+import { NaoEncontrado } from "@/telas/NaoEncontrado"
 import { cliente } from "@/api/cliente"
-import { chaves, lerRecusa, usePlano, type GrupoForm } from "@/api/consultas"
+import { chaves, lerRecusa, recusaComMarca, temRecusa, usePlano, type GrupoForm } from "@/api/consultas"
+import { camposDoErro } from "@/lib/campos"
+import { avisarFalhaDeRede, escrever, falhaDoServidor } from "@/lib/aviso"
 import { useGrupoInicial } from "@/api/inicial"
 import { usePrevia } from "@/api/previa"
 import { copiarComAviso } from "@/lib/copiar"
@@ -27,8 +30,14 @@ export function GrupoTela() {
   const navegar = useNavigate()
   const consultas = useQueryClient()
 
-  const ident = id ? Number(id) : null
-  const de = busca.get("de")
+  // `/grupos/abc` e o mesmo caso do peer: um endereco que nao aponta para
+  // registro nenhum, e nao uma API fora do ar
+  const ident = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
+  const enderecoInvalido = id !== undefined && ident === null
+  // O `de` so vale na tela do registro novo, como no peer: com os dois na URL
+  // o id manda, senao o cabecalho anuncia "copia de 3" com os valores do 3 na
+  // tela e o salvar grava no id da URL com o corpo da copia
+  const de = ident === null ? busca.get("de") : null
 
   // A navegacao que a propria tela pede nao pode cair no aviso de alteracao nao
   // salva: o registro foi excluido, sumiu, ou acabou de ser gravado. A marca e um
@@ -55,7 +64,9 @@ export function GrupoTela() {
   const copiando = de !== null
 
   const plano = usePlano()
-  const inicial = useGrupoInicial(ident, de ? Number(de) : null, tipo)
+  // sem o `ligado` a consulta sairia com o ident nulo e traria o grupo em
+  // branco de /grupos/novo, que e um pedido que a tela nem vai usar
+  const inicial = useGrupoInicial(ident, de ? Number(de) : null, tipo, !enderecoInvalido)
 
   const form = useForm<GrupoForm>({ defaultValues: CAMPO_BRANCO_GRUPO })
   const valores = useWatch({ control: form.control }) as GrupoForm
@@ -109,13 +120,20 @@ export function GrupoTela() {
   // lint nesta config)
   const recusaVale = recusa !== null && previa.dataUpdatedAt <= recusa.em ? recusa : null
   const erros = recusaVale && Object.keys(recusaVale.erros).length > 0 ? recusaVale.erros : previa.data?.erros ?? {}
-  const comErro = Object.keys(erros).length > 0
+  // So as chaves que apontam para um campo do formulario contam, como no peer e
+  // na tela dos prefixos: a chave do bgpq4 nao tem campo, e contar o mapa
+  // inteiro apagava o painel por causa de uma consulta que falhou
+  const comErro = Object.entries(erros).some(
+    ([chave, mensagem]) => Boolean(mensagem) && camposDoErro(chave, valores.tipo, true).length > 0,
+  )
   const erroIrr = recusaVale?.irr ?? null
 
   const abas: AbaSaida[] = [
     {
       id: "bloco", rotulo: "bloco do grupo",
-      conteudo: comErro ? null : previa.data?.bloco ?? null,
+      // a previa que nao veio nao e previa nenhuma: sem o `isError` o painel
+      // ficaria em "gerando previa..." para sempre
+      conteudo: comErro || previa.isError ? null : previa.data?.bloco ?? null,
       arquivo: previa.data?.arquivo ?? null, salvo: previa.data?.salvo ?? null,
     },
   ]
@@ -131,14 +149,13 @@ export function GrupoTela() {
       cliente.POST("/api/irr", {
         body: { asn: form.getValues("asn"), apelido: form.getValues("nome"), forcar },
       }),
-    onSuccess: (r) => {
+    onSuccess: (r, forcar) => {
       if (r.error) {
         const lida = lerRecusa(r.error)
-        setRecusa({
-          em: Date.now(),
-          erros: lida.erros,
-          irr: lida.erros.bgpq4 ?? lida.erros.asn ?? "a consulta ao IRR falhou",
-        })
+        // o 502 do bgpq4 e falha do servidor: o aviso com o caminho de volta
+        // entra junto da mensagem, que e a da consulta e nao a de um campo
+        if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => irr.mutate(forcar))
+        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros.asn ?? "a consulta ao IRR falhou"))
         return
       }
       // so a mensagem do IRR sai: os erros que o salvar deixou na tela ficam
@@ -148,6 +165,9 @@ export function GrupoTela() {
       form.setValue("prefixos_v6", r.data.v6, { shouldDirty: true })
       toast("prefixos do IRR no formulário; nada foi gravado")
     },
+    // a excecao de rede nao passa pelo ramo do `r.error`: o openapi-fetch a
+    // re-lanca, e sem este caminho o clique na consulta nao deixava rastro
+    onError: (_erro, forcar) => avisarFalhaDeRede(() => irr.mutate(forcar)),
   })
 
   const salvar = useMutation({
@@ -160,18 +180,28 @@ export function GrupoTela() {
   })
 
   async function gravar(): Promise<number | null> {
-    const r = await salvar.mutateAsync()
+    // O `escrever` e quem apanha a excecao do fetch: sem ele o `mutateAsync`
+    // rejeitava, a excecao subia por esta funcao sem aviso nenhum na tela
+    const r = await escrever(() => salvar.mutateAsync(), () => void gravar())
+    if (r === null) return null
     if (r.error) {
       if (r.response.status === 404) {
         toast.error("registro não encontrado")
         irPara("/grupos", { replace: true })
         return null
       }
+      // O 5xx e falha do servidor, e nao do formulario: o aviso com o caminho
+      // de volta entra junto. Sem corpo de recusa nao ha mensagem de campo a
+      // mostrar, e o `_corpo` do lerRecusa seria ruido em cima do aviso
+      if (falhaDoServidor(r.response.status)) {
+        avisarFalhaDeRede(() => void gravar())
+        if (!temRecusa(r.error)) return null
+      }
       // Sem o refetch daqui: ele subiria o `dataUpdatedAt` da previa e a marca
       // da recusa chegaria vencida, apagando no mesmo instante a lista que ela
       // acabou de escrever. Os erros do salvar ficam ate a proxima previa
       // responder, que e quando a lista de la substitui a de ca
-      setRecusa({ em: Date.now(), erros: lerRecusa(r.error).erros, irr: null })
+      setRecusa(recusaComMarca(r.error))
       return null
     }
     setRecusa(null)
@@ -203,8 +233,18 @@ export function GrupoTela() {
   }
 
   async function excluir() {
-    const r = await cliente.DELETE("/api/grupos/{ident}", { params: { path: { ident: ident as number } } })
+    const r = await escrever(
+      () => cliente.DELETE("/api/grupos/{ident}", { params: { path: { ident: ident as number } } }),
+      () => void excluir(),
+    )
+    if (r === null) return
     if (r.error) {
+      // o 5xx tem o caminho de volta, e sem corpo de recusa nao ha mensagem
+      // para o dialogo: o `_corpo` do lerRecusa seria ruido em cima do aviso
+      if (falhaDoServidor(r.response.status)) {
+        avisarFalhaDeRede(() => void excluir())
+        if (!temRecusa(r.error)) return
+      }
       // o 409 traz os membros na mesma mensagem do POST /grupo/{nome}/excluir
       setErrosDoGrupo(lerRecusa(r.error).erros)
       return
@@ -229,6 +269,9 @@ export function GrupoTela() {
     aoDuplicar: ident === null ? undefined : () => navegar(`/grupos/novo?de=${ident}`),
     aoCopiarBloco: blocoAberto ? () => void copiarComAviso(blocoAberto, blocoRef.current) : undefined,
   })
+
+  // O endereco que nao aponta para registro nenhum tem a tela dele, como no peer
+  if (enderecoInvalido) return <NaoEncontrado />
 
   const falhou = (plano.isError || inicial.isError) && inicial.error?.message !== "nao_encontrado"
   if (falhou) {
@@ -312,7 +355,7 @@ export function GrupoTela() {
             abas={abas}
             sujo={sujo}
             carregando={previa.isFetching}
-            erro={comErro ? "com erro" : null}
+            erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}
             onCopiar={async (aba) =>
               aba.conteudo ? (await copiarComAviso(aba.conteudo, blocoRef.current)) === "copiado" : false
             }

@@ -11,7 +11,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AvisoNaoSalvo } from "@/components/AvisoNaoSalvo"
 import { Falha } from "@/components/Falha"
 import { PainelSaida, type AbaSaida } from "@/components/PainelSaida"
-import { chaves, lerRecusa, useGrupos, usePlano, type PeerForm } from "@/api/consultas"
+import { NaoEncontrado } from "@/telas/NaoEncontrado"
+import { chaves, lerRecusa, recusaComMarca, temRecusa, useGrupos, usePlano, type PeerForm } from "@/api/consultas"
+import { camposDoErro } from "@/lib/campos"
+import { avisarFalhaDeRede, escrever, falhaDoServidor } from "@/lib/aviso"
 // o `consultas.ts` nao reexporta o cliente: ele e o dono do cliente e o importa
 // para os hooks, mas o export fica no cliente.ts
 import { cliente } from "@/api/cliente"
@@ -39,8 +42,17 @@ export function PeerTela() {
   const navegar = useNavigate()
   const consultas = useQueryClient()
 
-  const ident = id ? Number(id) : null
-  const de = busca.get("de")
+  // `/peers/abc` casa na rota do `:id` sem ser um id: o Number virava NaN, o
+  // GET respondia 422 (o inicial.ts so trata o 404) e o operador caia na falha
+  // de rede, cujo "tentar de novo" nunca ia funcionar. Endereco que nao aponta
+  // para registro nenhum e o mesmo caso do registro que nao existe
+  const ident = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
+  const enderecoInvalido = id !== undefined && ident === null
+  // O `de` so vale na tela do registro novo: com os dois na URL o id manda,
+  // senao o cabecalho anuncia "copia de 3" com os valores do 3 na tela e o
+  // salvar manda o id 8 do corpo no PUT do 7, que a API le como troca de
+  // identidade - o peer 7 se perderia
+  const de = ident === null ? busca.get("de") : null
 
   // A navegacao que a propria tela pede nao pode cair no aviso de alteracao nao
   // salva: o registro foi excluido, sumiu, ou acabou de ser gravado. A marca e um
@@ -68,7 +80,10 @@ export function PeerTela() {
 
   const plano = usePlano()
   const grupos = useGrupos()
-  const inicial = usePeerInicial(ident, de ? Number(de) : null, tipo)
+  // Sem o `ligado` a consulta sairia com o ident nulo e traria o formulario em
+  // branco de /peers/novo: e um pedido que a tela nem usa, para um endereco que
+  // nao aponta para registro nenhum
+  const inicial = usePeerInicial(ident, de ? Number(de) : null, tipo, !enderecoInvalido)
 
   const form = useForm<PeerForm>({ defaultValues: CAMPO_BRANCO })
   const valores = useWatch({ control: form.control }) as PeerForm
@@ -127,14 +142,24 @@ export function PeerTela() {
   const recusaVale = recusa !== null && previa.dataUpdatedAt <= recusa.em ? recusa : null
   const erros = recusaVale && Object.keys(recusaVale.erros).length > 0 ? recusaVale.erros : previa.data?.erros ?? {}
   const avisos = previa.data?.avisos ?? []
-  const comErro = Object.keys(erros).length > 0
+  // So as chaves que apontam para um campo do formulario contam. O bgpq4 fora
+  // do ar nao diz nada sobre o que esta escrito nos campos, e contar o mapa
+  // inteiro apagava o painel ("a previa volta quando os erros forem
+  // corrigidos") por causa de uma consulta que falhou, sem nenhum campo para
+  // corrigir. E o mesmo que a tela dos prefixos ja faz com as duas caixas
+  const comErro = Object.entries(erros).some(
+    ([chave, mensagem]) => Boolean(mensagem) && camposDoErro(chave, valores.tipo).length > 0,
+  )
   const erroIrr = recusaVale?.irr ?? null
 
   const abas: AbaSaida[] = [
     {
       id: "bloco",
       rotulo: "bloco do peer",
-      conteudo: comErro ? null : previa.data?.bloco ?? null,
+      // a previa que nao veio nao e previa nenhuma: sem o `isError` o painel
+      // ficaria em "gerando previa..." para sempre, esperando por um bloco que
+      // nao vem
+      conteudo: comErro || previa.isError ? null : previa.data?.bloco ?? null,
       arquivo: previa.data?.arquivo ?? null,
       salvo: previa.data?.salvo ?? null,
     },
@@ -159,14 +184,13 @@ export function PeerTela() {
       cliente.POST("/api/irr", {
         body: { asn: form.getValues("asn"), apelido: form.getValues("apelido"), forcar },
       }),
-    onSuccess: (r) => {
+    onSuccess: (r, forcar) => {
       if (r.error) {
         const lida = lerRecusa(r.error)
-        setRecusa({
-          em: Date.now(),
-          erros: lida.erros,
-          irr: lida.erros.bgpq4 ?? lida.erros.asn ?? "a consulta ao IRR falhou",
-        })
+        // o 502 do bgpq4 e falha do servidor: o aviso com o caminho de volta
+        // entra junto da mensagem, que e a da consulta e nao a de um campo
+        if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => irr.mutate(forcar))
+        setRecusa(recusaComMarca(r.error, lida.erros.bgpq4 ?? lida.erros.asn ?? "a consulta ao IRR falhou"))
         return
       }
       // so a mensagem do IRR sai: os erros que o salvar deixou na tela ficam
@@ -176,6 +200,9 @@ export function PeerTela() {
       form.setValue("prefixos_v6", r.data.v6, { shouldDirty: true })
       toast("prefixos do IRR no formulário; nada foi gravado")
     },
+    // a excecao de rede nao passa pelo ramo do `r.error`: o openapi-fetch a
+    // re-lanca, e sem este caminho o clique na consulta nao deixava rastro
+    onError: (_erro, forcar) => avisarFalhaDeRede(() => irr.mutate(forcar)),
   })
 
   const salvar = useMutation({
@@ -187,20 +214,35 @@ export function PeerTela() {
     },
   })
 
-  /** Grava e devolve o ID do registro gravado, ou nulo quando a API recusou. */
+  /**
+   * Grava e devolve o ID do registro gravado, ou nulo quando a API recusou ou
+   * quando a escrita nem chegou.
+   */
   async function gravar(): Promise<number | null> {
-    const r = await salvar.mutateAsync()
+    // O `escrever` e quem apanha a excecao do fetch: sem ele o `mutateAsync`
+    // rejeitava, a excecao subia por esta funcao e nao havia nem aviso na tela
+    // nem quem a apanhasse depois (o "salvar e copiar" a levava ao painel, que
+    // dizia "nada foi copiado: a operacao nao terminou")
+    const r = await escrever(() => salvar.mutateAsync(), () => void gravar())
+    if (r === null) return null
     if (r.error) {
       if (r.response.status === 404) {
         toast.error("registro não encontrado")
         irPara("/peers", { replace: true })
         return null
       }
+      // O 5xx e falha do servidor, e nao do formulario: o aviso com o caminho
+      // de volta entra junto. Sem corpo de recusa nao ha mensagem de campo a
+      // mostrar, e o `_corpo` do lerRecusa seria ruido em cima do aviso
+      if (falhaDoServidor(r.response.status)) {
+        avisarFalhaDeRede(() => void gravar())
+        if (!temRecusa(r.error)) return null
+      }
       // Sem o refetch daqui: ele subiria o `dataUpdatedAt` da previa e a marca
       // da recusa chegaria vencida, apagando no mesmo instante a lista que ela
       // acabou de escrever. Os erros do salvar ficam ate a proxima previa
       // responder, que e quando a lista de la substitui a de ca
-      setRecusa({ em: Date.now(), erros: lerRecusa(r.error).erros, irr: null })
+      setRecusa(recusaComMarca(r.error))
       return null
     }
     setRecusa(null)
@@ -236,9 +278,15 @@ export function PeerTela() {
   }
 
   async function excluir() {
-    const r = await cliente.DELETE("/api/peers/{ident}", { params: { path: { ident: ident as number } } })
+    const r = await escrever(
+      () => cliente.DELETE("/api/peers/{ident}", { params: { path: { ident: ident as number } } }),
+      () => void excluir(),
+    )
+    if (r === null) return
     if (r.error) {
       toast.error("não deu para excluir")
+      // o 5xx tem o caminho de volta, e o 404 nao tem o que repetir
+      if (falhaDoServidor(r.response.status)) avisarFalhaDeRede(() => void excluir())
       return
     }
     setExcluindo(false)
@@ -268,6 +316,10 @@ export function PeerTela() {
   })
 
   const grupo = (grupos.data ?? []).find((g) => String(g.id) === String(valores.grupo_id))
+
+  // O endereco que nao aponta para registro nenhum tem a tela dele: nao ha o
+  // que tentar de novo, e a tela de falha de rede mentiria sobre o problema
+  if (enderecoInvalido) return <NaoEncontrado />
 
   // Uma falha de rede nao pode passar: sem o plano a tela fica vazia sem dizer
   // por que. O 404 e outro caminho, o do toast e da volta para /peers.
@@ -359,7 +411,7 @@ export function PeerTela() {
             abas={abas}
             sujo={sujo}
             carregando={previa.isFetching}
-            erro={comErro ? "com erro" : null}
+            erro={comErro ? "com erro" : previa.isError ? "não deu para gerar a prévia" : null}
             onCopiar={async (aba) =>
               aba.conteudo ? (await copiarComAviso(aba.conteudo, blocoRef.current)) === "copiado" : false
             }
