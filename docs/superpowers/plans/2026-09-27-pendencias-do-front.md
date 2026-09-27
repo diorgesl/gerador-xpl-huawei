@@ -873,18 +873,36 @@ retry", que e o defeito que existia de verdade.
 - Modify: `web/src/telas/configuracoes/ConfiguracoesTela.tsx`
 - Test: `web/src/telas/configuracoes/ConfiguracoesTela.test.tsx`
 
+> Nota de execucao (2026-09-27): esta task **nao tinha rodado** quando a revisao
+> final da leva a leu - o plano, a spec e o ledger a davam por fechada, e o
+> componente seguia sem `aria-pressed` e sem o caso de teste. A execucao entrou
+> na rodada de conserto, e o Step 1 abaixo ja esta na versao executada: o
+> `mockFetch(BASE)` que o snippet do brief omitia (sem ele o `afterEach` do
+> arnés acusa "rota sem mapa") e as **tres** assercoes, e nao duas. A terceira -
+> o `sistema` em `false` depois do clique - e a que prova que a marca se
+> **move**: o tema padrao e `sistema` (`web/src/app/tema.ts:12-19`), entao ela
+> comeca em `true` e tem que virar `false`. Sem ela, um `aria-pressed={true}`
+> fixo passaria nas duas assercoes do brief; medido na execucao, ele falha.
+
 - [ ] **Step 1: Escrever o teste que falha**
 
 ```tsx
   it("o tema escolhido se anuncia como pressionado", async () => {
     // a marca era so a cor (variant + ring): quem usa leitor de tela nao sabia
-    // qual dos tres estava valendo
+    // qual dos tres estava valendo. O tema padrao e "sistema", entao o clique
+    // em "claro" muda o estado de verdade, e a marca tem que SAIR do sistema
+    mockFetch(BASE)
     montarRota(rotas, "/configuracoes")
     await screen.findByRole("button", { name: "claro" })
+    expect(screen.getByRole("button", { name: "sistema" })).toHaveAttribute("aria-pressed", "true")
+
     await userEvent.click(screen.getByRole("button", { name: "claro" }))
 
     expect(screen.getByRole("button", { name: "claro" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", { name: "escuro" })).toHaveAttribute("aria-pressed", "false")
+    // sem esta terceira linha o caso passaria com a marca fixa: e ela que prova
+    // que o "pressionado" andou de um botao para o outro
+    expect(screen.getByRole("button", { name: "sistema" })).toHaveAttribute("aria-pressed", "false")
   })
 ```
 
@@ -1022,6 +1040,7 @@ Os quatro pendentes do e2e e a medicao do Safari. Esta task e a unica que pode m
 **Files:**
 - Modify: `web/playwright.config.ts` (aspas nos caminhos)
 - Create: `web/tsconfig.e2e.json`, Modify: `web/tsconfig.json` (a referencia)
+- Create: `web/e2e/clipboard.d.ts` (o tipo minimo do `navigator.clipboard`, na emenda do Step 2)
 - Modify: `web/eslint.config.js` (globais de Node)
 - Modify: `web/e2e/copiar.spec.ts` (a assercao forte e o caso novo)
 - Modify: `README.md` (a contagem de casos do e2e)
@@ -1036,12 +1055,40 @@ Em `web/playwright.config.ts`, o comando do `webServer` passa a citar cada camin
 
 - [ ] **Step 2: O typecheck do e2e**
 
+> Nota de execucao (2026-09-27): a config abaixo nasceu sem `"lib"`, e o default
+> do `target` trazia a lib DOM para dentro do programa do e2e: `document`,
+> `window` e `localStorage` seguiam typecheckando, que e o oposto do que o
+> Step 3 quer (o bloco de lint existe porque o e2e "hoje recebe `document`,
+> `window` e `localStorage` como definidos"). Medido na rodada de conserto com
+> `--lib ES2022`: so `navigator.clipboard` quebrava - tres pontos, o `:22` e o
+> `:74` do `copiar.spec.ts` **e o `:113` do `fluxos.spec.ts`**, que a revisao
+> nao contou. A emenda entrou na mesma rodada: o `"lib": ["ES2022"]` no
+> `tsconfig.e2e.json` e o tipo local minimo do `clipboard` em
+> `web/e2e/clipboard.d.ts` - uma declaracao, zero `any`, zero
+> `@ts-expect-error`, zero cast.
+>
+> O que a config entrega depois da emenda, medido: escrever `document.title`,
+> `window.location` ou um campo do `navigator` fora do `clipboard` num arquivo
+> do `e2e/` e erro de tipo (`TS2584`/`TS2304`); o `localStorage` continua
+> passando, e nao pela DOM - o `@types/node` 24 declara
+> `web-globals/storage.d.ts` com `var localStorage: Storage`, porque o Node tem
+> esse global. Ou seja: a garantia e "ES2022 mais os globais de Node", e nao
+> "nada de navegador".
+
 Crie `web/tsconfig.e2e.json`:
 
 ```json
 {
   "compilerOptions": {
+    // o mesmo destino dos outros dois: sem isto o `tsc -b` larga um
+    // tsconfig.e2e.tsbuildinfo solto na raiz do web/, fora do gitignore
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
     "target": "ES2022",
+    // sem o lib, a DOM entra pelo default do target e `document`, `window` e
+    // `localStorage` seguem typecheckando no e2e, que roda em navegador e nao
+    // pode contar com eles: o que o e2e enxerga aqui e o ES2022 mais os globais
+    // de Node, e so
+    "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -1068,6 +1115,22 @@ cd web && npx tsc -b
 ```
 
 Expected: PASS na primeira vez, ou erros de tipo em codigo que nunca foi checado. Cada erro e conserto real, no mesmo commit.
+
+Com o `"lib": ["ES2022"]` o que aparece sao os tres `navigator.clipboard` (dois
+no `copiar.spec.ts`, um no `fluxos.spec.ts`), e o conserto e o tipo local minimo
+em `web/e2e/clipboard.d.ts` - o que o e2e usa do navegador e o `readText`, e so:
+
+```ts
+interface Navigator {
+  readonly clipboard: { readText(): Promise<string> }
+}
+```
+
+E uma declaracao de global, e nao um cast: o compilador continua conferindo o
+resto (`navigator.clipboar` e erro de propriedade inexistente, e `document` nao
+existe no programa). O `declare global` dentro de um dos specs cobriria os dois
+arquivos pelo mesmo programa, mas o `.d.ts` ao lado deles diz de onde vem o
+tipo sem precisar procurar em qual spec ele foi declarado.
 
 - [ ] **Step 3: Os globais certos no lint**
 
