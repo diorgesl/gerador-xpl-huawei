@@ -28,6 +28,7 @@
 | 10 | e2e | aspas, typecheck, globais de Node, a copia provando o bloco, e a medicao do Safari |
 | 11 | Comentarios e registro | os quinze comentarios obsoletos e onde cada pendencia foi fechada |
 | 12 | O erro de token | a colisao de token aponta o apelido quando e o apelido que colide |
+| 13 | O campo que invade a coluna | o select de valor longo para de pintar por cima do vizinho |
 
 ## Global Constraints
 
@@ -1312,6 +1313,116 @@ git commit -m "O erro de token aponta o apelido quando e o apelido que colide"
 
 ---
 
+### Task 13: O campo de valor longo nao invade a coluna vizinha
+
+O operador abriu a copia do ALT num viewport logo acima do `xl` e viu os campos
+sobrepostos: o select da origem ("1100 - fora da tabela do tipo") pintado por
+cima do rotulo do POP, e o do prepend por cima do keepalive.
+
+A causa: `web/src/components/ui/select.tsx:43` monta o `SelectTrigger` com
+`w-fit` e `whitespace-nowrap`, e `Formulario.tsx:229` o usa sem classe nenhuma.
+Em `xl` o painel de saida toma `minmax(0, 42rem)` da largura
+(`PeerTela.tsx:388`), entao as tres colunas do formulario ficam com cerca de
+110px cada: o select, que e do tamanho do proprio texto, estoura a celula do
+grid e pinta por cima do vizinho. O `line-clamp-1` que o componente ja poe no
+valor nao ajuda enquanto o gatilho nao tiver largura para clampar.
+
+**Files:**
+- Modify: `web/src/components/Formulario.tsx:229` (a classe do `SelectTrigger`)
+- Modify: `web/src/components/Campo.tsx` (o `min-w-0` do item do grid)
+- Modify: `web/e2e/fluxos.spec.ts` (o caso que mede as caixas)
+
+**Interfaces:**
+- Produces: nada para as outras tasks. O `CampoCombo` (o input com `datalist`) e o `Input` comum ja sao `w-full` e nao sofrem disso.
+
+- [ ] **Step 1: Escrever o teste que falha**
+
+Em `web/e2e/fluxos.spec.ts`, no fim:
+
+```ts
+test("um valor longo nao invade a coluna vizinha", async ({ page }) => {
+  // No xl o painel de saida toma 42rem, entao cada uma das tres colunas do
+  // formulario fica com ~110px. O select do shadcn nasce `w-fit`: com um valor
+  // longo ele estourava a celula do grid e pintava por cima do campo ao lado.
+  // A medida e a unica prova possivel aqui: jsdom nao calcula layout
+  await page.goto("/peers/1")
+  const origem = page.getByLabel("Origem da rota")
+  const pop = page.getByLabel("POP")
+  await expect(origem).toBeVisible()
+
+  const a = await origem.boundingBox()
+  const b = await pop.boundingBox()
+  expect(a && b).toBeTruthy()
+  expect(a!.x + a!.width).toBeLessThanOrEqual(b!.x + 1)
+})
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+```bash
+cd web && npm run e2e -- --project=chromium -g "nao invade"
+```
+
+Expected: FAIL, porque o select passa por cima do POP. Se ele passar de primeira,
+o viewport do caso nao esta reproduzindo o aperto do `xl`: confira que a janela
+tem 1280 de largura (o padrao do `devices["Desktop Chrome"]`) e que as tres
+colunas estao de pe.
+
+- [ ] **Step 3: O gatilho com largura da coluna**
+
+Em `web/src/components/Formulario.tsx:229`:
+
+```tsx
+            <SelectTrigger id={id} className="w-full min-w-0">
+```
+
+O `w-full` faz o gatilho caber na celula, e o `line-clamp-1` que o componente ja
+aplica ao valor passa a ter efeito: o texto longo e cortado com reticencias em
+vez de vazar. O `min-w-0` e o que permite o gatilho encolher abaixo do proprio
+conteudo dentro do flex do componente.
+
+- [ ] **Step 4: O item do grid tambem encolhe**
+
+Em `web/src/components/Campo.tsx`, o wrapper do campo:
+
+```tsx
+    <div
+      data-campo={nome}
+      className={cn("flex min-w-0 flex-col gap-1", largo && "sm:col-span-2")}
+    >
+```
+
+Sem o `min-w-0` o item do grid tem `min-width: auto`, entao ele se recusa a
+encolher abaixo do conteudo e a coluna inteira estoura em vez de so o campo.
+
+- [ ] **Step 5: Rodar e ver passar**
+
+```bash
+cd web && npm run e2e -- --project=chromium -g "nao invade"
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Rodar tudo o que a mudanca pode ter tocado**
+
+```bash
+cd web && npm test && npm run lint && npm run e2e
+.venv/bin/python -m pytest -q
+```
+
+Expected: PASS nos quatro. O layout do formulario e usado pelas telas de peer e
+de grupo, entao o e2e inteiro (os cinco fluxos e a copia) e a prova de que nada
+quebrou de visual.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add web/src/components/Formulario.tsx web/src/components/Campo.tsx web/e2e/fluxos.spec.ts
+git commit -m "O campo de valor longo para de invadir a coluna vizinha"
+```
+
+---
+
 ## Tabela de pendencias
 
 Cada pendencia registrada nas etapas anteriores e onde ela fecha nesta leva.
@@ -1329,11 +1440,13 @@ Cada pendencia registrada nas etapas anteriores e onde ela fecha nesta leva.
 | O `graphify update .` no checkout principal (plano do corte) | Feito no merge, fora desta leva |
 | Os comentarios que citam `_contexto` e "a tela HTML" (revisao do corte) | Task 11 |
 | A mensagem `ASN ja usado` apontando o ASN quando o que colide e o apelido (achado pelo operador, na copia do ALT) | Task 12 |
+| Os campos sobrepostos no formulario, com o select de valor longo pintando por cima do vizinho (achado pelo operador, na mesma tela) | Task 13 |
 
 ## Fechamento
 
-Ao fim das doze tasks, o que as tres etapas do front deixaram registrado esta
-fechado ou decidido, mais o achado que o operador trouxe da copia do ALT. Duas coisas continuam em aberto de proposito, e as duas
+Ao fim das treze tasks, o que as tres etapas do front deixaram registrado esta
+fechado ou decidido, mais os dois achados que o operador trouxe da tela da copia
+do ALT (o erro de token e os campos sobrepostos). Duas coisas continuam em aberto de proposito, e as duas
 estao escritas nos planos das etapas: a tela de lista no corpo (que virou estado
 vazio por decisao) e a origem dos tres upstreams do cadastro real (que o aviso
 mostra e o operador decide).
