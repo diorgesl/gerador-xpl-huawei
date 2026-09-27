@@ -1108,9 +1108,17 @@ def test_origem_fora_da_tabela_do_tipo_e_aviso_nos_tipos_sem_conferencia():
 
 
 def test_origem_no_downstream_nao_ganha_aviso_novo():
-    """Nos downstream a faixa 1xxx ja e erro no validar, e nao aviso aqui."""
-    for origem in (1100, 1120):
-        assert validate.avisos(um_peer(tipo="cliente", origem=origem), []) == []
+    """Nos downstream a faixa 1xxx ja e erro no validar, e nao aviso aqui.
+
+    O valor e o 1400, e nao um dos que a tabela do cliente usa (1100, 1110,
+    1120, 1130): com um valor de dentro da tabela o caso passava com a guarda
+    do `avisos` e sem ela, porque o que a guarda decide e sobre o TIPO do
+    peer, e nao sobre o valor. O 1400 e o que prova: ele esta fora da tabela
+    do cliente, entao sem a guarda sairia o aviso ambar ("origem 1400 nao
+    esta na tabela do cliente") por cima do erro vermelho que o validar ja
+    da no downstream.
+    """
+    assert validate.avisos(um_peer(tipo="cliente", origem=1400), []) == []
 
 
 def test_a_colisao_de_token_aponta_o_campo_onde_o_token_nasce():
