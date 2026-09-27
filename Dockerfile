@@ -53,7 +53,9 @@ USER bgpgen
 
 EXPOSE 8000
 
-# sem curl na imagem slim: o proprio python responde se a tela esta de pe
+# sem curl na imagem slim: o proprio python responde se a tela esta de pe. O /
+# responde 307 para /peers desde o corte das telas HTML, e o urlopen segue o
+# redirect sozinho: quem devolve o 200 e o index.html do build
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
  CMD python -c "import sys,urllib.request; \
 sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3).status == 200 else 1)"

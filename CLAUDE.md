@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository overview
 
-This repository holds a design document, `PLANO.md`, specifying the BGP communities policy for AS64512 and its implementation in XPL (Huawei VRP's policy language) on the NetEngine 8000 F1A, plus the app that implements it: `app/` (FastAPI, with the JSON API under `/api` and the Jinja screens in `templates/`) and `web/` (the React SPA that consumes the API). The document is written in Portuguese. The suite is `pytest` for Python and `vitest` for the front; the commands are in the `README.md`.
+This repository holds a design document, `PLANO.md`, specifying the BGP communities policy for AS64512 and its implementation in XPL (Huawei VRP's policy language) on the NetEngine 8000 F1A, plus the app that implements it: `app/` (FastAPI, serving the JSON API under `/api`, the generated blocks in `out/` and the SPA build) and `web/` (the React SPA the operator uses; `templates/` holds only the Jinja templates that render the XPL blocks). The document is written in Portuguese. The suite is `pytest` for Python and `vitest` for the front; the commands are in the `README.md`.
 
 ## Working with this document
 

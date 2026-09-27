@@ -11,9 +11,9 @@ services:
       - "127.0.0.1:8765:8000"
     volumes:
       # O checkout inteiro entra no lugar do que a imagem copiou. Assim o
-      # peers.yaml e o out/ sao os mesmos do repositorio, editar template vale
-      # na hora (o Jinja recarrega sozinho) e o bloco gerado aparece no disco
-      # da maquina para colar no F1A. Apagar esta linha congela a imagem.
+      # peers.yaml e o out/ sao os mesmos do repositorio, editar um template de
+      # bloco vale na hora e o bloco gerado aparece no disco da maquina para
+      # colar no F1A. Apagar esta linha congela a imagem.
       - .:/app
     # uid do dono dos arquivos que o app escreve. Em macOS o padrao 1000 ja
     # escreve no bind mount; num servidor Linux vale exportar o uid do

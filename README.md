@@ -1,22 +1,22 @@
 # bgpgen
 
 Gera o bloco XPL de uma sessão BGP do AS64512 a partir de um formulário, mais
-um bloco base com os sets e filtros que todas as sessões compartilham.
+um bloco base com os sets e filtros que todas as sessões compartilham. A tela é
+uma SPA em `web/`, servida pelo próprio FastAPI.
 
 ## O que é
 
-A tela lista os peers e traz o formulário ao lado. Preenchido o formulário, o
-app escreve o bloco daquela sessão em `out/<token>-<tipo>.txt`, sobrescrevendo
-só esse arquivo. Gerar um peer não toca na saída dos outros. O bloco base, que
-é igual para todos, a tela serve em `GET /base.txt`.
+A SPA lista os peers na barra da esquerda e abre cada um num formulário. Salvo o
+formulário, o app escreve o bloco daquela sessão em `out/<token>-<tipo>.txt`,
+sobrescrevendo só esse arquivo: gerar um peer não toca na saída dos outros. O
+bloco base, que é igual para todos, sai em `GET /base.txt`.
 
-Além da tela, o app serve uma API JSON em `/api`, que a SPA em `web/` consome.
-A SPA está no ar em `/peers`, servida pelo próprio uvicorn. As telas antigas
-seguem em `/` até o corte, e o desenho das duas está em
-`docs/superpowers/specs/2026-09-26-front-spa-design.md`. As rotas usam o mesmo
-formulário, a mesma validação e o mesmo render da tela, e a documentação
-interativa fica em `/docs`. A prévia (`POST /api/peers/previa`) monta o bloco
-sem gravar nada.
+Por baixo dela o app serve uma API JSON em `/api`, que é quem fala com o
+`peers.yaml`: a SPA não reimplementa regra nenhuma, e o parsing, a validação e o
+render continuam no Python. A raiz (`/`) leva para `/peers`, e a documentação
+interativa da API fica em `/docs`. A prévia (`POST /api/peers/previa`) monta o
+bloco sem gravar nada. O desenho está em
+`docs/superpowers/specs/2026-09-26-front-spa-design.md`.
 
 O estado é o `peers.yaml`, o cadastro dos peers. O que está em `out/` é saída, e
 está no `.gitignore`.
@@ -54,10 +54,10 @@ Com Docker, que já traz o `bgpq4` junto:
 docker compose up --build
 ```
 
-A tela fica em http://127.0.0.1:8765/. O `compose.yaml` monta o checkout em
-`/app`, então o `peers.yaml` e o `out/` são os do repositório e editar template
-vale na hora. Sem essa linha de `volumes:`, a imagem roda sozinha com o que foi
-copiado no build.
+A tela fica em http://127.0.0.1:8765/, que cai em `/peers`. O `compose.yaml`
+monta o checkout em `/app`, então o `peers.yaml` e o `out/` são os do
+repositório, e editar um template de bloco vale na hora. Sem essa linha de
+`volumes:`, a imagem roda sozinha com o que foi copiado no build.
 
 A imagem é o `python:3.14-slim` mais o `bgpq4` 1.12 do repositório Debian. O
 `bgpq4` do brew está na 1.16, então as duas rotas não dão a mesma versão do
@@ -68,13 +68,13 @@ Suíte: `.venv/bin/python -m pytest`, ou
 
 ### O front (SPA)
 
-A tela nova é uma SPA em `web/`, servida pelo próprio FastAPI. Em produção não há
+A tela é uma SPA em `web/`, servida pelo próprio FastAPI. Em produção não há
 processo separado: o uvicorn serve a API, os arquivos do build e o `index.html`.
 
 Em desenvolvimento são dois processos, com o Vite recarregando a tela na hora:
 
 ```bash
-.venv/bin/uvicorn app.app:app --port 8000      # a API e as telas antigas
+.venv/bin/uvicorn app.app:app --port 8000      # a API e a SPA
 cd web && npm install && npm run dev           # a SPA em http://127.0.0.1:5173/peers
 ```
 
@@ -89,8 +89,8 @@ cd web && npm run build && cd ..
 ```
 
 O diretório do build vem de `BGPGEN_WEB`, e o padrão é `web/dist`. Sem build, as
-rotas da SPA respondem 503 com a instrução de compilar; a API e as telas antigas
-continuam funcionando.
+rotas da SPA respondem 503 com a instrução de compilar; a API continua
+funcionando.
 
 ### Testes do front
 
@@ -100,7 +100,7 @@ npm test              # Vitest: tokenizador XPL, diff, campos, contraste, compon
 npm run lint
 npm run api:conferir  # falha se o schema.d.ts estiver velho em relação ao app.openapi()
 npx playwright install  # uma vez: baixa os navegadores que o Playwright pede
-npm run e2e             # Playwright: compila e roda os 10 casos contra um uvicorn (6 fluxos + 4 de copia)
+npm run e2e             # Playwright: compila e roda os 12 casos contra um uvicorn (8 fluxos + 4 de copia)
 ```
 
 O `npm run api:tipos` regenera o `web/src/api/schema.d.ts` a partir do
