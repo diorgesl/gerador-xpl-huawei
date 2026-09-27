@@ -109,6 +109,24 @@ describe("a tela do peer", () => {
     expect(await screen.findByRole("dialog")).toHaveTextContent("268127")
   })
 
+  it("o cancelar do dialogo nao exclui nada", async () => {
+    // O par do test_excluir_sem_confirmar_nao_apaga do test_app.py: excluir sem
+    // confirmar nao apaga. A confirmacao saiu do servidor (a API nao pede mais o
+    // `confirmado`) e virou dialogo, entao quem prova isso agora e o cancelar
+    // nao mandar DELETE nenhum. Sem este caso, um refactor que disparasse o
+    // excluir na abertura do dialogo apagaria o registro e o out/ dele
+    mockFetch(BASE)
+    montarRota(rotas, "/peers/7")
+    await userEvent.click(await screen.findByRole("button", { name: /mais ações/i }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /excluir/i }))
+    await screen.findByRole("dialog")
+
+    await userEvent.click(screen.getByRole("button", { name: /cancelar/i }))
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(peticoes().some((p) => p.metodo === "DELETE")).toBe(false)
+  })
+
   it("duplicar leva para o peer novo preenchido com a copia", async () => {
     // A copia leva valores que a origem nao tem: o token e o mesmo dos dois
     // lados, entao so o token nao diz de qual registro a tela leu. Com o ASN e o

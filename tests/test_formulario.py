@@ -105,3 +105,31 @@ def test_as_tabelas_so_citam_tipos_do_plano():
     for tabela in (formulario.CAMPOS_POR_TIPO, formulario.CAMPOS_POR_TIPO_GRUPO):
         for tipos in tabela.values():
             assert set(tipos) <= set(plan.TIPOS)
+
+
+def test_o_bloco_da_cascata_e_a_tabela_do_plano():
+    """O que a SPA le para se preencher sozinha bate com o plan.py.
+
+    Este caso veio do test_app.py, onde lia o `<script id="padroes">` da tela.
+    O que ele protege nunca foi a marcacao: e a sincronia entre o bloco que o
+    formulario consome e as tabelas da politica. Se um valor mudar no plan.py e
+    nao aqui, o formulario passa a se preencher com a politica antiga, em
+    silencio. O test_api.py compara o padroes do plano com o proprio _padroes,
+    e isso nao pega: as duas pontas mudam juntas.
+    """
+    p = formulario._padroes()
+
+    assert p["origem_tipo"] == dict(plan.ORIGEM)
+    assert p["origem_classe"] == dict(plan.ORIGEM_CLASSE)
+    assert p["downstream"] == list(plan.TIPOS_DOWNSTREAM)
+    assert p["origens_por_tipo"] == {t: list(v)
+                                     for t, v in plan.ORIGENS_POR_TIPO.items()}
+    assert p["origem_nome"] == {str(c): n
+                                for c, n in plan.Rede().ORIGEM_NOME.items()}
+    for tipo in plan.TIPOS:
+        assert p["tipos"][tipo] == {
+            "lp_base": plan.LP_BASE.get(tipo),
+            "route_limit": plan.ROUTE_LIMIT.get(tipo),
+            "timer_keepalive": plan.TIMER_PADRAO.get(tipo, (None, None))[0],
+            "timer_hold": plan.TIMER_PADRAO.get(tipo, (None, None))[1],
+        }, tipo
