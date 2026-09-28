@@ -120,8 +120,10 @@ describe("a tela das configuracoes", () => {
     soltar()
     await waitFor(() => expect(screen.getByLabelText(/AS da rede/i)).toHaveValue("64512"))
     await userEvent.click(screen.getByRole("button", { name: /gravar AS/i }))
+    // o corpo leva so o que a tela edita: o AS do tenant vai no `?asn=`, como
+    // nas outras rotas de dados
     expect(peticoes().filter((p) => p.metodo === "PUT")).toEqual([
-      { metodo: "PUT", caminho: "/api/rede", query: "", corpo: { asn: "64512", politica: "65532" } },
+      { metodo: "PUT", caminho: "/api/rede", query: "asn=64512", corpo: { politica: "65532" } },
     ])
   })
 
@@ -199,7 +201,7 @@ describe("a tela das configuracoes", () => {
     await waitFor(() => expect(screen.getByLabelText(/AS da rede/i)).toHaveValue("64512"))
     await userEvent.keyboard("{Control>}s{/Control}")
     expect(peticoes().filter((p) => p.metodo === "PUT")).toEqual([
-      { metodo: "PUT", caminho: "/api/rede", query: "", corpo: { asn: "64512", politica: "65532" } },
+      { metodo: "PUT", caminho: "/api/rede", query: "asn=64512", corpo: { politica: "65532" } },
     ])
   })
 

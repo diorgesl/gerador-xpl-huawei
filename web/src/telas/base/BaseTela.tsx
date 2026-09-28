@@ -6,14 +6,25 @@ import { Falha } from "@/components/Falha"
 import { sessaoVencida } from "@/api/cliente"
 import { baixar, copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
+import { useAsn } from "@/app/tenant"
 
 export function BaseTela() {
+  const asn = useAsn()
   // O /base.txt e montado no momento do download, e nao guardado em out/:
   // ele reflete o plan.py e os templates de agora
   const base = useQuery({
-    queryKey: ["base"],
+    // o ASN entra na chave como em toda consulta de um tenant: o bloco base e
+    // da rede escolhida, e sem ele a troca de tenant mostraria o bloco da
+    // anterior ate o refetch chegar
+    queryKey: ["base", asn],
+    // sem ASN nao ha o que pedir: o /base.txt passou a exigir o `?asn=`, e o
+    // pedido sem ele seria um 422
+    enabled: asn !== null,
     queryFn: async () => {
-      const r = await fetch("/base.txt")
+      // o /base.txt nao esta em /api, mas e do tenant como as outras rotas: o
+      // fetch cru nao passa pelo cliente tipado, entao o parametro entra na
+      // mao, e e por isso que o `tsc` nao cobra esta linha
+      const r = await fetch(`/base.txt?asn=${asn}`)
       // o fetch cru nao passa pelo cliente: sem esta linha, a sessao vencida
       // viraria uma falha de servidor cujo tentar de novo nunca passa
       if (sessaoVencida(r)) throw new Error("sessao expirada")

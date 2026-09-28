@@ -39,11 +39,15 @@ function comBaseTxt() {
 
 describe("a tela do bloco base", () => {
   it("mostra o texto do /base.txt com destaque", async () => {
-    comBaseTxt()
+    const chamadas = comBaseTxt()
     montarRota([{ path: "/base", element: <BaseTela /> }], "/base")
     expect(await screen.findByText(/CL-NOADV/)).toBeInTheDocument()
     expect(document.querySelector(".tk-comentario")).toBeTruthy()
     expect(document.querySelector(".tk-objeto")).toBeTruthy()
+    // O `?asn=` vai na mao, porque o fetch cru nao passa pelo cliente tipado e
+    // o `tsc` nao cobra esta linha: sem esta prova, um `/base.txt` sem o
+    // parametro so apareceria como um 422 quando o operador clicasse em baixar
+    expect(chamadas).toEqual(["/base.txt?asn=64512"])
   })
 
   it("explica a ordem de colagem", async () => {

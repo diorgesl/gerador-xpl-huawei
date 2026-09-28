@@ -60,7 +60,9 @@ export function PrefixosTela() {
   )
 
   const previa = useQuery({
-    queryKey: ["previa-blocos", v4, v6],
+    // o ASN entra na chave como nas dos hooks: o bloco previsto e da rede
+    // escolhida, e nao so do texto que esta nas caixas
+    queryKey: ["previa-blocos", v4, v6, asn],
     // so depois de o registro chegar: antes disso a previa sairia com os dois
     // editores vazios, e o painel abriria com o bloco do texto em branco
     enabled: blocos.data !== undefined,

@@ -109,7 +109,8 @@ export function GrupoTela() {
 
   // O grupo nao tem bloco de remocao: o do membro e que desfaz a sessao
   const saida = useQuery({
-    queryKey: ["saida", "grupo", ident],
+    // o ASN entra na chave como no peer: o bloco do grupo e da rede escolhida
+    queryKey: ["saida", "grupo", ident, asn],
     enabled: ident !== null && inicial.data !== undefined,
     queryFn: async () => {
       const { data, error } = await cliente.GET("/api/grupos/{ident}/saida", {

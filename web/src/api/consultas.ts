@@ -87,10 +87,10 @@ export function usePlano() {
     enabled: asn !== null,
     queryFn: async () => {
       const { data, error } = await cliente.GET("/api/plano", {
-        // O `asn` da query e `int` na API, e a lista e o sessionStorage o
-        // guardam como texto: o `Number` e a travessia entre os dois, e o
-        // `enabled` acima garante que ela so acontece com o ASN na mao (o
-        // `Number(null)` seria o 0, um tenant que nao existe)
+        // o `Number` e a conversao de borda: o contexto guarda texto (o que
+        // o sessionStorage e a lista do /api/asns devolvem) e o schema tipa
+        // o parametro como inteiro. O `enabled` acima garante que a consulta
+        // so roda com o ASN na mao, entao o null nao chega aqui
         params: { query: { asn: Number(asn) } },
       })
       if (error) throw new Error("falha ao ler o plano")

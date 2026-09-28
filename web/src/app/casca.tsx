@@ -11,12 +11,14 @@ import { baixar } from "@/lib/copiar"
 import { ProvedorAcoes } from "./acoes"
 import { useAtalhos } from "./atalhos"
 import type { AcoesDaTela } from "./acoes-contexto"
+import { useAsn } from "./tenant"
 
 export function Casca() {
   const plano = usePlano()
   const peers = usePeers()
   const grupos = useGrupos()
   const navegar = useNavigate()
+  const asn = useAsn()
 
   const [paletaAberta, setPaletaAberta] = useState(false)
   // o que a tela aberta publica: a paleta e o Ctrl+S leem daqui
@@ -29,7 +31,11 @@ export function Casca() {
   const copiarBloco = acoes.aoCopiarBloco
 
   const baixarBase = useCallback(async () => {
-    const resposta = await fetch("/base.txt")
+    // O /base.txt nao esta em /api, mas e do tenant como as outras rotas: sem
+    // o `?asn=` o download bate num 422 no meio de uma acao que nao tem nada a
+    // ver com o ASN. O fetch cru nao passa pelo cliente tipado, entao o
+    // parametro entra na mao, e e por isso que o `tsc` nao cobra esta linha
+    const resposta = await fetch(`/base.txt?asn=${asn}`)
     // o fetch cru nao passa pelo cliente, entao o 401 de sessao vencida
     // precisa do aviso aqui: sem ele o clique nao faria nada, calado
     if (sessaoVencida(resposta)) return
@@ -37,7 +43,7 @@ export function Casca() {
     // nome do bloco base
     if (!resposta.ok) return
     baixar(await resposta.text(), "base.txt")
-  }, [])
+  }, [asn])
 
   const barra = (
     <BarraLateral

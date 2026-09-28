@@ -7,6 +7,7 @@ import { Campo } from "@/components/Campo"
 import { Falha } from "@/components/Falha"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
 import { useTema } from "@/app/tema"
+import { useAsn } from "@/app/tenant"
 import { cliente } from "@/api/cliente"
 import { chaves, lerRecusa, usePlano, type RedeAtual } from "@/api/consultas"
 import { avisarFalhaDeRede, falhaDoServidor } from "@/lib/aviso"
@@ -16,6 +17,9 @@ export function ConfiguracoesTela() {
   const consultas = useQueryClient()
   const plano = usePlano()
   const [tema, trocarTema] = useTema()
+  // o PUT e uma rota de dados como as outras: o tenant vai no `?asn=`, e nao
+  // no corpo, que so carrega o que a tela edita
+  const asn = useAsn()
   const [erros, setErros] = useState<Record<string, string>>({})
 
   // O que o operador escreveu, campo a campo, e so ele: a tela mostra este
@@ -35,7 +39,10 @@ export function ConfiguracoesTela() {
   }
 
   const gravar = useMutation({
-    mutationFn: () => cliente.PUT("/api/rede", { body: { asn: rede.asn, politica: rede.politica } }),
+    mutationFn: () => cliente.PUT("/api/rede", {
+      params: { query: { asn: Number(asn) } },
+      body: { politica: rede.politica },
+    }),
     onSuccess: (r) => {
       if (r.error) {
         // o 5xx e falha do servidor, e nao do AS digitado: o aviso com o

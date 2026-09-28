@@ -127,7 +127,9 @@ export function PeerTela() {
   // A remocao vem do registro salvo, e nao da previa: ela desfaz o que esta no
   // equipamento, e o que esta no equipamento e o que foi gravado
   const saida = useQuery({
-    queryKey: ["saida", "peer", ident],
+    // o ASN entra na chave pelo mesmo motivo dos hooks: sem ele a troca de
+    // tenant mostraria o bloco da rede anterior ate o refetch chegar
+    queryKey: ["saida", "peer", ident, asn],
     enabled: ident !== null && inicial.data !== undefined,
     queryFn: async () => {
       const { data, error } = await cliente.GET("/api/peers/{ident}/saida", {
