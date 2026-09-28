@@ -9,10 +9,19 @@ import { BadgeTipo } from "@/components/BadgeTipo"
 import { SeletorAsn } from "@/components/SeletorAsn"
 import { filtrarGrupos, filtrarPeers } from "@/lib/busca"
 import type { GrupoResumo, PeerResumo } from "@/api/consultas"
+import { sessaoVencida } from "@/api/cliente"
 import { useSair } from "@/api/sessao"
+import { useAsn } from "@/app/tenant"
+import { baixar } from "@/lib/copiar"
 import { useState } from "react"
 
 const TIPOS = ["cliente", "parceiro", "upstream", "ix", "pni"]
+
+// O mesmo desenho para o que navega e para o que baixa: o item de download
+// e um botao, e nao um Link, e sem a classe compartilhada os dois ficariam
+// diferentes com o tempo
+const CLASSE_ITEM =
+  "flex items-center justify-between gap-2 rounded px-2 py-1 text-sm hover:bg-accent aria-[current=page]:bg-accent"
 
 // O seletor de tema nao mora aqui: ele fica nas configuracoes (Task 15) e na
 // paleta de comandos (Task 8), que sao os dois lugares que a spec pede.
@@ -28,6 +37,7 @@ type Props = {
 export function BarraLateral({ peers, grupos, aoNovo }: Props) {
   const [busca, setBusca] = useState("")
   const { pathname } = useLocation()
+  const asn = useAsn()
   const sair = useSair()
   const peersVisiveis = filtrarPeers(peers, busca)
   const gruposVisiveis = filtrarGrupos(grupos, busca)
@@ -38,15 +48,24 @@ export function BarraLateral({ peers, grupos, aoNovo }: Props) {
   const aberto = (para: string) => pathname === para || pathname.startsWith(`${para}/`)
 
   const item = (para: string, rotulo: string, extra?: React.ReactNode) => (
-    <Link
-      to={para}
-      aria-current={aberto(para) ? "page" : undefined}
-      className="flex items-center justify-between gap-2 rounded px-2 py-1 text-sm hover:bg-accent aria-[current=page]:bg-accent"
-    >
+    <Link to={para} aria-current={aberto(para) ? "page" : undefined} className={CLASSE_ITEM}>
       <span className="truncate">{rotulo}</span>
       {extra}
     </Link>
   )
+
+  // O PDF nao e rota: e o mesmo fetch cru do /base.txt (a rota esta fora do
+  // /api e fora do schema), e por isso o 401 de sessao vencida precisa da
+  // conferencia aqui, como na Casca e na tela do bloco base
+  const baixarPolitica = async () => {
+    if (!asn) return
+    const resposta = await fetch(`/politica-cliente.pdf?asn=${asn}`)
+    if (sessaoVencida(resposta)) return
+    // sem a conferencia, um 500 do servidor salvaria a pagina de erro com o
+    // nome do documento, e o operador entregaria aquilo ao cliente
+    if (!resposta.ok) return
+    baixar(await resposta.blob(), `politica-bgp-${asn}.pdf`)
+  }
 
   return (
     <nav aria-label="Navegação" className="flex h-full flex-col gap-3 p-3">
@@ -129,6 +148,10 @@ export function BarraLateral({ peers, grupos, aoNovo }: Props) {
           {item("/prefixos", "Prefixos próprios")}
           {item("/base", "Bloco base")}
           {item("/config-completa", "Config completa")}
+          <button type="button" className={`${CLASSE_ITEM} w-full cursor-pointer`}
+                  onClick={baixarPolitica} disabled={!asn}>
+            Política do cliente (PDF)
+          </button>
           {item("/configuracoes", "Configurações")}
         </section>
       </div>

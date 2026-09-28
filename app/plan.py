@@ -105,6 +105,10 @@ CLASSES_CLIENTE = tuple(ORIGEM_CLASSE)
 # rotulo foi reescrito sem. E o vocabulario e fixo do plano, nao inventario
 # do operador: por isso estes viram select, e nao datalist.
 #
+# Quem le estes rotulos e a tela e, desde o PDF do cliente, o
+# politica.documento: os dois mostram a mesma palavra sem acento, e uma
+# versao so para o PDF seria duas listas divergindo com o tempo.
+#
 # O 1000 fica de fora: o rotulo dele cita o AS, e por isso quem o monta e o
 # _origem_nome. As outras nove linhas nao citam AS nenhum.
 _ORIGEM_NOME = {
@@ -120,10 +124,15 @@ _ORIGEM_NOME = {
 }
 
 
-def _origem_nome(ns=ASN):
+def _origem_nome(ns=ASN, asn=None):
     # o 1000 entra primeiro, e nao por update depois: a ordem e a do
     # documento, e e ela que a tela segue no select de origem
-    nomes = {1000: "prefixo proprio do AS%s" % ns}
+    #
+    # O rotulo cita o AS da sessao, e nao o namespace. Os dois numeros
+    # coincidem em todo ASN de 16 bits, que e por que a diferenca passou
+    # despercebida ate um tenant declarar asn_politica: ali o rotulo dizia
+    # "prefixo proprio do AS65532", o prefixo de uma rede que nao existe
+    nomes = {1000: "prefixo proprio do AS%s" % (ns if asn is None else asn)}
     nomes.update(_ORIGEM_NOME)
     return nomes
 
@@ -488,7 +497,7 @@ class Rede:
         self.PARCEIRO = _parceiro(self.ns)
         self.ORIGEM_ANUNCIAVEL = _origem_anunciavel(self.ns)
         self.LP_CLIENTE = _lp_cliente(self.ns)
-        self.ORIGEM_NOME = _origem_nome(self.ns)
+        self.ORIGEM_NOME = _origem_nome(self.ns, self.asn)
         self.BLACKHOLE = _blackhole(self.ns)
         self.BLACKHOLE_PROPAGATE = _blackhole_propagate(self.ns)
         self.BLACKHOLE_INFO = _blackhole_info(self.ns)

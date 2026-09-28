@@ -319,6 +319,16 @@ def test_o_base_txt_exige_sessao(api_anonimo, logar):
     assert api_anonimo.get("/base.txt").status_code == 200
 
 
+def test_o_pdf_do_cliente_exige_sessao(api_anonimo, logar):
+    # o documento leva o cadastro da rede para a mesa do cliente: fora de
+    # sessao ele e o mesmo vazamento que o /base.txt seria
+    assert api_anonimo.get("/politica-cliente.pdf").status_code == 401
+
+    logar(api_anonimo)
+
+    assert api_anonimo.get("/politica-cliente.pdf").status_code == 200
+
+
 def test_o_docs_e_o_openapi_exigem_sessao(api_anonimo, logar):
     assert api_anonimo.get("/docs").status_code == 401
     assert api_anonimo.get("/openapi.json").status_code == 401

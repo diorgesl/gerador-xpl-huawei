@@ -12,6 +12,14 @@ formulário, o app escreve o bloco daquela sessão em
 não toca na saída dos outros. O bloco base, que é igual para todos, sai em
 `GET /base.txt`.
 
+A barra tem ainda o "Política do cliente (PDF)", que baixa
+`GET /politica-cliente.pdf`: o documento que o ISP entrega ao cliente, com as
+communities que ele pode enviar e o que cada uma faz. O texto é montado no
+namespace da rede, como o bloco base, e sai de `app/politica.py` (as tabelas,
+lidas do `plan.py`) mais `app/pdf.py` (a folha). O `PLANO.md` tem a seção
+"Tabela pública para clientes" com o mesmo texto, mas o app não a lê: o que
+está no PDF é o que os filtros realmente consomem.
+
 Por baixo dela o app serve uma API JSON em `/api`, que é quem fala com o
 cadastro do tenant: a SPA não reimplementa regra nenhuma, e o parsing, a
 validação e o render continuam no Python. A raiz (`/`) leva para `/peers`, e a
@@ -35,6 +43,10 @@ no `.gitignore`.
   do peer mexe nos filtros e não tem como zerar o que está no equipamento.
 - **Não importa nada do `PLANO.md`.** O documento é a referência de desenho; o
   app não o lê em tempo de execução.
+- **O PDF não é por cliente.** Ele descreve a política da rede, que é a mesma
+  para todos os clientes dela: não sai com os prefixos, o route-limit nem as
+  sessões de quem vai receber. O bloco da sessão daquele cliente continua sendo
+  o `out/<ASN>/<token>-<tipo>.txt`.
 - **Não tem gestão de usuários.** É um admin só, criado no boot, e sem papéis.
   Trocar a senha é apagar o `usuarios.yaml` e reiniciar; não há tela para isso.
 
@@ -110,8 +122,9 @@ docker compose logs bgpgen | grep -A3 "admin criado"   # a senha do primeiro boo
 ```
 
 O que fica atrás do login é o `/api` inteiro (menos as três rotas de sessão), o
-`/base.txt`, o `/docs` e o `/openapi.json`; a SPA e os arquivos do build
-continuam abertos, senão a própria tela de login não carregaria. A sessão é um
+`/base.txt`, o `/politica-cliente.pdf`, o `/docs` e o `/openapi.json`; a SPA e
+os arquivos do build continuam abertos, senão a própria tela de login não
+carregaria. A sessão é um
 cookie de sete dias, e reiniciar o app não desloga ninguém: o que derruba as
 sessões abertas é trocar o segredo, o que acontece quando o `usuarios.yaml` é
 recriado.

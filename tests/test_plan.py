@@ -233,6 +233,11 @@ def test_o_rotulo_da_origem_propria_acompanha_o_asn():
     assert plan.ORIGEM_NOME[1000] == "prefixo proprio do AS64512"
     assert plan.Rede(asn=64500).ORIGEM_NOME[1000] == (
         "prefixo proprio do AS64500")
+    # com asn_politica declarado os dois numeros divergem, e o rotulo e do AS
+    # da sessao: 264130 e quem tem o prefixo, 65532 e so o namespace das
+    # standard. O caso acima nao pega isto porque la os dois coincidem
+    assert plan.Rede(264130, 65532).ORIGEM_NOME[1000] == (
+        "prefixo proprio do AS264130")
     # as outras nove linhas nao citam AS nenhum e nao tem por que mudar
     assert {k: v for k, v in plan.Rede(asn=64500).ORIGEM_NOME.items()
             if k != 1000} == {k: v for k, v in plan.ORIGEM_NOME.items()

@@ -18,7 +18,17 @@ export type Pedido = {
  * servidor: o `openapi-fetch` RE-LANCA a excecao do fetch nessa hora, em vez de
  * devolver o `{error}` das recusas, e o `corpo` nao existe nesse caminho.
  */
-export type Resposta = { status?: number; corpo?: unknown; rede?: true }
+export type Resposta = {
+  status?: number
+  corpo?: unknown
+  rede?: true
+  /**
+   * Um corpo que nao e JSON, como o PDF do cliente. Sem ele o duble
+   * `JSON.stringify`aria os bytes, e o teste do download leria um arquivo
+   * que o servidor nunca mandou.
+   */
+  binario?: string
+}
 
 // O que o fetch de mentira viu fica no modulo, e nao no fechamento de cada
 // `mockFetch`, porque quem limpa e quem acusa sao os dois ganchos abaixo,
@@ -120,10 +130,11 @@ export function mockFetch(mapa: Record<string, Resposta>) {
     // 204 e companhia nao podem ter corpo: o construtor do Response recusa
     // qualquer coisa ali, inclusive a string "null" de um corpo nulo
     const semCorpo = status === 204 || status === 205 || status === 304
+    const binario = achado.binario !== undefined
     return Promise.resolve(
-      new Response(semCorpo ? null : JSON.stringify(achado.corpo), {
+      new Response(binario ? achado.binario : semCorpo ? null : JSON.stringify(achado.corpo), {
         status,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": binario ? "application/pdf" : "application/json" },
       }),
     )
   })
