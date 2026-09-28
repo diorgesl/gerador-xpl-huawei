@@ -105,6 +105,30 @@ describe("a tela das configuracoes", () => {
     )).toBeInTheDocument()
   })
 
+  it("o erro do ASN do arquivo aparece no campo do AS, que e leitura", async () => {
+    // o ASN sai do nome do arquivo e passa pelo _asn_do_formulario do PUT, e
+    // nao do formulario da tela: um peers/<asn>.yaml posto a mao com ASN
+    // reservado recusa nesta chave. O 4xx daqui pinta campo e nao avisa por
+    // toast, entao sem o `erro` a recusa nao aparecia em lugar nenhum - o
+    // clique em gravar ficava sem resposta. A ancora e a caixa do campo, e
+    // nao o documento: o documento inteiro deixaria passar uma tela que
+    // desenhe a mensagem no lugar errado
+    mockFetch({
+      ...BASE,
+      "PUT /api/rede": {
+        status: 422,
+        corpo: { erros: { asn_rede: "ASN reservado pela IANA: 23456" }, avisos: [] },
+      },
+    })
+    montarRota(rotas, "/configuracoes")
+    const gravar = await screen.findByRole("button", { name: /gravar AS/i })
+    await waitFor(() => expect(gravar).toBeEnabled())
+    await userEvent.click(gravar)
+    await waitFor(() =>
+      expect(document.querySelector('[data-campo="asn_rede"]')).toHaveTextContent("ASN reservado pela IANA: 23456"),
+    )
+  })
+
   it("troca o tema e guarda a escolha", async () => {
     mockFetch(BASE)
     montarRota(rotas, "/configuracoes")

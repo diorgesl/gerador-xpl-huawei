@@ -108,8 +108,13 @@ export function ConfiguracoesTela() {
               seletor da barra lateral, que escolhe outro tenant ou cria um.
               Editar aqui renomearia o arquivo, e o rename fica para a
               rodada seguinte. Sem o rename, um campo que grava e nao muda
-              nada seria o campo mentindo. */}
-          <Campo nome="asn_rede" rotulo="AS da rede"
+              nada seria o campo mentindo.
+              O `erro` fica: o PUT leva o ASN do arquivo pelo
+              _asn_do_formulario, e um arquivo posto a mao com ASN reservado
+              ou fora da faixa volta 422 nesta chave. O 4xx daqui pinta campo
+              e nao avisa por toast, entao sem a prop a recusa do servidor
+              nao apareceria em lugar nenhum */}
+          <Campo nome="asn_rede" rotulo="AS da rede" erro={erros.asn_rede}
                  ajuda="quem troca e o seletor, na barra lateral">
             <Input id="asn_rede" className="dado" value={rede.asn} readOnly />
           </Campo>
