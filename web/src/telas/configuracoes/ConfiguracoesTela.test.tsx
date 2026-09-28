@@ -61,20 +61,48 @@ describe("a tela das configuracoes", () => {
     expect(screen.getByLabelText(/namespace/i)).toHaveValue("65532")
   })
 
+  it("o AS da rede e leitura, com a nota que aponta para o seletor", async () => {
+    // Nesta rodada quem troca de ASN e o seletor da barra lateral: editar o
+    // campo renomearia o arquivo, e o rename nao existe ainda. Um campo que
+    // grava e nao muda nada seria o campo mentindo, entao ele nao aceita
+    // digitacao, e as duas notas dizem por onde a troca passa
+    mockFetch(BASE)
+    montarRota(rotas, "/configuracoes")
+    const campo = await screen.findByLabelText(/AS da rede/i)
+    await waitFor(() => expect(campo).toHaveValue("64512"))
+    expect(campo).toHaveAttribute("readonly")
+    expect(screen.getByText(/quem troca e o seletor, na barra lateral/i)).toBeInTheDocument()
+    expect(screen.getByText(/Trocar o ASN no seletor muda o nome de toda community/i)).toBeInTheDocument()
+  })
+
   it("explica que o namespace so e necessario com ASN de 32 bits", async () => {
     mockFetch(BASE)
     montarRota(rotas, "/configuracoes")
     expect(await screen.findByText(/32 bits/i)).toBeInTheDocument()
   })
 
-  it("o erro da faixa aparece no campo do AS", async () => {
-    mockFetch({ ...BASE, "PUT /api/rede": { status: 422, corpo: { erros: { asn_rede: "AS da rede fora da faixa valida" }, avisos: [] } } })
+  it("o erro do namespace aparece no campo que o causou", async () => {
+    // a recusa que a tela ainda pode provocar e a do namespace, que e o unico
+    // campo que ela edita: o AS sai do nome do arquivo, e nao do formulario
+    mockFetch({
+      ...BASE,
+      "PUT /api/rede": {
+        status: 422,
+        corpo: {
+          // a mensagem e a do plan.NS_MIN/NS_MAX, a que o 422 da API devolve
+          erros: { asn_politica: "namespace das standard vai de 1 a 65535: o ASN de 32 bits fica no campo ao lado" },
+          avisos: [],
+        },
+      },
+    })
     montarRota(rotas, "/configuracoes")
     const gravar = await screen.findByRole("button", { name: /gravar AS/i })
     // o botao so oferece o salvar depois de o plano chegar
     await waitFor(() => expect(gravar).toBeEnabled())
     await userEvent.click(gravar)
-    expect(await screen.findByText("AS da rede fora da faixa valida")).toBeInTheDocument()
+    expect(await screen.findByText(
+      "namespace das standard vai de 1 a 65535: o ASN de 32 bits fica no campo ao lado",
+    )).toBeInTheDocument()
   })
 
   it("troca o tema e guarda a escolha", async () => {
@@ -130,15 +158,15 @@ describe("a tela das configuracoes", () => {
   it("o que o operador digita nao e apagado pelo dado que chega depois", async () => {
     // o formulario monta antes de a leitura responder, e o mesmo caminho vale
     // para o refetch do foco e para a invalidacao depois do salvar: o dado que
-    // chega nao pode passar por cima do campo que esta sendo digitado. O outro
-    // campo, que ninguem tocou, entra com o valor do plano
+    // chega nao pode passar por cima do campo que esta sendo digitado. O AS,
+    // que e leitura e ninguem digita, entra com o valor do plano
     mockFetch(BASE)
     const soltar = segurarLeitura("GET /api/plano")
     montarRota(rotas, "/configuracoes")
-    await userEvent.type(await screen.findByLabelText(/AS da rede/i), "64500")
+    await userEvent.type(await screen.findByLabelText(/namespace/i), "65530")
     soltar()
-    await waitFor(() => expect(screen.getByLabelText(/namespace/i)).toHaveValue("65532"))
-    expect(screen.getByLabelText(/AS da rede/i)).toHaveValue("64500")
+    await waitFor(() => expect(screen.getByLabelText(/AS da rede/i)).toHaveValue("64512"))
+    expect(screen.getByLabelText(/namespace/i)).toHaveValue("65530")
   })
 
   it("diz que nao deu para falar com a API, e o tentar de novo traz o dado", async () => {
@@ -166,13 +194,13 @@ describe("a tela das configuracoes", () => {
     const mapa: Record<string, Resposta> = { ...BASE, "PUT /api/rede": { rede: true } }
     mockFetch(mapa)
     montarRota(rotas, "/configuracoes")
-    const campo = await screen.findByLabelText(/AS da rede/i)
-    await waitFor(() => expect(campo).toHaveValue("64512"))
+    const campo = await screen.findByLabelText(/namespace/i)
+    await waitFor(() => expect(campo).toHaveValue("65532"))
     await userEvent.clear(campo)
-    await userEvent.type(campo, "64500")
+    await userEvent.type(campo, "65530")
     await userEvent.click(screen.getByRole("button", { name: /gravar AS/i }))
     expect(await screen.findByText("não deu para falar com a API")).toBeInTheDocument()
-    expect(screen.getByLabelText(/AS da rede/i)).toHaveValue("64500")
+    expect(screen.getByLabelText(/namespace/i)).toHaveValue("65530")
     mapa["PUT /api/rede"] = { corpo: { asn: "64500", politica: "65532" } }
     await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
     await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))

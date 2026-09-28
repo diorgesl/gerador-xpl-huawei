@@ -28,13 +28,15 @@ export function ConfiguracoesTela() {
   // lint e erro nesta config (foi o que tirou o rascunho dos prefixos do
   // efeito), e o copiar passaria por cima do que esta sendo digitado, porque o
   // refetch do foco e a invalidacao depois do salvar chegam pelo mesmo caminho
-  // de um `plano.data` novo. O `??` e por campo de proposito: o campo que
-  // ninguem tocou acompanha o plano, e nao fica congelado no que estava na
-  // tela quando o outro foi editado
+  // de um `plano.data` novo. O `??` e por campo de proposito: o namespace, o
+  // unico com rascunho, vence o plano, e o AS acompanha a leitura, em vez de
+  // os dois ficarem presos no que estava na tela quando um deles mudou
   const [rascunho, setRascunho] = useState<Partial<RedeAtual>>({})
   const carregado: RedeAtual = plano.data?.rede ?? { asn: "", politica: "" }
   const rede: RedeAtual = {
-    asn: rascunho.asn ?? carregado.asn,
+    // o AS nao tem rascunho, porque nao tem campo: ele e leitura, e o que
+    // chega do plano e o eco do tenant selecionado
+    asn: carregado.asn,
     politica: rascunho.politica ?? carregado.politica,
   }
 
@@ -102,14 +104,14 @@ export function ConfiguracoesTela() {
           AS da rede
         </legend>
         <div className="flex flex-col gap-3">
-          <Campo nome="asn_rede" rotulo="AS da rede" erro={erros.asn_rede}>
-            <Input
-              id="asn_rede"
-              className="dado"
-              inputMode="numeric"
-              value={rede.asn}
-              onChange={(e) => setRascunho((atual) => ({ ...atual, asn: e.target.value }))}
-            />
+          {/* O campo nao e editavel nesta rodada: quem troca de ASN e o
+              seletor da barra lateral, que escolhe outro tenant ou cria um.
+              Editar aqui renomearia o arquivo, e o rename fica para a
+              rodada seguinte. Sem o rename, um campo que grava e nao muda
+              nada seria o campo mentindo. */}
+          <Campo nome="asn_rede" rotulo="AS da rede"
+                 ajuda="quem troca e o seletor, na barra lateral">
+            <Input id="asn_rede" className="dado" value={rede.asn} readOnly />
           </Campo>
 
           <Campo
@@ -130,7 +132,8 @@ export function ConfiguracoesTela() {
           </Campo>
 
           <p className="text-xs text-muted-foreground">
-            Trocar o AS muda o nome de toda community e o nome dos arquivos em out/.
+            Trocar o ASN no seletor muda o nome de toda community e o nome dos
+            arquivos em {"out/<ASN>/"}.
           </p>
 
           <div>
