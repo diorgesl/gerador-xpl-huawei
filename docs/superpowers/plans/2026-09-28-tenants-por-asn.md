@@ -883,6 +883,19 @@ def test_o_asn_que_falta_da_422(api):
     assert "_corpo" in resposta.json()["erros"]
 
 
+def test_o_asn_que_nao_e_numero_da_422(api):
+    """A revisao da tarefa 3 deixou este caminho sem prova.
+
+    O `?asn=` ausente ja era testado; o torto, que estoura na conversao para
+    int antes de a dependencia rodar, nao. E o caso do operador que cola um
+    pedaco de texto no lugar do numero, e sem ele a recusa poderia virar um
+    500 sem ninguem notar.
+    """
+    resposta = api.cru.get("/api/peers", params={"asn": "abc"})
+    assert resposta.status_code == 422
+    assert "_corpo" in resposta.json()["erros"]
+
+
 def test_o_base_txt_tambem_e_do_tenant(api):
     """O /base.txt e fetch cru no front, e nao do cliente tipado.
 
@@ -971,7 +984,7 @@ def test_criar_grava_o_arquivo_do_tenant(api, tmp_path):
 def test_criar_o_que_ja_existe_e_422_no_campo(api):
     resposta = api.post("/api/asns", json={"asn": "64512", "politica": ""})
     assert resposta.status_code == 422
-    assert "ja tem cadastro" in resposta.json()["erros"]["asn"]
+    assert "ja tem cadastro" in resposta.json()["erros"]["asn_rede"]
 
 
 def test_criar_asn_de_32_bits_sem_namespace_e_422_no_campo(api):
@@ -983,13 +996,25 @@ def test_criar_asn_de_32_bits_sem_namespace_e_422_no_campo(api):
 def test_criar_asn_reservado_e_422(api):
     resposta = api.post("/api/asns", json={"asn": "23456", "politica": ""})
     assert resposta.status_code == 422
-    assert "reservado" in resposta.json()["erros"]["asn"]
+    assert "reservado" in resposta.json()["erros"]["asn_rede"]
 
 
 def test_criar_asn_que_nao_e_numero_e_422(api):
     resposta = api.post("/api/asns", json={"asn": "abc", "politica": ""})
     assert resposta.status_code == 422
-    assert "so digitos" in resposta.json()["erros"]["asn"]
+    assert "so digitos" in resposta.json()["erros"]["asn_rede"]
+
+
+def test_criar_sem_asn_e_422_no_campo(api):
+    """O campo vazio, que a tela nova manda quando ninguem digitou nada.
+
+    E o caminho que os dois testes apagados na tarefa 3 deixaram sem
+    cobertura: com o `asn` fora do RedeForm, o "informe o AS da rede" do
+    _asn_do_formulario so tem esta rota para aparecer.
+    """
+    resposta = api.post("/api/asns", json={"asn": "", "politica": ""})
+    assert resposta.status_code == 422
+    assert "informe o AS da rede" in resposta.json()["erros"]["asn_rede"]
 
 
 def test_criar_asn_de_16_bits_sem_namespace_usa_o_proprio(api, tmp_path):
@@ -1056,7 +1081,12 @@ def criar_asn(pedido: AsnPedido):
         try:
             tenants_mod.criar(asn, politica)
         except ValueError as exc:
-            erros = [validate.Erro("asn", str(exc))]
+            # a chave e `asn_rede`, e nao `asn`, porque e o nome do campo que
+            # o dialogo da tela desenha, o mesmo do fieldset das
+            # Configuracoes. Um erro numa chave que campo nenhum tem seria
+            # uma recusa invisivel: o 422 volta, o dialogo nao pinta nada e o
+            # operador clica de novo no mesmo botao
+            erros = [validate.Erro("asn_rede", str(exc))]
     if erros:
         return _falha(422, erros)
     return [str(n) for n in tenants_mod.listar()]
@@ -1540,7 +1570,7 @@ export function DialogoNovoAsn({ aberto, aoFechar, aoCriar }: {
   })
 ```
 
-Os dois campos são `Campo nome="asn" rotulo="AS da rede"` e `Campo nome="asn_politica" rotulo="Namespace das standard"`, iguais aos das Configurações, com `inputMode="numeric"` e a mesma ajuda. O `aoCriar` recebe o ASN que acabou de ser criado, para o seletor já trocar para ele.
+Os dois campos são `Campo nome="asn_rede" rotulo="AS da rede"` e `Campo nome="asn_politica" rotulo="Namespace das standard"`, iguais aos das Configurações, com `inputMode="numeric"` e a mesma ajuda. Os nomes têm que ser exatamente estes: são as chaves com que o `POST /api/asns` devolve os erros, e um `nome` diferente faz a recusa voltar sem pintar campo nenhum. O `aoCriar` recebe o ASN que acabou de ser criado, para o seletor já trocar para ele.
 
 - [ ] **Step 2: O seletor**
 
@@ -1798,6 +1828,7 @@ Confira com `git status --short` que `web/e2e/peers/64512.yaml` continua rastrea
 - `README.md`: onde fala do `peers.yaml` como o estado do app (o mapa dos arquivos e o "Ordem de colagem no F1A"), passa a falar de `peers/<ASN>.yaml` e `out/<ASN>/`; a seção do e2e (linha 145) fala do `peers.yaml` temporário, que agora é uma pasta.
 - `CLAUDE.md`: o "Repository overview" diz que o app serve "os blocos gerados em `out/`"; passa a `out/<ASN>/`, e a linha que descreve o `peers.yaml` vira a pasta. O "Document map" continua valendo: o `PLANO.md` não muda nesta etapa.
 - `compose.example.yaml`: o comentário do bind mount fala do `peers.yaml` e do `out/`; passa a falar da pasta `peers/`.
+- **Comentários que ficaram velhos nas tarefas anteriores**, apontados pela revisão da tarefa 3: `app/auth.py:68` cita "o `_yaml()` do api.py", que não existe mais; `app/app.py:5` diz que o estado é o `peers.yaml`; `app/app.py:109` fala de "como fazem com o PEERS_YAML"; e `app/api.py:360` diz que o `_ler` lê "o que esta salvo em out/", que agora é `out/<ASN>/`. Nenhum é erro de comportamento, e todos são o tipo de coisa que a próxima pessoa lê como verdade.
 
 - [ ] **Step 5: A conferência final**
 
