@@ -1522,7 +1522,7 @@ Expected: PASS. Os testes das telas que montam formulário leem a resposta do `P
 
 ```bash
 git add -A
-git commit -m "As telas gravam no tenant escolhido e o campo do AS vira leitura
+git commit -m "O campo do AS da tela de configuracoes vira leitura
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1632,24 +1632,60 @@ O `DropdownMenuSeparator` já está exportado (`web/src/components/ui/dropdown-m
 
 `web/src/components/BarraLateral.tsx:50-55`: o `Link to="/configuracoes"` com `AS{asn}` dá lugar ao `<SeletorAsn />`, e a prop `asn` sai do componente (o seletor lê do contexto). `web/src/app/casca.tsx:42-49` deixa de passar `asn={plano.data?.rede.asn ?? ""}`.
 
-- [ ] **Step 4: O estado vazio**
+- [ ] **Step 4: O estado vazio, que não é o mesmo que a lista que não chegou**
 
 `web/src/components/SemTenant.tsx`: explica que `peers/` está vazia, mostra o caminho do checkout e um botão "criar o primeiro ASN" que abre o mesmo `DialogoNovoAsn`.
 
-Em `web/src/app/casca.tsx`:
+A revisão da tarefa 5 mostrou que o estado vazio do brief engolia a falha da lista: com o `/api/asns` fora do ar, `lista.data` é indefinido, `asns` fica `[]` e o `asn` fica nulo — e como toda consulta de dados se desabilita com o ASN nulo, **nenhuma tela desenha o próprio aviso de falha**. O app fica com a cara de instalação nova, sem caminho de volta a não ser recarregar, e é uma regressão: antes desta etapa, a mesma queda aparecia em cada tela com o "tentar de novo" que o `Falha` já sabe desenhar.
+
+Então o contexto expõe o erro da lista, e a casca separa os dois casos:
 
 ```tsx
 export function Casca() {
-  const { asn, asns } = useTenant()
+  const { asn, asns, erro } = useTenant()
   ...
-  // Sem tenant nao ha o que listar nem o que consultar: as consultas abaixo
-  // saem desabilitadas pelo proprio useAsn nulo, e a casca desenha a tela
-  // que explica o que fazer. O `asns.length === 0` e o unico caso em que
-  // isso acontece, porque com lista o `asn` nunca e nulo.
-  if (asns.length === 0) return <SemTenant />
+  // Dois estados diferentes que o mesmo `asn` nulo produziria:
+  // - a lista nao chegou (rede fora, 500): e falha de comunicacao, e o
+  //   aviso com tentar de novo e o mesmo das outras telas;
+  // - a lista chegou e esta vazia: e a pasta `peers/` sem arquivo, e o que
+  //   a tela tem a fazer e oferecer o primeiro ASN.
+  // Sem a distincao, a queda da unica rota que sustenta todas as outras
+  // ficava invisivel: as consultas nem saem com o ASN nulo, entao tela
+  // nenhuma tem erro proprio para mostrar.
+  if (asn === null) {
+    return erro ? <Falha mensagem="não deu para falar com a API"
+                          tentando={false}
+                          aoTentar={() => void recarregar()} />
+                : <SemTenant />
+  }
 ```
 
-- [ ] **Step 5: Os testes**
+O `erro` e o `lista.error` do `useAsns`, e o `recarregar` e o `lista.refetch`. Como essa tela toma a casca inteira, o estado de ASN nulo nunca chega a um formulário — é o que fecha também o segundo efeito do mesmo buraco, que era um salvamento com `?asn=0` a partir de um formulário aberto nesse estado.
+
+O `erro` entra no tipo e no valor do contexto (`web/src/app/tenant.ts` e o `ProvedorTenant` do `provedores.tsx`), ao lado do `asn`, do `asns` e do `trocar`. O `Falha` já existe em `web/src/components/Falha.tsx` e é o mesmo que as outras telas usam.
+
+- [ ] **Step 5: A troca de tenant remonta as telas**
+
+A revisão da tarefa 5 achou a janela de escrita no tenant errado: as consultas estão com a chave certa, mas **o estado dos formulários não é indexado pelo ASN**. Quem estiver com um rascunho aberto em `/prefixos`, `/base`, `/config-completa` ou `/configuracoes` e trocar de tenant continua com a tela montada com o texto do tenant anterior; no primeiro salvar, o conteúdo da rede A vai para a rede B, porque a mutação lê o `asn` do contexto atual e o rascunho do render antigo.
+
+O conserto é remontar quando o ASN muda, em `web/src/app/casca.tsx`:
+
+```tsx
+        <main className="min-w-0 flex-1">
+          <ProvedorAcoes definir={setAcoes}>
+            {/* A chave no ASN remonta a tela na troca: o rascunho de uma
+                rede nao tem o que fazer na outra, e sem remontar o primeiro
+                salvar depois da troca mandaria o texto da rede anterior com
+                o ?asn= da nova. A perda do rascunho na troca e o que a
+                tarefa 8 pergunta antes de deixar acontecer. */}
+            <Outlet key={asn} />
+          </ProvedorAcoes>
+        </main>
+```
+
+O `escolher` do seletor continua navegando para `/peers` quando a rota aberta é de peer ou de grupo, porque ali o registro também não existe do outro lado; a chave cobre as telas que ele não navega.
+
+- [ ] **Step 6: Os testes**
 
 ```tsx
 // web/src/components/SeletorAsn.test.tsx
@@ -1663,12 +1699,12 @@ it("sem nenhum tenant, a casca explica e oferece criar o primeiro", async () => 
 
 O teste do criar confere a petição: `peticoes().find((p) => p.caminho === "/api/asns")` com `metodo === "POST"`.
 
-- [ ] **Step 6: Rodar**
+- [ ] **Step 7: Rodar**
 
 Run: `cd web && npm test && npm run build && npm run lint`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add -A
