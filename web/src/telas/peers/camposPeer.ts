@@ -28,6 +28,10 @@ export type Campo = {
   // sufixo da opcao que representa um valor guardado fora da lista do tipo, o
   // que a tela antiga escrevia na origem: "1900 - fora da tabela do tipo"
   rotuloForaDaLista?: string
+  // a chave do /api/plano de onde sai a busca de communities. O campo
+  // declara de onde le, e nao so que le: sem isso o formulario teria que
+  // adivinhar que `large_communities` le a lista `large_communities`
+  sugestoes?: "communities" | "large_communities"
 }
 
 // As opcoes de cada select saem do /api/plano, e nao de uma tabela escrita a
@@ -111,8 +115,12 @@ export const CAMPOS_PEER: Campo[] = [
   { nome: "ap_allowed", rotulo: "ASNs permitidos", tipo: "area", secao: "aspath", mono: true, linhas: 3 },
   { nome: "ap_prefer", rotulo: "Membros com LP 195", tipo: "area", secao: "aspath", mono: true, linhas: 3 },
 
-  { nome: "communities", rotulo: "communities", tipo: "area", secao: "clpeer", mono: true, linhas: 3 },
-  { nome: "large_communities", rotulo: "large-communities", tipo: "area", secao: "clpeer", mono: true, linhas: 3 },
+  { nome: "communities", rotulo: "communities", tipo: "area", secao: "clpeer", mono: true, linhas: 3,
+    sugestoes: "communities",
+    ajuda: "a community que este peer recebe além do que o plano já manda" },
+  { nome: "large_communities", rotulo: "large-communities", tipo: "area", secao: "clpeer", mono: true, linhas: 3,
+    sugestoes: "large_communities",
+    ajuda: "RFC 8195, três campos: namespace, função e ASN" },
 
   { nome: "sessao_v4_local", rotulo: "IPv4 local", tipo: "texto", secao: "sessoes", mono: true },
   { nome: "sessao_v4_remoto", rotulo: "IPv4 remoto", tipo: "texto", secao: "sessoes", mono: true },

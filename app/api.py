@@ -256,6 +256,9 @@ def ler_plano(t: tenants_mod.Tenant = Depends(tenant)):
         campos_por_tipo={c: list(t) for c, t in form.CAMPOS_POR_TIPO.items()},
         campos_por_tipo_grupo={c: list(t)
                                for c, t in form.CAMPOS_POR_TIPO_GRUPO.items()},
+        # as communities da busca saem do cadastro desta rede: o ASN dos
+        # upstreams entra nos rotulos, e o namespace das standard e o dela
+        sugestoes=form.sugestoes(rede, peers, grupos),
     )
 
 

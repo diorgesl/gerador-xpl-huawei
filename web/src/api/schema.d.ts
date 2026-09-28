@@ -1183,6 +1183,7 @@ export interface components {
             campos_por_tipo_grupo: {
                 [key: string]: string[];
             };
+            sugestoes: components["schemas"]["Sugestoes"];
         };
         /** Prefixos */
         Prefixos: {
@@ -1279,6 +1280,35 @@ export interface components {
             logado: boolean;
             /** Usuario */
             usuario?: string | null;
+        };
+        /**
+         * Sugestao
+         * @description Uma community que o formulario oferece para o operador clicar.
+         *
+         *     O `valor` e o que entra no campo, o `rotulo` e o que a busca do
+         *     operador casa e le, e o `grupo` e o cabecalho da lista.
+         */
+        Sugestao: {
+            /** Valor */
+            valor: string;
+            /** Rotulo */
+            rotulo: string;
+            /** Grupo */
+            grupo: string;
+        };
+        /**
+         * Sugestoes
+         * @description Uma lista por campo: a standard e a large nao cabem na mesma.
+         *
+         *     Os dois campos do formulario tem formas diferentes (`ASN:VALOR` e
+         *     `ASN:V1:V2`), e a validacao recusa a trocada: juntar as duas listas
+         *     seria oferecer o erro.
+         */
+        Sugestoes: {
+            /** Communities */
+            communities: components["schemas"]["Sugestao"][];
+            /** Large Communities */
+            large_communities: components["schemas"]["Sugestao"][];
         };
         /** TabelaTipo */
         TabelaTipo: {

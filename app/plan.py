@@ -437,6 +437,84 @@ def cidr_para_xpl(cidr):
     return "%s %d" % (addr.strip(), int(mascara))
 
 
+# --- o vocabulario das communities, como os dois lados o leem -----------
+#
+# Os rotulos ficam aqui, e nao em cada consumidor, porque os valores sao os
+# mesmos: o documento que vai para a mesa do cliente, a tabela de sugestoes
+# do formulario e a busca que o operador digita leem todos desta secao. Duas
+# copias divergem na primeira vez que alguem corrigir uma so, e a que ficou
+# para tras passa a mentir sobre o que a community faz.
+#
+# O rotulo diz o efeito e nao o numero: quem procura na busca escreve
+# "prepend", e nao o digito da classe.
+
+# O efeito de cada degrau da escada de preferencia, do menor para o maior.
+# A ordem e a do LP_CLIENTE, que e quem manda nos numeros.
+ESCALA_LP = (
+    "Último recurso",
+    "Preferência abaixo dos nossos upstreams",
+    "Preferência abaixo do nosso peering",
+    "Preferência abaixo dos demais clientes",
+    "Preferência acima dos demais clientes",
+)
+
+# Os dois blocos do escopo de anuncio. O primeiro proibe um destino e o
+# segundo faz o inverso; o 200 e a proibicao absoluta e nao tem par no
+# segundo bloco.
+RESTRINGE = (
+    (200, "Não anunciar para ninguém"),
+    (201, "Não anunciar para os nossos upstreams"),
+    (202, "Não anunciar para os nossos peers"),
+    (203, "Não anunciar nos IXs"),
+    (204, "Não anunciar para os nossos outros clientes"),
+)
+
+SOMENTE = (
+    (210, "Anunciar somente para os nossos upstreams"),
+    (211, "Anunciar somente nos nossos IXs"),
+    (212, "Anunciar somente para CDNs e PNIs"),
+    (213, "Anunciar somente para os nossos outros clientes"),
+)
+
+# Os destinos do prepend por classe, na ordem em que o PLANO os publica. A
+# chave e a classe do 6CA e nao o tipo do peer: o cliente escolhe o destino
+# que quer penalizar, e a classe 7 e "todos", que nao e tipo de sessao
+# nenhuma. Quem liga um tipo a uma classe e o CLASSE_6CA, do lado da
+# configuracao.
+DESTINOS_6CA = {
+    7: "todos os destinos",
+    1: "nossos upstreams",
+    2: "nossos IXs",
+    3: "IX privado e PNI",
+    4: "CDNs / conteúdo",
+    5: "peering bilateral",
+}
+
+# As cinco acoes do alias 5PPA, na ordem da escala. O digito e o ultimo
+# campo, e o 1 e o P1 explicito: ele existe so neste eixo, porque em large
+# nao ha como pedir "anuncie sem prepend nenhum".
+ACOES_5PPA = (
+    (0, "Não anunciar"),
+    (1, "P1, sem prepend"),
+    (2, "Prepend 1x"),
+    (3, "Prepend 2x"),
+    (4, "Prepend 3x"),
+)
+
+# As cinco funcoes da large community por ASN. O numero e o campo do meio, e
+# o nome e o que a funcao faz. O destino nao entra no rotulo daqui: quem o
+# escreve e quem consome, e os dois escrevem coisas diferentes - o documento
+# do cliente poe `<ASN>`, porque nao sabe qual ele vai escolher, e o
+# formulario poe o ASN do cadastro.
+FUNCOES_LARGE = (
+    (0, "Não anunciar"),
+    (1, "Prepend 1x"),
+    (2, "Prepend 2x"),
+    (3, "Prepend 3x"),
+    (4, "Anunciar somente"),
+)
+
+
 def faixa_ok(community, ns=ASN):
     """A community esta numa das faixas do plano, no namespace da rede?"""
     partes = community.split(":")

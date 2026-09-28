@@ -12,6 +12,7 @@ const PLANO = {
   route_limit_exemplo: {}, prepend_max: 6, prepend_implementado: 3,
   pop_min: 2001, pop_max: 2999, aprendizado_min: 3000, aprendizado_max: 3999,
   pop_usados: [], aprendizado_usados: [], campos_por_tipo: {}, campos_por_tipo_grupo: {},
+  sugestoes: { communities: [], large_communities: [] },
 }
 
 const BASE = {

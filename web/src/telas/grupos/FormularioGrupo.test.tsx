@@ -35,7 +35,8 @@ const PLANO = {
     te_prefixos_v6: ["upstream"], communities: ["upstream"], large_communities: ["upstream"],
     ix_id: ["ix"], ap_prefer: ["ix"], ap_allowed: ["pni"],
   },
-} as unknown as Plano
+  sugestoes: { communities: [], large_communities: [] },
+} satisfies Plano
 
 function Montar({ iniciais = {}, erros = {} }: { iniciais?: Partial<GrupoForm>; erros?: Record<string, string> }) {
   const form = useForm<GrupoForm>({ defaultValues: { ...CAMPO_BRANCO_GRUPO, ...iniciais } })

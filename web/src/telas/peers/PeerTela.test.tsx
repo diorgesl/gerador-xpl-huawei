@@ -16,6 +16,7 @@ const PLANO = {
   lp_base: {}, route_limit: {}, route_limit_exemplo: {}, prepend_max: 6, prepend_implementado: 3,
   pop_min: 2001, pop_max: 2999, aprendizado_min: 3000, aprendizado_max: 3999,
   pop_usados: [], aprendizado_usados: [], campos_por_tipo: {}, campos_por_tipo_grupo: {},
+  sugestoes: { communities: [], large_communities: [] },
 }
 
 const FORMULARIO = {
@@ -227,6 +228,38 @@ describe("a tela do peer", () => {
     const put = peticoes().find((p) => p.metodo === "PUT")
     expect(put?.caminho).toBe("/api/peers/7")
     expect(put?.corpo).toMatchObject({ prefixos_v4: ["45.169.232.0/22", "45.169.236.0/23"] })
+  })
+
+  it("a community escolhida na busca entra no que o salvar envia", async () => {
+    // as duas pontas tem teste proprio (a lista, no AdicionarCommunity; o
+    // campo, no caso do IPv4 acima), e o que este caso cobre e a ligacao: o
+    // valor que a lista entrega tem que virar linha no textarea e sair no
+    // corpo do PUT
+    const comCatalogo = {
+      ...PLANO,
+      sugestoes: {
+        communities: [{ valor: "64512:613", rotulo: "Prepend 2x para os nossos upstreams", grupo: "Prepend" }],
+        large_communities: [],
+      },
+    }
+    mockFetch({
+      ...BASE,
+      "GET /api/plano": { corpo: comCatalogo },
+      "PUT /api/peers/7": {
+        corpo: { registro: { id: 7, token: "268127", formulario: FORMULARIO }, arquivo: "268127-cliente.txt", avisos: [] },
+      },
+    })
+    montarRota(rotas, "/peers/7")
+
+    await userEvent.click(await screen.findByRole("button", { name: "adicionar communities" }))
+    await userEvent.type(screen.getByPlaceholderText(/buscar/i), "prepend")
+    await userEvent.click(await screen.findByRole("option", { name: /nossos upstreams/ }))
+    await userEvent.click(screen.getByRole("button", { name: /^salvar$/i }))
+
+    await waitFor(() => {
+      const put = peticoes().find((p) => p.metodo === "PUT")
+      expect(put?.corpo).toMatchObject({ communities: ["64512:613"] })
+    })
   })
 
   it("o excluir sai sem perguntar sobre alteracao nao salva", async () => {

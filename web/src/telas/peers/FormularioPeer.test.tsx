@@ -42,7 +42,11 @@ const PLANO = {
     large_communities: ["cliente", "parceiro", "upstream"],
   },
   campos_por_tipo_grupo: {},
-} as unknown as Plano
+  // o catalogo da busca de communities. Vazio aqui de proposito: a lista
+  // tem teste proprio no AdicionarCommunity.test.tsx, e o que estes casos
+  // provam e o resto do formulario
+  sugestoes: { communities: [], large_communities: [] },
+} satisfies Plano
 
 const BRANCO: PeerForm = {
   id: "7", apelido: "", nome: "Cliente ACME", tipo: "cliente", grupo_id: "",

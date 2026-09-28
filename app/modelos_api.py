@@ -145,6 +145,30 @@ class Padroes(BaseModel):
     origem_nome: dict[str, str]
 
 
+class Sugestao(BaseModel):
+    """Uma community que o formulario oferece para o operador clicar.
+
+    O `valor` e o que entra no campo, o `rotulo` e o que a busca do
+    operador casa e le, e o `grupo` e o cabecalho da lista.
+    """
+
+    valor: str
+    rotulo: str
+    grupo: str
+
+
+class Sugestoes(BaseModel):
+    """Uma lista por campo: a standard e a large nao cabem na mesma.
+
+    Os dois campos do formulario tem formas diferentes (`ASN:VALOR` e
+    `ASN:V1:V2`), e a validacao recusa a trocada: juntar as duas listas
+    seria oferecer o erro.
+    """
+
+    communities: list[Sugestao]
+    large_communities: list[Sugestao]
+
+
 class Plano(BaseModel):
     rede: RedeAtual
     padroes: Padroes
@@ -164,6 +188,7 @@ class Plano(BaseModel):
     aprendizado_usados: list[int]
     campos_por_tipo: dict[str, list[str]]
     campos_por_tipo_grupo: dict[str, list[str]]
+    sugestoes: Sugestoes
 
 
 class PeerResumo(BaseModel):

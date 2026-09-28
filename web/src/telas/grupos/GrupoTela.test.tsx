@@ -14,6 +14,11 @@ const PLANO = {
   prepend_max: 6, prepend_implementado: 3, pop_min: 2001, pop_max: 2999,
   aprendizado_min: 3000, aprendizado_max: 3999, pop_usados: [], aprendizado_usados: [],
   campos_por_tipo: {}, campos_por_tipo_grupo: {},
+  // o catalogo da busca de communities: vazio aqui, porque o que
+  // estes casos provam nao e a lista, e o AdicionarCommunity tem teste
+  // proprio. O `satisfies` e o que faz a proxima chave do Plano
+  // aparecer aqui como erro de tipo, e nao como tela quebrada
+  sugestoes: { communities: [], large_communities: [] },
 }
 
 const GRUPO = {

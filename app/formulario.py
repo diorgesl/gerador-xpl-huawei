@@ -7,7 +7,7 @@ quando moravam la.
 
 import ipaddress
 
-from app import plan, validate
+from app import plan, politica, validate
 from app import peers as peers_mod
 from app.peers import Bloco, Grupo, Peer
 
@@ -188,6 +188,77 @@ def _padroes(rede=None):
         "origens_por_tipo": {t: list(v) for t, v in plan.ORIGENS_POR_TIPO.items()},
         # chave de JSON e string, entao o codigo vira texto aqui
         "origem_nome": {str(c): n for c, n in rede.ORIGEM_NOME.items()},
+    }
+
+
+def _rotulo_do_asn(asns):
+    return ", ".join("AS%d" % a for a in asns)
+
+
+def _sugestoes_standard(rede, fontes):
+    itens = [{"valor": community, "rotulo": efeito, "grupo": "Preferência"}
+             for (community, _lp), efeito
+             in zip(rede.LP_CLIENTE, plan.ESCALA_LP)]
+    itens += [{"valor": rede.c(valor), "rotulo": efeito, "grupo": "Anúncio"}
+              for valor, efeito in plan.RESTRINGE + plan.SOMENTE]
+    # uma entrada por digito, e nao uma por classe: o que entra no campo e
+    # uma community so, e a linha com as tres juntas nao teria como virar
+    # clique
+    for classe, destino in plan.DESTINOS_6CA.items():
+        for digito in sorted(plan.DIGITO_PREPEND):
+            itens.append({
+                "valor": rede.c6ca(classe, digito),
+                "rotulo": "Prepend %dx para %s"
+                          % (plan.DIGITO_PREPEND[digito], destino),
+                "grupo": "Prepend",
+            })
+    for ident, asns in fontes:
+        for digito, nome in plan.ACOES_5PPA:
+            itens.append({
+                "valor": rede.c5ppa(ident, digito),
+                "rotulo": "%s (%s, identificador %02d)"
+                          % (nome, _rotulo_do_asn(asns), ident),
+                "grupo": "Por upstream",
+            })
+    return itens
+
+
+def _sugestoes_large(rede, fontes):
+    """As de 32 bits, uma por ASN de upstream cadastrado.
+
+    O ASN sai do cadastro e nao de um marcador: quem escolhe "nao anunciar
+    para o upstream" nao tem que lembrar do numero dele, e um `<ASN>` no
+    campo seria recusado na validacao depois do clique.
+    """
+    itens = []
+    for ident, asns in fontes:
+        for asn in asns:
+            for funcao, nome in plan.FUNCOES_LARGE:
+                itens.append({
+                    "valor": plan.c_large(funcao, asn, rede.ns),
+                    "rotulo": "%s para o AS%d (identificador %02d)"
+                              % (nome, asn, ident),
+                    "grupo": "Por ASN",
+                })
+    return itens
+
+
+def sugestoes(rede=None, peers=(), grupos=()):
+    """As communities que o formulario oferece na busca, por campo.
+
+    Duas listas, e nao uma, porque os dois campos tem formas diferentes: a
+    standard carrega dois numeros e a large tres, e a validacao recusa a
+    forma errada. Oferecer as duas no mesmo campo seria oferecer o erro.
+
+    Tudo sai do plan.py e do cadastro: os valores, os rotulos do efeito e o
+    ASN de cada upstream. Um catalogo escrito a mao aqui inseriria no campo
+    um valor que parece conferido e que nenhum filtro le.
+    """
+    rede = rede if rede is not None else plan.Rede()
+    fontes = politica.fontes_5ppa(peers, grupos)
+    return {
+        "communities": _sugestoes_standard(rede, fontes),
+        "large_communities": _sugestoes_large(rede, fontes),
     }
 
 

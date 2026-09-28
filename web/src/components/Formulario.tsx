@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { AdicionarCommunity } from "@/components/AdicionarCommunity"
 import { Campo } from "@/components/Campo"
 import { CampoCombo } from "@/components/CampoCombo"
 import { ResumoErros } from "@/components/ResumoErros"
@@ -249,13 +250,25 @@ function CampoRender({ campo, ctx, bruto, erro, avisos, nota, aoMudar, aoTrocarT
         )
       case "area":
         return (
-          <AreaTexto
-            id={id}
-            bruto={bruto}
-            linhas={campo.linhas ?? 3}
-            mono={campo.mono}
-            aoMudar={aoMudar}
-          />
+          <>
+            {/* a busca fica acima do campo e nao no lugar dele: o textarea
+                continua livre, e quem sabe o numero digita direto */}
+            {campo.sugestoes && (
+              <AdicionarCommunity
+                rotulo={campo.rotulo}
+                sugestoes={ctx.plano.sugestoes[campo.sugestoes]}
+                jaUsadas={linhasDe(bruto)}
+                aoAdicionar={(valor) => aoMudar(id, [...linhasDe(bruto), valor])}
+              />
+            )}
+            <AreaTexto
+              id={id}
+              bruto={bruto}
+              linhas={campo.linhas ?? 3}
+              mono={campo.mono}
+              aoMudar={aoMudar}
+            />
+          </>
         )
       default:
         return (

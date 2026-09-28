@@ -109,6 +109,13 @@ cd web && npm install && npm run dev           # a SPA em http://127.0.0.1:5173/
 O Vite faz proxy de `/api` e `/base.txt` para a 8000, então a SPA funciona nos
 dois modos com o mesmo código.
 
+Os dois campos de `CL-PEER` (`communities` e `large_communities`) têm um botão
+"adicionar" que abre uma busca: digitar `prepend` lista as de prepend, `14840`
+lista as daquele ASN. Clicar insere o valor como linha no campo, que continua
+livre para digitar e colar. A lista sai do `/api/plano`, montada do `plan.py`
+no namespace da rede, e o ASN de cada entrada é o dos upstreams do cadastro:
+não há uma segunda lista de communities escrita no front para divergir.
+
 Para servir a SPA pelo uvicorn, com um processo só:
 
 ```bash

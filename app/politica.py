@@ -20,72 +20,28 @@ from dataclasses import dataclass
 
 from app import plan
 
-# Os destinos do prepend por classe, na ordem em que o PLANO os publica. A
-# chave e a classe do 6CA, e nao o tipo do peer: o cliente escolhe o destino
-# que quer penalizar, e a classe 7 e "todos", que nao e tipo de sessao
-# nenhuma. Quem liga um tipo a uma classe e o plan.CLASSE_6CA, do lado da
-# configuracao.
-DESTINOS_6CA = {
-    7: "todos os destinos",
-    1: "nossos upstreams",
-    2: "nossos IXs",
-    3: "IX privado e PNI",
-    4: "CDNs / conteúdo",
-    5: "peering bilateral",
-}
+# O vocabulario das communities vem do plan.py: os valores, os rotulos do
+# efeito e os destinos do prepend sao os mesmos que o formulario oferece na
+# busca e que o operador le na tela. Duas copias divergem na primeira vez que
+# alguem corrigir uma so.
+#
+# O que este modulo faz a mais e escrever a frase que o cliente le: o
+# plan.FUNCOES_LARGE diz "Prepend 1x", e a tabela daqui diz "Prepend 1x para
+# o `<ASN>`", porque no documento o destino e um marcador.
+DESTINOS_6CA = plan.DESTINOS_6CA
+RESTRINGE = plan.RESTRINGE
+SOMENTE = plan.SOMENTE
+ESCALA_LP = plan.ESCALA_LP
+ACOES_5PPA = plan.ACOES_5PPA
 
-# Os dois blocos de escopo de anuncio, com o efeito de cada valor. O 200 e a
-# proibicao absoluta e os outros quatro restringem a um destino; o 204 e o
-# unico do bloco que a lista do plan.py implementa para a classe de cliente
-# (plan.NOADV_CUST), os outros tres saem do NOADV por tipo. E o teste que
-# amarra uma lista na outra.
-RESTRINGE = (
-    (200, "Não anunciar para ninguém"),
-    (201, "Não anunciar para os nossos upstreams"),
-    (202, "Não anunciar para os nossos peers"),
-    (203, "Não anunciar nos IXs"),
-    (204, "Não anunciar para os nossos outros clientes"),
-)
 
-SOMENTE = (
-    (210, "Anunciar somente para os nossos upstreams"),
-    (211, "Anunciar somente nos nossos IXs"),
-    (212, "Anunciar somente para CDNs e PNIs"),
-    (213, "Anunciar somente para os nossos outros clientes"),
-)
+def _funcoes_large():
+    """As funcoes da large com o `<ASN>` escrito no lugar do destino."""
+    return tuple((funcao, "%s para o `<ASN>`" % nome)
+                 for funcao, nome in plan.FUNCOES_LARGE)
 
-# A escada de preferencia, do menor para o maior. A ordem e a do
-# rede.LP_CLIENTE, que e quem manda nos numeros: aqui fica so o que cada
-# degrau significa para quem le
-ESCALA_LP = (
-    "Suas rotas viram último recurso",
-    "Preferência abaixo dos nossos upstreams",
-    "Preferência abaixo do nosso peering",
-    "Preferência abaixo dos demais clientes",
-    "Preferência acima dos demais clientes",
-)
 
-# As funcoes da large community por ASN. O numero e o que o c_large escreve
-# no campo do meio, e ele nao sai do plan.py porque so a documentacao o usa:
-# o filtro compara a large inteira, montada no cadeado do cliente.
-FUNCOES_LARGE = (
-    (0, "Não anunciar para o `<ASN>`"),
-    (1, "Prepend 1x para o `<ASN>`"),
-    (2, "Prepend 2x para o `<ASN>`"),
-    (3, "Prepend 3x para o `<ASN>`"),
-    (4, "Anunciar somente para o `<ASN>`"),
-)
-
-# As cinco acoes do alias em standard, na ordem da escala. O digito e o
-# ultimo campo do 5PPA, e o 1 e o P1 explicito, que so existe neste eixo: em
-# large nao ha como dizer "anuncie sem prepend nenhum"
-ACOES_5PPA = (
-    (0, "Não anunciar"),
-    (1, "P1, sem prepend"),
-    (2, "Prepend 1x"),
-    (3, "Prepend 2x"),
-    (4, "Prepend 3x"),
-)
+FUNCOES_LARGE = _funcoes_large()
 
 TITULO_ALIAS = "Controle por upstream (alias em standard)"
 
@@ -216,8 +172,8 @@ def _por_asn(rede):
     )
 
 
-def _fontes_5ppa(peers, grupos):
-    """Os identificadores que emitem 5PPA, com o ASN de cada um.
+def fontes_5ppa(peers, grupos):
+    """Os identificadores que emitem 5PPA, com os ASNs de cada um.
 
     Quem emite nao e o cadastro do upstream e sim o bloco de filtro que
     carrega o CL-5PPA, e num upstream agrupado esse bloco e o do grupo: o
@@ -226,7 +182,11 @@ def _fontes_5ppa(peers, grupos):
     ID deles, e a tabela mostraria destinos que nao existem.
 
     O ASN do grupo vence o do membro quando o grupo declara um; sem ele, o
-    grupo herda dos membros, e ASNs diferentes viram uma celula so.
+    grupo herda dos membros. Os ASNs saem em lista, e nao num texto so,
+    porque os dois consumidores os querem de formas diferentes: a tabela do
+    PDF junta os de um identificador na mesma celula, e a busca do
+    formulario abre uma entrada por ASN, para o numero sair escrito por
+    inteiro em cada uma.
     """
     por_id = {g.id: g for g in grupos}
     fontes = {}
@@ -241,8 +201,7 @@ def _fontes_5ppa(peers, grupos):
         ident = p.id if g is None else g.id
         asn = g.asn if g is not None and g.asn else p.asn
         fontes.setdefault(ident, set()).add(asn)
-    return [(ident, ", ".join(str(a) for a in sorted(asns)))
-            for ident, asns in sorted(fontes.items())]
+    return [(ident, sorted(asns)) for ident, asns in sorted(fontes.items())]
 
 
 def _alias(rede, peers, grupos):
@@ -255,7 +214,7 @@ def _alias(rede, peers, grupos):
     alias esta na lista de pendencias do PLANO. Publicar o ID dos dois
     ensinaria o cliente a mandar community que o filtro descarta.
     """
-    fontes = _fontes_5ppa(peers, grupos)
+    fontes = fontes_5ppa(peers, grupos)
     textos = [
         "Se o seu equipamento não envia large community, use o alias em "
         "standard: `%s:5` mais os dois dígitos do identificador do upstream "
@@ -280,9 +239,9 @@ def _alias(rede, peers, grupos):
         "mesmo upstream dividem um identificador só, porque dividem o "
         "filtro: a community vale para o conjunto deles. O `4:<ASN>` não tem "
         "equivalente neste eixo.")
-    linhas = [["%02d" % ident, asn]
+    linhas = [["%02d" % ident, ", ".join(str(a) for a in asns)]
               + [rede.c5ppa(ident, digito) for digito, _ in ACOES_5PPA]
-              for ident, asn in fontes]
+              for ident, asns in fontes]
     colunas = ("ID", "ASN") + tuple(rotulo for _digito, rotulo in ACOES_5PPA)
     return Secao(titulo=TITULO_ALIAS, textos=tuple(textos),
                  tabelas=(_tabela(colunas, linhas),))
