@@ -1167,6 +1167,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - Create: `web/src/app/tenant.ts`
 - Modify: `web/src/app/provedores.tsx`
 - Modify: `web/src/api/consultas.ts`, `web/src/api/inicial.ts`, `web/src/api/previa.ts`
+- Modify: `web/src/telas/peers/PeerTela.tsx`, `web/src/telas/grupos/GrupoTela.tsx`, `web/src/telas/prefixos/PrefixosTela.tsx` (as 16 chamadas diretas)
 - Modify: `web/src/teste/roteador.tsx` (a rota ambiente do `/api/asns`)
 - Create: `web/src/app/tenant.test.tsx`
 
@@ -1348,7 +1349,7 @@ function ProvedorTenant({ children }: { children: ReactNode }) {
     </QueryClientProvider>
 ```
 
-- [ ] **Step 5: O esquema de tipos do openapi 5.x exige um corpo de `GET /api/asns`**
+- [ ] **Step 5: O hook da lista e a chave nova**
 
 Escrevendo o `useAsns`, que é o hook novo e o mais simples de todos:
 
@@ -1418,38 +1419,9 @@ const AMBIENTE: Record<string, Resposta> = {
 
 e a linha do achado passa a ser `const achado = mapa[chave] ?? AMBIENTE[chave]`.
 
-- [ ] **Step 8: Rodar**
+- [ ] **Step 8: As chamadas diretas das telas**
 
-Run: `cd web && npm test`
-Expected: PASS. Os testes existentes quebram no `tsc -b` se algum hook ficou sem o `asn`; no vitest eles param de quebrar sozinhos, porque o dublê de fetch casa por método e caminho e ignora a query.
-
-Run: `cd web && npm run build`
-Expected: PASS (é o `tsc -b` que cobra o `asn` em cada chamada)
-
-- [ ] **Step 9: Commit**
-
-```bash
-git add -A
-git commit -m "O front escolhe o tenant e o leva em toda consulta
-
-Co-Authored-By: Claude Code <noreply@anthropic.com>"
-```
-
----
-
-### Task 6: As escritas do front e o campo AS somente leitura
-
-**Files:**
-- Modify: `web/src/telas/peers/PeerTela.tsx`, `web/src/telas/grupos/GrupoTela.tsx`, `web/src/telas/prefixos/PrefixosTela.tsx`, `web/src/telas/configuracoes/ConfiguracoesTela.tsx`
-- Modify: os testes dessas telas
-
-**Interfaces:**
-- Consumes: `useAsn()` (tarefa 5) e o `PUT /api/rede` sem o `asn` (tarefa 3).
-- Produces: nada que outra tarefa consuma.
-
-- [ ] **Step 1: As chamadas de escrita ganham o ASN**
-
-Os hooks (`consultas.ts`, `inicial.ts`, `previa.ts`) já levam o ASN desde a tarefa 5. O que falta são as chamadas diretas dentro das telas: são 16, e **todas** ganham o ASN, inclusive as de leitura, porque são rotas do mesmo contrato.
+Os hooks (`consultas.ts`, `inicial.ts`, `previa.ts`) já levam o ASN desde o passo 6. O que falta são as chamadas diretas dentro das telas: são 16, e **todas** ganham o ASN, inclusive as de leitura, porque são rotas do mesmo contrato. Esta parte estava na tarefa 6 do plano e subiu para cá porque sem ela o `tsc -b` não fecha, e uma tarefa que termina com o front não compilando não tem como provar o próprio passo de build.
 
 | Arquivo | Linha | Chamada |
 | --- | --- | --- |
@@ -1468,7 +1440,7 @@ Os hooks (`consultas.ts`, `inicial.ts`, `previa.ts`) já levam o ASN desde a tar
 | `PrefixosTela.tsx` | 71 | `PUT /api/blocos` |
 | `PrefixosTela.tsx` | 103 | `POST /api/blocos/irr` |
 
-O `ConfiguracoesTela.tsx:38` (`PUT /api/rede`) entra no passo 2, que muda o corpo junto. O padrão, para a que grava o peer:
+O `ConfiguracoesTela.tsx:38` (`PUT /api/rede`) fica de fora aqui de propósito: ele muda o corpo junto com o campo que vira leitura, e é a tarefa 6 inteira. O padrão, para a que grava o peer:
 
 ```ts
 const asn = useAsn()
@@ -1481,7 +1453,38 @@ const asn = useAsn()
 
 As chamadas que já têm `params` só acrescentam o `query` (o `body`, o `signal` e o `path` ficam como estão). O `POST /api/irr` e o `POST /api/blocos/irr` entram na lista: são rotas de dados como as outras.
 
-- [ ] **Step 2: O campo AS da rede vira leitura**
+- [ ] **Step 9: Rodar**
+
+Run: `cd web && npm test`
+Expected: PASS. O vitest sozinho não cobra o `asn` — o dublê de fetch casa por método e caminho e ignora a query —, então o verde dele não prova este passo.
+
+Run: `cd web && npm run build`
+Expected: PASS (é o `tsc -b` que cobra o `asn` em cada chamada, e é ele que prova o passo 8)
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add -A
+git commit -m "O front escolhe o tenant e o leva em toda consulta
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>"
+```
+
+---
+
+### Task 6: As escritas do front e o campo AS somente leitura
+
+**Files:**
+- Modify: `web/src/telas/configuracoes/ConfiguracoesTela.tsx`
+- Modify: os testes dessa tela
+
+**Interfaces:**
+- Consumes: `useAsn()` (tarefa 5) e o `PUT /api/rede` sem o `asn` (tarefa 3).
+- Produces: nada que outra tarefa consuma.
+
+- [ ] **Step 1: A tela de Configurações**
+
+As outras 16 chamadas diretas do front subiram para o passo 8 da tarefa 5, que é onde o `tsc -b` passou a fechar. O que sobra aqui é esta tela, que muda em dois lugares ao mesmo tempo e por isso não cabia lá: o campo do AS vira leitura e o corpo do `PUT /api/rede` perde o `asn`.
 
 `web/src/telas/configuracoes/ConfiguracoesTela.tsx`: o `Input` do AS (linhas 98-106) vira texto, e o `gravar` deixa de mandar o ASN.
 
@@ -1508,12 +1511,12 @@ e o `gravar`:
 
 O `rascunho` deixa de guardar o `asn` (só o `politica`): o `RedeAtual.asn` continua vindo do plano, que é o eco do tenant selecionado. O aviso do fim do fieldset ("Trocar o AS muda o nome de toda community...") passa a dizer o que a troca faz hoje: "Trocar o ASN no seletor muda o nome de toda community e o nome dos arquivos em `out/<ASN>/`."
 
-- [ ] **Step 3: Rodar**
+- [ ] **Step 2: Rodar**
 
 Run: `cd web && npm test && npm run build`
 Expected: PASS. Os testes das telas que montam formulário leem a resposta do `PUT /api/rede`; se algum montar o corpo com `asn`, ele quebra aqui, e é o teste certo a mudar.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add -A
