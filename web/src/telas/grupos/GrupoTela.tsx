@@ -21,6 +21,7 @@ import { usePrevia } from "@/api/previa"
 import { copiarComAviso } from "@/lib/copiar"
 import { cn } from "@/lib/utils"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
+import { useAsn } from "@/app/tenant"
 import { FormularioGrupo } from "./FormularioGrupo"
 import { CAMPO_BRANCO_GRUPO } from "./camposGrupo"
 
@@ -29,6 +30,9 @@ export function GrupoTela() {
   const [busca] = useSearchParams()
   const navegar = useNavigate()
   const consultas = useQueryClient()
+  // as chamadas diretas desta tela sao rotas de dados como as dos hooks: vao
+  // com o tenant da aba, e nao com o ASN do formulario, que e o do grupo
+  const asn = useAsn()
 
   // `/grupos/abc` e o mesmo caso do peer: um endereco que nao aponta para
   // registro nenhum, e nao uma API fora do ar
@@ -109,7 +113,7 @@ export function GrupoTela() {
     enabled: ident !== null && inicial.data !== undefined,
     queryFn: async () => {
       const { data, error } = await cliente.GET("/api/grupos/{ident}/saida", {
-        params: { path: { ident: ident as number } },
+        params: { path: { ident: ident as number }, query: { asn: Number(asn) } },
       })
       return error ? null : data
     },
@@ -147,6 +151,7 @@ export function GrupoTela() {
   const irr = useMutation({
     mutationFn: (forcar: boolean) =>
       cliente.POST("/api/irr", {
+        params: { query: { asn: Number(asn) } },
         body: { asn: form.getValues("asn"), apelido: form.getValues("nome"), forcar },
       }),
     onSuccess: (r, forcar) => {
@@ -174,8 +179,10 @@ export function GrupoTela() {
     mutationFn: async () => {
       const corpo = form.getValues()
       return ident === null
-        ? cliente.POST("/api/grupos", { body: corpo })
-        : cliente.PUT("/api/grupos/{ident}", { params: { path: { ident } }, body: corpo })
+        ? cliente.POST("/api/grupos", {
+            params: { query: { asn: Number(asn) } }, body: corpo })
+        : cliente.PUT("/api/grupos/{ident}", {
+            params: { path: { ident }, query: { asn: Number(asn) } }, body: corpo })
     },
   })
 
@@ -208,7 +215,8 @@ export function GrupoTela() {
       // recarregar a tela e perder o que foi digitado: a tela rebusca o
       // proximo livre e o operador so clica em salvar de novo
       if (recusaComMarca(r.error).erros.id && ident === null) {
-        const livre = await cliente.GET("/api/grupos/novo", { params: { query: { tipo } } })
+        const livre = await cliente.GET("/api/grupos/novo", {
+          params: { query: { tipo, asn: Number(asn) } } })
         // o id do formulario e texto (o `GrupoForm.id`) e o do registro e
         // numero: sem o String o `tsc -b` reprova a linha, e a tela ja
         // converte assim no `String(r.data.registro.id)` do salvamento
@@ -238,7 +246,8 @@ export function GrupoTela() {
   async function salvarECopiar(aba: AbaSaida): Promise<boolean> {
     const gravado = await gravar()
     if (gravado === null) return false
-    const { data } = await cliente.GET("/api/grupos/{ident}/saida", { params: { path: { ident: gravado } } })
+    const { data } = await cliente.GET("/api/grupos/{ident}/saida", {
+      params: { path: { ident: gravado }, query: { asn: Number(asn) } } })
     const texto = aba.id === "criar" ? data?.criar_lista : data?.bloco
     if (!texto) return false
     return (await copiarComAviso(texto, blocoRef.current)) === "copiado"
@@ -246,7 +255,8 @@ export function GrupoTela() {
 
   async function excluir() {
     const r = await escrever(
-      () => cliente.DELETE("/api/grupos/{ident}", { params: { path: { ident: ident as number } } }),
+      () => cliente.DELETE("/api/grupos/{ident}", {
+        params: { path: { ident: ident as number }, query: { asn: Number(asn) } } }),
       () => void excluir(),
     )
     if (r === null) return

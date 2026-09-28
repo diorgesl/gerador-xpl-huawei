@@ -33,8 +33,10 @@ describe("o cliente fala com o mesmo caminho relativo em dev e em producao", () 
     // cliente de verdade, com o baseUrl vazio do cliente.ts
     vi.resetModules()
     const { cliente } = await import("./cliente")
-    await cliente.GET("/api/plano")
-    expect(chamadas).toEqual(["/api/plano"])
+    await cliente.GET("/api/plano", { params: { query: { asn: 64512 } } })
+    // o ?asn= e do contrato novo (toda rota de dados e de um tenant); o que
+    // esta prova mede continua sendo o caminho, relativo e sem host
+    expect(chamadas).toEqual(["/api/plano?asn=64512"])
   })
 })
 
@@ -58,14 +60,14 @@ describe("o cliente avisa quando a sessao caiu", () => {
   }
 
   it("avisa no 401 de uma consulta qualquer", async () => {
-    const avisos = await comResposta(401, (c) => c.GET("/api/plano"))
+    const avisos = await comResposta(401, (c) => c.GET("/api/plano", { params: { query: { asn: 64512 } } }))
 
     expect(avisos).toBe(1)
   })
 
   it("nao avisa no 422 nem no 500", async () => {
-    expect(await comResposta(422, (c) => c.GET("/api/plano"))).toBe(0)
-    expect(await comResposta(500, (c) => c.GET("/api/plano"))).toBe(0)
+    expect(await comResposta(422, (c) => c.GET("/api/plano", { params: { query: { asn: 64512 } } }))).toBe(0)
+    expect(await comResposta(500, (c) => c.GET("/api/plano", { params: { query: { asn: 64512 } } }))).toBe(0)
   })
 
   it("nao avisa no 401 do login, que e senha errada", async () => {

@@ -1,5 +1,5 @@
 import { cleanup, render } from "@testing-library/react"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClient } from "@tanstack/react-query"
 import { RouterProvider, createMemoryRouter, type RouteObject } from "react-router-dom"
 import { toast } from "sonner"
 import { afterEach, beforeEach, vi } from "vitest"
@@ -69,6 +69,11 @@ afterEach(() => {
  * O QueryClient e de cada caso, e nao o do modulo: com um so, o caso seguinte
  * leria pela mesma chave o dado que o anterior deixou, e o `staleTime` de 5s
  * das consultas ainda estaria valendo.
+ *
+ * Ele entra pelo `Provedores`, e nao por um provedor aqui dentro, porque o
+ * provedor do tenant mora la: e ele que pergunta a lista de ASNs, e com um
+ * provedor daqui a lista do caso anterior sobreviveria ao seguinte - um caso
+ * com a lista menor leria a do vizinho.
  */
 export function montarRota(rotas: RouteObject[], inicial = "/") {
   const consultas = new QueryClient({
@@ -76,12 +81,17 @@ export function montarRota(rotas: RouteObject[], inicial = "/") {
   })
   const roteador = createMemoryRouter(rotas, { initialEntries: [inicial] })
   return render(
-    <Provedores>
-      <QueryClientProvider client={consultas}>
-        <RouterProvider router={roteador} />
-      </QueryClientProvider>
+    <Provedores client={consultas}>
+      <RouterProvider router={roteador} />
     </Provedores>,
   )
+}
+
+// O provedor de tenant pergunta a lista em toda montagem, e nenhum caso
+// monta isso a mao. A rota mora aqui, e quem quiser outra lista passa a
+// propria chave no mapa do caso, que vence.
+const AMBIENTE: Record<string, Resposta> = {
+  "GET /api/asns": { corpo: ["64512"] },
 }
 
 /**
@@ -98,7 +108,7 @@ export function mockFetch(mapa: Record<string, Resposta>) {
     const pedido = lerPedido(entrada, init)
     vistos.push(pedido)
     const chave = `${pedido.metodo} ${pedido.caminho}`
-    const achado = mapa[chave]
+    const achado = mapa[chave] ?? AMBIENTE[chave]
     if (!achado) {
       semMapa.push(chave)
       return Promise.resolve(new Response("{}", { status: 404 }))

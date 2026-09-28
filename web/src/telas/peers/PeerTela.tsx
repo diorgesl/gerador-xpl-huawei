@@ -23,6 +23,7 @@ import { usePrevia } from "@/api/previa"
 import { copiarComAviso } from "@/lib/copiar"
 import { cn } from "@/lib/utils"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
+import { useAsn } from "@/app/tenant"
 import { FormularioPeer } from "./FormularioPeer"
 import { CAMPO_BRANCO } from "./camposPeer"
 
@@ -41,6 +42,9 @@ export function PeerTela() {
   const [busca] = useSearchParams()
   const navegar = useNavigate()
   const consultas = useQueryClient()
+  // as chamadas diretas desta tela sao rotas de dados como as dos hooks: vao
+  // com o tenant da aba, e nao com o ASN do formulario, que e o peer
+  const asn = useAsn()
 
   // `/peers/abc` casa na rota do `:id` sem ser um id: o Number virava NaN, o
   // GET respondia 422 (o inicial.ts so trata o 404) e o operador caia na falha
@@ -127,7 +131,7 @@ export function PeerTela() {
     enabled: ident !== null && inicial.data !== undefined,
     queryFn: async () => {
       const { data, error } = await cliente.GET("/api/peers/{ident}/saida", {
-        params: { path: { ident: ident as number } },
+        params: { path: { ident: ident as number }, query: { asn: Number(asn) } },
       })
       return error ? null : data
     },
@@ -182,6 +186,7 @@ export function PeerTela() {
   const irr = useMutation({
     mutationFn: (forcar: boolean) =>
       cliente.POST("/api/irr", {
+        params: { query: { asn: Number(asn) } },
         body: { asn: form.getValues("asn"), apelido: form.getValues("apelido"), forcar },
       }),
     onSuccess: (r, forcar) => {
@@ -209,8 +214,10 @@ export function PeerTela() {
     mutationFn: async () => {
       const corpo = form.getValues()
       return ident === null
-        ? cliente.POST("/api/peers", { body: corpo })
-        : cliente.PUT("/api/peers/{ident}", { params: { path: { ident } }, body: corpo })
+        ? cliente.POST("/api/peers", {
+            params: { query: { asn: Number(asn) } }, body: corpo })
+        : cliente.PUT("/api/peers/{ident}", {
+            params: { path: { ident }, query: { asn: Number(asn) } }, body: corpo })
     },
   })
 
@@ -270,7 +277,7 @@ export function PeerTela() {
     // O que vai para a area de transferencia e o bloco do registro gravado, e
     // nao o da previa: o que vale e o que foi para o out/ agora
     const { data } = await cliente.GET("/api/peers/{ident}/saida", {
-      params: { path: { ident: gravado } },
+      params: { path: { ident: gravado }, query: { asn: Number(asn) } },
     })
     const texto = aba.id === "criar" ? data?.criar_lista : aba.id === "remover" ? data?.remover : data?.bloco
     if (!texto) return false
@@ -279,7 +286,8 @@ export function PeerTela() {
 
   async function excluir() {
     const r = await escrever(
-      () => cliente.DELETE("/api/peers/{ident}", { params: { path: { ident: ident as number } } }),
+      () => cliente.DELETE("/api/peers/{ident}", {
+        params: { path: { ident: ident as number }, query: { asn: Number(asn) } } }),
       () => void excluir(),
     )
     if (r === null) return

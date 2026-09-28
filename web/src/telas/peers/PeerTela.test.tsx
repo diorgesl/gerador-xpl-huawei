@@ -599,9 +599,14 @@ describe("a tela do peer", () => {
     expect(peticoes().map((p) => `${p.metodo} ${p.caminho}`)).toContain("GET /api/peers/8")
     // e a previa seguinte ja pergunta pelo id novo, na query: e o outro pedaco
     // que o arnes expoe, e o que diz que o id saiu da URL, e nao do corpo. A
-    // espera e a janela de 400ms, que rearma quando o registro lido chega
+    // espera e a janela de 400ms, que rearma quando o registro lido chega.
+    //
+    // O pedaco e comparado solto, e nao a query inteira: o ?asn= do tenant
+    // viaja na mesma string, e a prova do id nao pode depender do lugar dele
     await waitFor(() =>
-      expect(peticoes().some((p) => p.caminho === "/api/peers/previa" && p.query === "id=8")).toBe(true),
+      expect(
+        peticoes().some((p) => p.caminho === "/api/peers/previa" && p.query.split("&").includes("id=8")),
+      ).toBe(true),
     )
   })
 

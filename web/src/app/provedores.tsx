@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { useCallback, useEffect, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { Toaster } from "@/components/ui/sonner"
+import { useAsns } from "@/api/consultas"
+import { ContextoTenant, gravarAsn, lerAsn } from "./tenant"
 import { aplicarTema, ContextoTema, gravarTema, lerTema, type Tema } from "./tema"
 
 const consultas = new QueryClient({
@@ -28,13 +30,53 @@ function ProvedorTema({ children }: { children: ReactNode }) {
   return <ContextoTema.Provider value={[tema, trocar]}>{children}</ContextoTema.Provider>
 }
 
-export function Provedores({ children }: { children: ReactNode }) {
+/**
+ * A lista enquanto a consulta nao responde. E uma constante, e nao um `[]` no
+ * `??`, porque o `valor` do contexto e memoizado: com um array novo a cada
+ * render, o memo nao serviria para nada e todo consumidor do tenant
+ * re-renderizaria a cada resposta da consulta.
+ */
+const SEM_TENANTS: string[] = []
+
+function ProvedorTenant({ children }: { children: ReactNode }) {
+  const lista = useAsns()
+  const asns = lista.data ?? SEM_TENANTS
+  const [escolhido, setEscolhido] = useState<string | null>(lerAsn)
+
+  // O guardado vale enquanto estiver na lista, e o `?? asns[0]` e o
+  // primeiro boot, a aba nova e o tenant apagado a mao: nos tres a escolha
+  // anterior nao existe mais, e cair no primeiro e melhor que ficar sem
+  // nenhuma. Nao ha efeito que copie a lista para o estado: o que manda e
+  // a lista que chegou, e nao a que estava na tela quando o operador
+  // escolheu.
+  const asn = escolhido !== null && asns.includes(escolhido)
+    ? escolhido
+    : (asns[0] ?? null)
+
+  const trocar = useCallback((novo: string) => {
+    gravarAsn(novo)
+    setEscolhido(novo)
+  }, [])
+
+  const valor = useMemo(() => ({ asn, asns, trocar }), [asn, asns, trocar])
+  return <ContextoTenant.Provider value={valor}>{children}</ContextoTenant.Provider>
+}
+
+/**
+ * O `client` e do teste: o arnes monta um QueryClient por caso (as consultas
+ * tem `staleTime` de 5s, e o caso seguinte leria o dado do anterior pela
+ * mesma chave), e o provedor do tenant mora aqui dentro - o cliente do caso
+ * so alcanca a lista de ASNs entrando por aqui. Em producao e o do modulo.
+ */
+export function Provedores({ children, client = consultas }: { children: ReactNode; client?: QueryClient }) {
   return (
-    <QueryClientProvider client={consultas}>
-      <ProvedorTema>
-        {children}
-        <Toaster position="bottom-right" />
-      </ProvedorTema>
+    <QueryClientProvider client={client}>
+      <ProvedorTenant>
+        <ProvedorTema>
+          {children}
+          <Toaster position="bottom-right" />
+        </ProvedorTema>
+      </ProvedorTenant>
     </QueryClientProvider>
   )
 }

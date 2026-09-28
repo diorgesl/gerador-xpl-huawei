@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import { useAsn } from "@/app/tenant"
 import type { components } from "./schema"
 import { cliente } from "./cliente"
 
@@ -46,6 +47,7 @@ export function recusaComMarca(corpoErro: unknown, irr: string | null = null) {
 }
 
 export const chaves = {
+  asns: ["asns"] as const,
   plano: ["plano"] as const,
   peers: ["peers"] as const,
   peer: (id: number) => ["peer", id] as const,
@@ -60,11 +62,37 @@ export const chaves = {
 // peers.yaml aparece sem F5
 const comum = { refetchOnWindowFocus: true, staleTime: 5_000 }
 
-export function usePlano() {
+/** A lista de ASNs, a unica consulta que nao e de um tenant: e ela quem diz quais existem. */
+export function useAsns() {
   return useQuery({
-    queryKey: chaves.plano,
+    queryKey: chaves.asns,
     queryFn: async () => {
-      const { data, error } = await cliente.GET("/api/plano")
+      const { data, error } = await cliente.GET("/api/asns")
+      if (error) throw new Error("falha ao listar os ASNs")
+      return data
+    },
+    ...comum,
+  })
+}
+
+export function usePlano() {
+  const asn = useAsn()
+  return useQuery({
+    // o ASN entra na chave: sem ele, o react-query serviria a lista de um
+    // tenant enquanto o outro esta selecionado, e a troca mostraria o
+    // cadastro da rede errada ate o refetch chegar
+    queryKey: [...chaves.plano, asn],
+    // sem ASN nao ha o que perguntar: a janela entre a montagem e a lista
+    // de ASNs chegando e curta, e uma consulta sem asn seria um 422
+    enabled: asn !== null,
+    queryFn: async () => {
+      const { data, error } = await cliente.GET("/api/plano", {
+        // O `asn` da query e `int` na API, e a lista e o sessionStorage o
+        // guardam como texto: o `Number` e a travessia entre os dois, e o
+        // `enabled` acima garante que ela so acontece com o ASN na mao (o
+        // `Number(null)` seria o 0, um tenant que nao existe)
+        params: { query: { asn: Number(asn) } },
+      })
       if (error) throw new Error("falha ao ler o plano")
       return data
     },
@@ -73,10 +101,14 @@ export function usePlano() {
 }
 
 export function usePeers() {
+  const asn = useAsn()
   return useQuery({
-    queryKey: chaves.peers,
+    queryKey: [...chaves.peers, asn],
+    enabled: asn !== null,
     queryFn: async () => {
-      const { data, error } = await cliente.GET("/api/peers")
+      const { data, error } = await cliente.GET("/api/peers", {
+        params: { query: { asn: Number(asn) } },
+      })
       if (error) throw new Error("falha ao listar os peers")
       return data
     },
@@ -85,26 +117,31 @@ export function usePeers() {
 }
 
 export function usePeer(id: number | null) {
+  const asn = useAsn()
   return useQuery({
-    queryKey: chaves.peer(id ?? -1),
+    queryKey: [...chaves.peer(id ?? -1), asn],
+    enabled: id !== null && asn !== null,
     queryFn: async () => {
       const { data, error, response } = await cliente.GET("/api/peers/{ident}", {
-        params: { path: { ident: id as number } },
+        params: { path: { ident: id as number }, query: { asn: Number(asn) } },
       })
       if (response.status === 404) throw new Error("nao_encontrado")
       if (error) throw new Error("falha ao ler o peer")
       return data
     },
-    enabled: id !== null,
     ...comum,
   })
 }
 
 export function useGrupos() {
+  const asn = useAsn()
   return useQuery({
-    queryKey: chaves.grupos,
+    queryKey: [...chaves.grupos, asn],
+    enabled: asn !== null,
     queryFn: async () => {
-      const { data, error } = await cliente.GET("/api/grupos")
+      const { data, error } = await cliente.GET("/api/grupos", {
+        params: { query: { asn: Number(asn) } },
+      })
       if (error) throw new Error("falha ao listar os grupos")
       return data
     },
@@ -113,26 +150,31 @@ export function useGrupos() {
 }
 
 export function useGrupo(id: number | null) {
+  const asn = useAsn()
   return useQuery({
-    queryKey: chaves.grupo(id ?? -1),
+    queryKey: [...chaves.grupo(id ?? -1), asn],
+    enabled: id !== null && asn !== null,
     queryFn: async () => {
       const { data, error, response } = await cliente.GET("/api/grupos/{ident}", {
-        params: { path: { ident: id as number } },
+        params: { path: { ident: id as number }, query: { asn: Number(asn) } },
       })
       if (response.status === 404) throw new Error("nao_encontrado")
       if (error) throw new Error("falha ao ler o grupo")
       return data
     },
-    enabled: id !== null,
     ...comum,
   })
 }
 
 export function useBlocos() {
+  const asn = useAsn()
   return useQuery({
-    queryKey: chaves.blocos,
+    queryKey: [...chaves.blocos, asn],
+    enabled: asn !== null,
     queryFn: async () => {
-      const { data, error } = await cliente.GET("/api/blocos")
+      const { data, error } = await cliente.GET("/api/blocos", {
+        params: { query: { asn: Number(asn) } },
+      })
       if (error) throw new Error("falha ao ler os blocos")
       return data
     },
@@ -141,10 +183,14 @@ export function useBlocos() {
 }
 
 export function useConfig() {
+  const asn = useAsn()
   return useQuery({
-    queryKey: chaves.config,
+    queryKey: [...chaves.config, asn],
+    enabled: asn !== null,
     queryFn: async () => {
-      const { data, error } = await cliente.GET("/api/config")
+      const { data, error } = await cliente.GET("/api/config", {
+        params: { query: { asn: Number(asn) } },
+      })
       if (error) throw new Error("falha ao ler a config")
       return data
     },

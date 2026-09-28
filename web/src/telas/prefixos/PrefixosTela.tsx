@@ -12,6 +12,7 @@ import { chaves, lerRecusa, recusaComMarca, temRecusa, useBlocos } from "@/api/c
 import { avisarFalhaDeRede, falhaDoServidor } from "@/lib/aviso"
 import { copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
+import { useAsn } from "@/app/tenant"
 
 /** O texto dos dois editores, no formato que a API recebe e devolve. */
 type Texto = { v4: string; v6: string }
@@ -27,6 +28,9 @@ const CAMPOS = ["blocos_v4", "blocos_v6"] as const
 
 export function PrefixosTela() {
   const consultas = useQueryClient()
+  // as tres chamadas diretas desta tela sao rotas de dados como as dos hooks:
+  // vao com o tenant da aba
+  const asn = useAsn()
   // O rascunho e o que o operador escreveu, e comeca nulo: enquanto ele for
   // nulo o texto dos editores e o do registro, derivado no proprio render. O
   // caminho obvio, um efeito copiando a resposta para o estado, e
@@ -61,14 +65,18 @@ export function PrefixosTela() {
     // editores vazios, e o painel abriria com o bloco do texto em branco
     enabled: blocos.data !== undefined,
     queryFn: async () => {
-      const { data, error } = await cliente.POST("/api/blocos/previa", { body: { v4, v6 } })
+      const { data, error } = await cliente.POST("/api/blocos/previa", {
+        params: { query: { asn: Number(asn) } }, body: { v4, v6 },
+      })
       if (error) throw error
       return data
     },
   })
 
   const salvar = useMutation({
-    mutationFn: () => cliente.PUT("/api/blocos", { body: { v4, v6 } }),
+    mutationFn: () => cliente.PUT("/api/blocos", {
+      params: { query: { asn: Number(asn) } }, body: { v4, v6 },
+    }),
     onSuccess: (r) => {
       if (r.error) {
         // o 5xx e falha do servidor, e nao do texto: o aviso com o caminho de
@@ -100,7 +108,9 @@ export function PrefixosTela() {
   })
 
   const consultar = useMutation({
-    mutationFn: (forcar: boolean) => cliente.POST("/api/blocos/irr", { body: { v4, v6, forcar } }),
+    mutationFn: (forcar: boolean) => cliente.POST("/api/blocos/irr", {
+      params: { query: { asn: Number(asn) } }, body: { v4, v6, forcar },
+    }),
     onSuccess: (r, forcar) => {
       if (r.error) {
         const lida = lerRecusa(r.error)

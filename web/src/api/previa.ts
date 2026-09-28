@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useState } from "react"
+import { useAsn } from "@/app/tenant"
 import { cliente } from "./cliente"
 import type { GrupoForm, PeerForm, Previa } from "./consultas"
 
@@ -23,6 +24,7 @@ export function usePrevia({ tipo, id, valores, ligado }: {
   valores: PeerForm | GrupoForm
   ligado: boolean
 }) {
+  const asn = useAsn()
   const [atrasado, setAtrasado] = useState<PeerForm | GrupoForm | null>(null)
 
   useEffect(() => {
@@ -36,7 +38,9 @@ export function usePrevia({ tipo, id, valores, ligado }: {
   }, [valores, ligado])
 
   return useQuery({
-    queryKey: ["previa", tipo, id, atrasado],
+    queryKey: ["previa", tipo, id, atrasado, asn],
+    // o `ligado` da tela ja e falso enquanto o registro (que so existe com o
+    // ASN na mao) nao chega: ele e a guarda que impede uma previa sem `?asn=`
     enabled: ligado && atrasado !== null,
     queryFn: async ({ signal }) => {
       // O caminho vai literal, e nao numa variavel: o openapi-fetch tipa cada
@@ -44,7 +48,7 @@ export function usePrevia({ tipo, id, valores, ligado }: {
       // sem opcoes, onde o segundo argumento so pode ser `undefined` (o
       // `tsc -b` reprova com TS2345). Duas chamadas literais mantem o mesmo
       // pedido, com o init conferido contra o schema de cada uma.
-      const params = { params: { query: { id: id ?? undefined } } }
+      const params = { params: { query: { id: id ?? undefined, asn: Number(asn) } } }
       const { data, error } = tipo === "peers"
         ? await cliente.POST("/api/peers/previa", { ...params, body: atrasado as PeerForm, signal })
         : await cliente.POST("/api/grupos/previa", { ...params, body: atrasado as GrupoForm, signal })
