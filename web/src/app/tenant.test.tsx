@@ -41,8 +41,13 @@ describe("o tenant da aba", () => {
   })
 
   it("nao dispara consulta de dados antes de saber o ASN", async () => {
-    mockFetch({ "GET /api/asns": { corpo: [] } })
-    montarRota([{ path: "/", element: <Espiao /> }])
+    // O `Peers` e o que faz a prova morder, e nao um enfeite: o `Espiao` so
+    // le o contexto, e com ele sozinho a linha dos caminhos passaria mesmo
+    // sem nenhuma guarda de `enabled` no app inteiro, porque consulta de
+    // dados nenhuma sairia de verdade. A rota do duble esta no mapa para o
+    // caso falhar na assercao, e nao no "rota sem mapa" do arnes
+    mockFetch({ "GET /api/asns": { corpo: [] }, "GET /api/peers": { corpo: [] } })
+    montarRota([{ path: "/", element: <><Espiao /><Peers /></> }])
     await waitFor(() => expect(screen.getByText("asn=null lista=")).toBeTruthy())
     expect(peticoes().map((p) => p.caminho)).toEqual(["/api/asns"])
   })

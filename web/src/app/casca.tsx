@@ -6,19 +6,23 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
 import { sessaoVencida } from "@/api/cliente"
-import { useGrupos, usePeers, usePlano } from "@/api/consultas"
+import { useAsns, useGrupos, usePeers } from "@/api/consultas"
 import { baixar } from "@/lib/copiar"
+import { Falha } from "@/components/Falha"
+import { SemTenant } from "@/components/SemTenant"
 import { ProvedorAcoes } from "./acoes"
 import { useAtalhos } from "./atalhos"
 import type { AcoesDaTela } from "./acoes-contexto"
-import { useAsn } from "./tenant"
+import { useTenant } from "./tenant"
 
 export function Casca() {
-  const plano = usePlano()
   const peers = usePeers()
   const grupos = useGrupos()
   const navegar = useNavigate()
-  const asn = useAsn()
+  const { asn, erro } = useTenant()
+  // a mesma consulta do provedor do tenant, para o "tentar de novo" e para o
+  // estado da lista: a chave e a mesma, entao o dado e um so
+  const lista = useAsns()
 
   const [paletaAberta, setPaletaAberta] = useState(false)
   // o que a tela aberta publica: a paleta e o Ctrl+S leem daqui
@@ -45,11 +49,40 @@ export function Casca() {
     baixar(await resposta.text(), "base.txt")
   }, [asn])
 
+  // Dois estados diferentes que o mesmo `asn` nulo produziria:
+  // - a lista nao chegou (rede fora, 500): e falha de comunicacao, e o
+  //   aviso com tentar de novo e o mesmo das outras telas;
+  // - a lista chegou e esta vazia: e a pasta `peers/` sem arquivo, e o que
+  //   a tela tem a fazer e oferecer o primeiro ASN.
+  // Sem a distincao, a queda da unica rota que sustenta todas as outras
+  // ficava invisivel: as consultas nem saem com o ASN nulo, entao tela
+  // nenhuma tem erro proprio para mostrar.
+  if (asn === null) {
+    // O `erro` do contexto e zerado pelo TanStack quando a consulta sem dado e
+    // refeita (o estado volta a `pending`), e o `errorUpdateCount` e o que
+    // resta da falha enquanto o pedido corre: sem ele o proprio "tentar de
+    // novo" cairia no estado vazio, dizendo que a pasta esta vazia enquanto a
+    // lista ainda nem respondeu
+    const tentando = lista.isFetching
+    const falhou = erro !== null || (tentando && lista.errorUpdateCount > 0)
+    if (falhou) {
+      return (
+        <Falha
+          mensagem="não deu para falar com a API"
+          tentando={tentando}
+          aoTentar={() => void lista.refetch()}
+        />
+      )
+    }
+    // nem falha nem pasta vazia: a lista ainda nao chegou, e afirmar qualquer
+    // das duas coisas aqui seria adivinhar
+    return lista.isSuccess ? <SemTenant /> : null
+  }
+
   const barra = (
     <BarraLateral
       peers={peers.data ?? []}
       grupos={grupos.data ?? []}
-      asn={plano.data?.rede.asn ?? ""}
       aoNovo={navegar}
     />
   )
@@ -74,7 +107,12 @@ export function Casca() {
         </header>
         <main className="min-w-0 flex-1">
           <ProvedorAcoes definir={setAcoes}>
-            <Outlet />
+            {/* A chave no ASN remonta a tela na troca: o rascunho de uma
+                rede nao tem o que fazer na outra, e sem remontar o primeiro
+                salvar depois da troca mandaria o texto da rede anterior com
+                o ?asn= da nova. A perda do rascunho na troca e o que a
+                tarefa 8 pergunta antes de deixar acontecer. */}
+            <Outlet key={asn} />
           </ProvedorAcoes>
         </main>
       </div>

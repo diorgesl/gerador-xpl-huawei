@@ -58,7 +58,10 @@ function ProvedorTenant({ children }: { children: ReactNode }) {
     setEscolhido(novo)
   }, [])
 
-  const valor = useMemo(() => ({ asn, asns, trocar }), [asn, asns, trocar])
+  // a falha da lista vai junto: e ela que separa, na casca, a rede fora do ar
+  // da pasta sem arquivo, e o `asn` nulo e o mesmo nos dois casos
+  const erro = lista.error
+  const valor = useMemo(() => ({ asn, asns, erro, trocar }), [asn, asns, erro, trocar])
   return <ContextoTenant.Provider value={valor}>{children}</ContextoTenant.Provider>
 }
 

@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { BadgeTipo } from "@/components/BadgeTipo"
+import { SeletorAsn } from "@/components/SeletorAsn"
 import { filtrarGrupos, filtrarPeers } from "@/lib/busca"
 import type { GrupoResumo, PeerResumo } from "@/api/consultas"
 import { useSair } from "@/api/sessao"
@@ -18,11 +19,13 @@ const TIPOS = ["cliente", "parceiro", "upstream", "ix", "pni"]
 type Props = {
   peers: PeerResumo[]
   grupos: GrupoResumo[]
-  asn: string
   aoNovo: (destino: string) => void
 }
 
-export function BarraLateral({ peers, grupos, asn, aoNovo }: Props) {
+// o ASN nao entra por prop: quem o mostra e o seletor, que le do contexto e
+// troca a rede da aba. Uma copia de leitura aqui seria mais um lugar para
+// discordar do tenant escolhido
+export function BarraLateral({ peers, grupos, aoNovo }: Props) {
   const [busca, setBusca] = useState("")
   const { pathname } = useLocation()
   const sair = useSair()
@@ -47,11 +50,13 @@ export function BarraLateral({ peers, grupos, asn, aoNovo }: Props) {
 
   return (
     <nav aria-label="Navegação" className="flex h-full flex-col gap-3 p-3">
-      <div className="flex items-baseline justify-between">
+      {/* o seletor fica aqui, e nao na secao de politica: a barra lateral
+          inteira e o unico lugar visivel em toda rota, e a troca de rede vale
+          para todas elas. O link das configuracoes, que era este, passou para
+          dentro do proprio menu */}
+      <div className="flex items-center justify-between">
         <span className="font-semibold">bgpgen</span>
-        <Link to="/configuracoes" className="dado text-xs text-muted-foreground hover:underline">
-          AS{asn}
-        </Link>
+        <SeletorAsn />
       </div>
 
       <div className="relative">

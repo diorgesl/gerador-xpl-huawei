@@ -34,12 +34,20 @@ export type TenantAtual = {
   /** O ASN escolhido, ou null enquanto a lista nao chegou ou esta vazia. */
   asn: string | null
   asns: string[]
+  /**
+   * A falha da lista de ASNs, ou null. E o unico jeito de a casca dizer que o
+   * app esta sem tenant por queda de rede, e nao por pasta vazia: com o asn
+   * nulo as consultas de dados se desabilitam, e nenhuma tela chega a ter um
+   * erro proprio para mostrar.
+   */
+  erro: Error | null
   trocar: (asn: string) => void
 }
 
 export const ContextoTenant = createContext<TenantAtual>({
   asn: null,
   asns: [],
+  erro: null,
   trocar: () => {},
 })
 

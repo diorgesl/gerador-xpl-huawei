@@ -1,7 +1,5 @@
-import { render, screen } from "@testing-library/react"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter } from "react-router-dom"
 import { describe, expect, it, vi } from "vitest"
 import { BarraLateral } from "./BarraLateral"
 import { filtrarGrupos, filtrarPeers } from "@/lib/busca"
@@ -37,18 +35,20 @@ describe("o filtro da busca", () => {
 })
 
 describe("a barra lateral", () => {
-  // o provedor de consultas entrou junto do botao de sair: o useSair le o
-  // QueryClient, e o MemoryRouter cru nao traz nenhum
-  const montar = (props = {}) =>
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <MemoryRouter>
-          <BarraLateral peers={PEERS} grupos={GRUPOS} asn="64512" aoNovo={vi.fn()} {...props} />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
+  // Quem monta e o arnes, e nao mais um MemoryRouter cru: a barra passou a
+  // levar o seletor de ASN, que le o tenant do provedor e so sabe qual e
+  // depois da lista do /api/asns - o `mockFetch` vazio entrega o ambiente do
+  // arnes, que ja traz essa lista. A rota e um coringa porque o que se monta
+  // aqui e a barra, que responde a qualquer endereco: o caco que ela le e o
+  // `pathname`, e nao a rota
+  const montar = (props = {}) => {
+    mockFetch({})
+    return montarRota([
+      { path: "*", element: <BarraLateral peers={PEERS} grupos={GRUPOS} aoNovo={vi.fn()} {...props} /> },
+    ])
+  }
 
-  it("mostra as secoes, os links e o AS da rede", () => {
+  it("mostra as secoes, os links e o AS da rede", async () => {
     montar()
     // as duas listas sao titulo, nao link: o nome do link de um peer e o
     // apelido dele, e o de um grupo e o nome mais a contagem de membros
@@ -59,7 +59,8 @@ describe("a barra lateral", () => {
                           "Configurações"]) {
       expect(screen.getByRole("link", { name: rotulo })).toBeInTheDocument()
     }
-    expect(screen.getByText("AS64512")).toBeInTheDocument()
+    // o AS vem do contexto, que so o sabe depois da lista de ASNs
+    expect(await screen.findByText("AS64512")).toBeInTheDocument()
   })
 
   it("mostra o tipo em badge e a contagem de membros do grupo", () => {
@@ -72,17 +73,19 @@ describe("a barra lateral", () => {
     // `startsWith(para)` acendia /peers/1 em /peers/12: dois itens acesos, e o
     // errado era o do registro que o operador nao abriu. O que compara e o
     // segmento inteiro, e nao o prefixo do texto
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <MemoryRouter initialEntries={["/peers/12"]}>
+    mockFetch({})
+    montarRota(
+      [{
+        path: "*",
+        element: (
           <BarraLateral
             peers={[...PEERS, { id: 12, token: "268999", tipo: "cliente", asn: 268999, apelido: "NOVO", nome: "Cliente NOVO", grupo_id: null }]}
             grupos={GRUPOS}
-            asn="64512"
             aoNovo={vi.fn()}
           />
-        </MemoryRouter>
-      </QueryClientProvider>,
+        ),
+      }],
+      "/peers/12",
     )
     const item = (destino: string) => screen.getAllByRole("link").find((l) => l.getAttribute("href") === destino)
     expect(item("/peers/12")).toHaveAttribute("aria-current", "page")
@@ -116,7 +119,7 @@ describe("a barra lateral", () => {
     // QueryClient: aqui quem monta e o arnes, com a rota de destino de verdade
     mockFetch({ "POST /api/logout": { corpo: { logado: false, usuario: null } } })
     montarRota([
-      { path: "/peers", element: <BarraLateral peers={[]} grupos={[]} asn="64512" aoNovo={() => {}} /> },
+      { path: "/peers", element: <BarraLateral peers={[]} grupos={[]} aoNovo={() => {}} /> },
       { path: "/login", element: <h1>entrou na tela de login</h1> },
     ], "/peers")
 
