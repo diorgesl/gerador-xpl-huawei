@@ -112,6 +112,21 @@ class RedeForm(Modelo):
     politica: str = ""
 
 
+class AsnPedido(Modelo):
+    """O par do formulario de um tenant novo.
+
+    Os dois campos sao texto, como os do resto do app: quem converte e o
+    _asn_do_formulario, que devolve o erro no campo que o causou. O par
+    inteiro vem junto porque um ASN de 32 bits precisa do namespace para
+    ter um arquivo que funcione: sem ele, o tenant nasceria estourando na
+    primeira leitura e a tela nao teria como conserta-lo, porque o plano
+    do tenant e justamente o que falha.
+    """
+
+    asn: str = ""
+    politica: str = ""
+
+
 class TabelaTipo(BaseModel):
     lp_base: int | None
     route_limit: int | None

@@ -70,6 +70,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Asns
+         * @description Os ASNs com arquivo na pasta, para o seletor da tela.
+         *
+         *     Esta e a unica rota de dados que nao pede o ?asn=: ela e quem diz
+         *     quais existem, e nao ha o que resolver antes dela. O test que varre a
+         *     tabela de rotas a dispensa pelo mesmo motivo.
+         */
+        get: operations["listar_asns_api_asns_get"];
+        put?: never;
+        /**
+         * Criar Asn
+         * @description Cria o arquivo de um tenant novo e devolve a lista com ele dentro.
+         *
+         *     A resposta e a lista inteira, e nao o registro criado: o seletor que
+         *     chamou precisa dela de qualquer jeito para desenhar as opcoes, e uma
+         *     volta a menos e uma janela a menos com o ASN novo fora da lista.
+         *
+         *     Nada e gravado antes de as duas conferencias passarem: a de faixa e de
+         *     par, do _asn_do_formulario, e a de arquivo ja existente, do criar.
+         */
+        post: operations["criar_asn_api_asns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plano": {
         parameters: {
             query?: never;
@@ -510,6 +545,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AsnPedido
+         * @description O par do formulario de um tenant novo.
+         *
+         *     Os dois campos sao texto, como os do resto do app: quem converte e o
+         *     _asn_do_formulario, que devolve o erro no campo que o causou. O par
+         *     inteiro vem junto porque um ASN de 32 bits precisa do namespace para
+         *     ter um arquivo que funcione: sem ele, o tenant nasceria estourando na
+         *     primeira leitura e a tela nao teria como conserta-lo, porque o plano
+         *     do tenant e justamente o que falha.
+         */
+        AsnPedido: {
+            /**
+             * Asn
+             * @default
+             */
+            asn: string;
+            /**
+             * Politica
+             * @default
+             */
+            politica: string;
+        };
         /** Aviso */
         Aviso: {
             /** Campo */
@@ -1318,6 +1376,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessaoResposta"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+        };
+    };
+    listar_asns_api_asns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+        };
+    };
+    criar_asn_api_asns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AsnPedido"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
                 };
             };
             /** @description Not Found */

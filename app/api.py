@@ -19,12 +19,13 @@ from app import formulario as form
 from app import peers as peers_mod
 from app import plan, prefixes, render, validate
 from app import tenants as tenants_mod
-from app.modelos_api import (Aviso, Blocos, BlocosIrrPedido, BlocosTexto,
-                             Config, ErroResposta, GrupoForm, GrupoRegistro,
-                             GrupoResumo, GrupoSalvo, IrrPedido, LoginPedido,
-                             Membro, PeerForm, PeerRegistro, PeerResumo,
-                             PeerSalvo, Plano, Prefixos, Previa, RedeAtual,
-                             RedeForm, Saida, SecaoConfig, SessaoResposta)
+from app.modelos_api import (AsnPedido, Aviso, Blocos, BlocosIrrPedido,
+                             BlocosTexto, Config, ErroResposta, GrupoForm,
+                             GrupoRegistro, GrupoResumo, GrupoSalvo, IrrPedido,
+                             LoginPedido, Membro, PeerForm, PeerRegistro,
+                             PeerResumo, PeerSalvo, Plano, Prefixos, Previa,
+                             RedeAtual, RedeForm, Saida, SecaoConfig,
+                             SessaoResposta)
 
 
 def _texto(valor):
@@ -189,6 +190,45 @@ def _modelo_rede(rede):
     # o proprio numero
     politica = "" if rede.politica == rede.asn else str(rede.politica)
     return RedeAtual(asn=rede.ASN, politica=politica)
+
+
+@roteador.get("/asns", response_model=list[str])
+def listar_asns():
+    """Os ASNs com arquivo na pasta, para o seletor da tela.
+
+    Esta e a unica rota de dados que nao pede o ?asn=: ela e quem diz
+    quais existem, e nao ha o que resolver antes dela. O test que varre a
+    tabela de rotas a dispensa pelo mesmo motivo.
+    """
+    return [str(asn) for asn in tenants_mod.listar()]
+
+
+@roteador.post("/asns", response_model=list[str], status_code=201)
+def criar_asn(pedido: AsnPedido):
+    """Cria o arquivo de um tenant novo e devolve a lista com ele dentro.
+
+    A resposta e a lista inteira, e nao o registro criado: o seletor que
+    chamou precisa dela de qualquer jeito para desenhar as opcoes, e uma
+    volta a menos e uma janela a menos com o ASN novo fora da lista.
+
+    Nada e gravado antes de as duas conferencias passarem: a de faixa e de
+    par, do _asn_do_formulario, e a de arquivo ja existente, do criar.
+    """
+    asn, politica, erros = form._asn_do_formulario(
+        {"asn_rede": pedido.asn, "asn_politica": pedido.politica})
+    if not erros:
+        try:
+            tenants_mod.criar(asn, politica)
+        except ValueError as exc:
+            # a chave e `asn_rede`, e nao `asn`, porque e o nome do campo que
+            # o dialogo da tela desenha, o mesmo do fieldset das
+            # Configuracoes. Um erro numa chave que campo nenhum tem seria
+            # uma recusa invisivel: o 422 volta, o dialogo nao pinta nada e o
+            # operador clica de novo no mesmo botao
+            erros = [validate.Erro("asn_rede", str(exc))]
+    if erros:
+        return _falha(422, erros)
+    return [str(n) for n in tenants_mod.listar()]
 
 
 @roteador.get("/plano", response_model=Plano)
