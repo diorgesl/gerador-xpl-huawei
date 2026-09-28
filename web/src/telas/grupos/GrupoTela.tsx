@@ -21,6 +21,7 @@ import { usePrevia } from "@/api/previa"
 import { copiarComAviso } from "@/lib/copiar"
 import { cn } from "@/lib/utils"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
+import { usePublicarRascunho } from "@/app/rascunho"
 import { useAsn } from "@/app/tenant"
 import { FormularioGrupo } from "./FormularioGrupo"
 import { CAMPO_BRANCO_GRUPO } from "./camposGrupo"
@@ -292,6 +293,9 @@ export function GrupoTela() {
   // que nao e o da tela
   const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
   const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
+  // o mesmo sujo do aviso de saida, publicado: e ele que faz o seletor de ASN
+  // perguntar antes de a troca remontar a tela e levar o rascunho junto
+  usePublicarRascunho(sujo)
   usePublicarAcoes({
     // O Ctrl+S nao pode gravar numa tela que ainda nao tem o registro: enquanto
     // o plano ou o registro nao chegaram, o formulario esta em branco e o PUT

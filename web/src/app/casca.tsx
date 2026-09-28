@@ -13,6 +13,7 @@ import { SemTenant } from "@/components/SemTenant"
 import { ProvedorAcoes } from "./acoes"
 import { useAtalhos } from "./atalhos"
 import type { AcoesDaTela } from "./acoes-contexto"
+import { ContextoDefinirRascunho, ContextoLerRascunho } from "./rascunho"
 import { useTenant } from "./tenant"
 
 export function Casca() {
@@ -27,6 +28,11 @@ export function Casca() {
   const [paletaAberta, setPaletaAberta] = useState(false)
   // o que a tela aberta publica: a paleta e o Ctrl+S leem daqui
   const [acoes, setAcoes] = useState<AcoesDaTela>({})
+  // o estado, e nao um ref, porque o seletor de ASN precisa re-renderizar
+  // quando ele muda: e no render seguinte que a pergunta pela troca aparece ou
+  // nao. Ele mora na casca porque as duas pontas estao embaixo dela - a tela
+  // que publica, no Outlet, e o seletor, na barra lateral
+  const [sujo, setSujo] = useState(false)
 
   const abrirPaleta = useCallback(() => setPaletaAberta(true), [])
   useAtalhos({ aoSalvar: acoes.aoSalvar, aoAbrirPaleta: abrirPaleta })
@@ -62,9 +68,15 @@ export function Casca() {
     // refeita (o estado volta a `pending`), e o `errorUpdateCount` e o que
     // resta da falha enquanto o pedido corre: sem ele o proprio "tentar de
     // novo" cairia no estado vazio, dizendo que a pasta esta vazia enquanto a
-    // lista ainda nem respondeu
+    // lista ainda nem respondeu.
+    // O `data === undefined` e o que separa este retentar do refetch de fundo
+    // de quem ja tem dado, como nas outras quatro telas: o contador e cumulativo
+    // e nunca zera, entao sem ele uma pasta que ja falhou uma vez e voltou
+    // vazia viraria "nao deu para falar com a API" a cada refetch de fundo
+    // (o foco da janela, o staleTime), por um pedido que nem esta falhando
     const tentando = lista.isFetching
-    const falhou = erro !== null || (tentando && lista.errorUpdateCount > 0)
+    const falhou = erro !== null ||
+      (tentando && lista.data === undefined && lista.errorUpdateCount > 0)
     if (falhou) {
       return (
         <Falha
@@ -88,44 +100,51 @@ export function Casca() {
   )
 
   return (
-    <div className="flex min-h-dvh">
-      {/* a partir de 1024px a barra fica fixa; abaixo disso vira gaveta */}
-      <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
-        <div className="sticky top-0 h-dvh overflow-y-auto">{barra}</div>
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b bg-card p-2 lg:hidden">
-          <Sheet>
-            <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Abrir navegação" />}>
-              <Menu className="size-5" />
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0">
-              {barra}
-            </SheetContent>
-          </Sheet>
-          <span className="font-semibold">bgpgen</span>
-        </header>
-        <main className="min-w-0 flex-1">
-          <ProvedorAcoes definir={setAcoes}>
-            {/* A chave no ASN remonta a tela na troca: o rascunho de uma
-                rede nao tem o que fazer na outra, e sem remontar o primeiro
-                salvar depois da troca mandaria o texto da rede anterior com
-                o ?asn= da nova. A perda do rascunho na troca e o que a
-                tarefa 8 pergunta antes de deixar acontecer. */}
-            <Outlet key={asn} />
-          </ProvedorAcoes>
-        </main>
-      </div>
+    // os dois contextos do rascunho envolvem a arvore inteira, e nao so o
+    // Outlet: a barra lateral (o seletor que pergunta) esta fora do main, e a
+    // tela que publica esta dentro dele
+    <ContextoDefinirRascunho.Provider value={setSujo}>
+      <ContextoLerRascunho.Provider value={sujo}>
+        <div className="flex min-h-dvh">
+          {/* a partir de 1024px a barra fica fixa; abaixo disso vira gaveta */}
+          <aside className="hidden w-64 shrink-0 border-r bg-card lg:block">
+            <div className="sticky top-0 h-dvh overflow-y-auto">{barra}</div>
+          </aside>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="flex items-center gap-2 border-b bg-card p-2 lg:hidden">
+              <Sheet>
+                <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Abrir navegação" />}>
+                  <Menu className="size-5" />
+                </SheetTrigger>
+                <SheetContent side="left" className="w-72 p-0">
+                  {barra}
+                </SheetContent>
+              </Sheet>
+              <span className="font-semibold">bgpgen</span>
+            </header>
+            <main className="min-w-0 flex-1">
+              <ProvedorAcoes definir={setAcoes}>
+                {/* A chave no ASN remonta a tela na troca: o rascunho de uma
+                    rede nao tem o que fazer na outra, e sem remontar o primeiro
+                    salvar depois da troca mandaria o texto da rede anterior com
+                    o ?asn= da nova. A perda do rascunho na troca e o que a
+                    tarefa 8 pergunta antes de deixar acontecer. */}
+                <Outlet key={asn} />
+              </ProvedorAcoes>
+            </main>
+          </div>
 
-      <Paleta
-        aberta={paletaAberta}
-        aoFechar={() => setPaletaAberta(false)}
-        peers={peers.data ?? []}
-        grupos={grupos.data ?? []}
-        aoDuplicar={duplicar}
-        aoCopiarBloco={copiarBloco}
-        aoBaixarBase={baixarBase}
-      />
-    </div>
+          <Paleta
+            aberta={paletaAberta}
+            aoFechar={() => setPaletaAberta(false)}
+            peers={peers.data ?? []}
+            grupos={grupos.data ?? []}
+            aoDuplicar={duplicar}
+            aoCopiarBloco={copiarBloco}
+            aoBaixarBase={baixarBase}
+          />
+        </div>
+      </ContextoLerRascunho.Provider>
+    </ContextoDefinirRascunho.Provider>
   )
 }

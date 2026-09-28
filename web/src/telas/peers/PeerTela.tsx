@@ -23,6 +23,7 @@ import { usePrevia } from "@/api/previa"
 import { copiarComAviso } from "@/lib/copiar"
 import { cn } from "@/lib/utils"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
+import { usePublicarRascunho } from "@/app/rascunho"
 import { useAsn } from "@/app/tenant"
 import { FormularioPeer } from "./FormularioPeer"
 import { CAMPO_BRANCO } from "./camposPeer"
@@ -322,6 +323,9 @@ export function PeerTela() {
   // ai o item nem aparece, em vez de aparecer e nao fazer nada
   const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
   const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
+  // o mesmo sujo do aviso de saida, publicado: e ele que faz o seletor de ASN
+  // perguntar antes de a troca remontar a tela e levar o rascunho junto
+  usePublicarRascunho(sujo)
   usePublicarAcoes({
     // Sem o dado na tela o formulario nem esta montado: o Ctrl+S mandaria um PUT
     // com o formulario em branco, e a recusa da API nao apareceria aqui, porque

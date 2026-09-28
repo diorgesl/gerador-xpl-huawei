@@ -12,6 +12,7 @@ import { chaves, lerRecusa, recusaComMarca, temRecusa, useBlocos } from "@/api/c
 import { avisarFalhaDeRede, falhaDoServidor } from "@/lib/aviso"
 import { copiarComAviso } from "@/lib/copiar"
 import { usePublicarAcoes } from "@/app/acoes-contexto"
+import { usePublicarRascunho } from "@/app/rascunho"
 import { useAsn } from "@/app/tenant"
 
 /** O texto dos dois editores, no formato que a API recebe e devolve. */
@@ -195,6 +196,9 @@ export function PrefixosTela() {
   // e o da tela
   const [abaAtiva, setAbaAtiva] = useState(abas[0]?.id ?? "")
   const blocoAberto = (abas.find((a) => a.id === abaAtiva) ?? abas[0])?.conteudo ?? null
+  // o mesmo sujo do aviso de saida, publicado: e ele que faz o seletor de ASN
+  // perguntar antes de a troca remontar a tela e levar o rascunho junto
+  usePublicarRascunho(sujo)
   // O salvamento exige o texto conhecido: enquanto o GET /api/blocos nao
   // responde, os dois editores estao vazios e o backend ACEITA esse vazio
   // (`validar_blocos` nao tem o que apontar), gravando um out/blocos.txt sem
