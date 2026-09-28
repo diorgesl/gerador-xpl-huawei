@@ -1497,7 +1497,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 O `?asn=` desta tela e o corpo do `PUT /api/rede` já foram tratados no passo 8 da tarefa 5: sem isso o `tsc -b` não fechava lá, e o passo de build de quem deixa a linha quebrada não prova nada. O que sobra aqui é o comportamento da tela, que é uma mudança de interface com o operador e merece o próprio gate: o campo do AS vira leitura, com a nota que aponta para o seletor, e as asserções do teste que falam dele acompanham.
 
-`web/src/telas/configuracoes/ConfiguracoesTela.tsx`: o `Input` do AS (linhas 98-106) vira texto.
+`web/src/telas/configuracoes/ConfiguracoesTela.tsx`: o `Input` do AS (linhas 98-106) vira texto. O `erro={erros.asn_rede}` fica: o campo ser de leitura não impede o servidor de recusar nele (o `PUT /api/rede` passa o ASN do tenant pelo `_asn_do_formulario`, e um arquivo posto à mão com ASN reservado volta 422 nessa chave), e o ramo 4xx desta tela pinta campo em vez de dar toast — sem a prop, a recusa não aparece em lugar nenhum.
 
 ```tsx
           {/* O campo nao e editavel nesta rodada: quem troca de ASN e o
@@ -1505,7 +1505,7 @@ O `?asn=` desta tela e o corpo do `PUT /api/rede` já foram tratados no passo 8 
               Editar aqui renomearia o arquivo, e o rename fica para a
               rodada seguinte. Sem o rename, um campo que grava e nao muda
               nada seria o campo mentindo. */}
-          <Campo nome="asn_rede" rotulo="AS da rede"
+          <Campo nome="asn_rede" rotulo="AS da rede" erro={erros.asn_rede}
                  ajuda="quem troca e o seletor, na barra lateral">
             <Input id="asn_rede" className="dado" value={rede.asn} readOnly />
           </Campo>
