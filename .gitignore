@@ -5,9 +5,6 @@
 /.claude/*/.venv/
 .superpowers/
 
-# cache do bgpq4: derivado do IRR, refaz com o botao de atualizar
-out/.cache/
-
 # python
 __pycache__/
 *.py[cod]
@@ -28,18 +25,29 @@ web/playwright-report/
 # macOS
 .DS_Store
 
-# saida gerada: derivada do peers.yaml, nao e fonte
-out/*.txt
+# saida gerada: derivada do tenant, nao e fonte. A pasta por ASN entra
+# inteira: out/*.txt nao casa com out/264130/blocos.txt, e sem esta linha os
+# blocos de producao aparecem como nao rastreados e entram num `git add .`
+out/*/
+out/.cache/
 
+# o cadastro de cada rede. A barra da frente ancora a regra na pasta da
+# raiz: um `peers/` solto casaria tambem com a web/src/telas/peers/ dos
+# componentes de peer, e um arquivo novo la nasceria ignorado
+/peers/
+peers.yaml.bak
+
+# excecao: o cadastro do e2e e fixture do repositorio; o peers/ ignorado
+# acima e o do equipamento, na raiz
+!web/e2e/peers/
+
+# o cadastro de antes da pasta dos tenants: quem migra e o boot, e o .bak
+# fica para tras
 peers.yaml
 
 # o login: hash da senha e o segredo que assina o cookie. O arquivo nasce
 # no primeiro boot do app, e nao vem do repositorio
 usuarios.yaml
-
-# excecao: o cadastro do e2e e fixture do repositorio; o peers.yaml
-# ignorado acima e o do equipamento
-!web/e2e/peers.yaml
 
 # config real do equipamento: fica no disco, nao no repositorio
 BGP_EXEMPLO.txt

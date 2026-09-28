@@ -65,7 +65,7 @@ def _caminho(caminho=None):
     argumento congela o valor que a constante tinha no import, e quem
     troca a constante depois disso (os testes, com monkeypatch) continuaria
     falando com o arquivo de sempre. Quem le a constante no momento da
-    chamada e este helper, como o _yaml() do api.py faz com o PEERS_YAML.
+    chamada e este helper, como o tenants.caminho() faz com a PASTA.
     """
     return Path(caminho or USUARIOS_YAML)
 

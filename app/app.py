@@ -2,7 +2,8 @@
 
 O uvicorn e o unico processo: ele serve a API em /api, o bloco base em
 /base.txt, os arquivos do build do front em /assets e o index.html da SPA nas
-rotas dela. A raiz leva para a SPA. Sem banco: o estado e o peers.yaml.
+rotas dela. A raiz leva para a SPA. Sem banco: o estado e a pasta peers/, um
+arquivo por ASN da rede.
 """
 
 import os
@@ -106,7 +107,7 @@ def baixar_base(asn: int = Query(...)):
 # vem de BGPGEN_WEB, e o padrao e web/dist na raiz do projeto.
 #
 # O caminho e lido a cada requisicao, e nao no import: os testes o trocam, como
-# fazem com o PEERS_YAML.
+# fazem com a PASTA e a SAIDA do tenants.
 
 SEM_BUILD = ("front nao compilado: rode `npm run build` em `web/` "
              "ou use o Vite na 5173")

@@ -7,19 +7,21 @@ uma SPA em `web/`, servida pelo próprio FastAPI.
 ## O que é
 
 A SPA lista os peers na barra da esquerda e abre cada um num formulário. Salvo o
-formulário, o app escreve o bloco daquela sessão em `out/<token>-<tipo>.txt`,
-sobrescrevendo só esse arquivo: gerar um peer não toca na saída dos outros. O
-bloco base, que é igual para todos, sai em `GET /base.txt`.
+formulário, o app escreve o bloco daquela sessão em
+`out/<ASN>/<token>-<tipo>.txt`, sobrescrevendo só esse arquivo: gerar um peer
+não toca na saída dos outros. O bloco base, que é igual para todos, sai em
+`GET /base.txt`.
 
 Por baixo dela o app serve uma API JSON em `/api`, que é quem fala com o
-`peers.yaml`: a SPA não reimplementa regra nenhuma, e o parsing, a validação e o
-render continuam no Python. A raiz (`/`) leva para `/peers`, e a documentação
-interativa da API fica em `/docs`. A prévia (`POST /api/peers/previa`) monta o
-bloco sem gravar nada. O desenho está em
+cadastro do tenant: a SPA não reimplementa regra nenhuma, e o parsing, a
+validação e o render continuam no Python. A raiz (`/`) leva para `/peers`, e a
+documentação interativa da API fica em `/docs`. A prévia
+(`POST /api/peers/previa`) monta o bloco sem gravar nada. O desenho está em
 `docs/superpowers/specs/2026-09-26-front-spa-design.md`.
 
-O estado é o `peers.yaml`, o cadastro dos peers. O que está em `out/` é saída, e
-está no `.gitignore`.
+O estado é a pasta `peers/`, um arquivo por ASN da rede: `peers/<ASN>.yaml`,
+com o cadastro dos peers daquele AS. O que está em `out/<ASN>/` é saída, e está
+no `.gitignore`.
 
 ## O que não faz
 
@@ -60,7 +62,7 @@ docker compose up --build
 O `compose.yaml` não vem no repositório: ele é o arquivo do operador e pode
 carregar a senha do admin, então o que fica versionado é o exemplo. A tela fica
 em http://127.0.0.1:8765/, que cai em `/peers`. O `compose.yaml` monta o
-checkout em `/app`, então o `peers.yaml` e o `out/` são os do repositório, e
+checkout em `/app`, então a pasta `peers/` e o `out/` são os do repositório, e
 editar um template de bloco vale na hora. Sem essa linha de `volumes:`, a imagem
 roda sozinha com o que foi copiado no build.
 
@@ -122,7 +124,7 @@ Duas variáveis mexem nisso:
 | `BGPGEN_COOKIE_SEGURO=1` | Liga o atributo `Secure` do cookie, para quem põe o app atrás de um TLS |
 
 O `usuarios.yaml` (o hash da senha e o segredo dos cookies) fica na raiz, ao
-lado do `peers.yaml`, e é ignorado pelo git e pelo build da imagem.
+lado da pasta `peers/`, e é ignorado pelo git e pelo build da imagem.
 
 ### Testes do front
 
@@ -142,13 +144,13 @@ suíte do Python quando o front está instalado: o `web/node_modules` no lugar e
 `npm` — o `node_modules` da máquina chega lá pelo bind mount do `compose.yaml`,
 e é por isso que a condição olha os dois.
 
-Os testes do Playwright sobem um uvicorn com um `peers.yaml` temporário, copiado
-de `web/e2e/peers.yaml` para `web/e2e/.tmp/` pelo `web/e2e/global-setup.ts`: o
-app resolve o cadastro a partir da raiz do projeto, e a cópia é o que permite
-apontá-lo para outro cadastro sem mudar o app. A cópia **não** pode ser um
-`globalSetup` do Playwright: ele roda depois do `webServer`, e o servidor precisa
-da árvore antes de subir. O e2e serve o `web/dist` de verdade, então o
-`npm run build` vem antes — o script `e2e` faz isso.
+Os testes do Playwright sobem um uvicorn com uma pasta `peers/` temporária, com o
+tenant de `web/e2e/peers/64512.yaml` copiado para `web/e2e/.tmp/peers/` pelo
+`web/e2e/global-setup.ts`: o app resolve a pasta a partir da raiz do projeto, e a
+cópia é o que permite apontá-lo para outro cadastro sem mudar o app. A cópia
+**não** pode ser um `globalSetup` do Playwright: ele roda depois do `webServer`, e
+o servidor precisa da árvore antes de subir. O e2e serve o `web/dist` de verdade,
+então o `npm run build` vem antes — o script `e2e` faz isso.
 
 Os 19 casos são o setup, que loga uma vez antes dos outros, os 10 do
 `fluxos.spec.ts` e os 2 do `login.spec.ts`, que rodam só no chromium, mais os 3
@@ -159,19 +161,20 @@ não expõe o `clipboard-read`: por isso a saída conta 18 passando e 1 pulado.
 
 A tela "Config completa" (`/config-completa`) monta a config inteira nesta
 ordem, para conferir antes de colar e para copiar tudo de uma vez. Ela marca o
-que ainda não está em `out/`, que é a parte que provavelmente não subiu.
+que ainda não está em `out/<ASN>/`, que é a parte que provavelmente não subiu.
 
 1. **O bloco base, uma vez, antes de tudo.** A tela serve em `GET /base.txt`,
    no botão "baixar bloco base". O corpo é montado na hora do download, então o
    que o navegador salva é sempre o que o `plan.py` diz agora: não há arquivo em
-   `out/` guardando uma versão antiga, nem aviso de desatualizado para conferir.
-   Salve onde quiser e cole antes dos blocos de peer.
+   `out/<ASN>/` guardando uma versão antiga, nem aviso de desatualizado para
+   conferir. Salve onde quiser e cole antes dos blocos de peer.
 2. **O bloco de cada grupo**, antes dos membros dele:
-   `out/grupo-<nome>.txt`. O membro sem política própria herda o que o grupo
-   define, e a sessão dele chama o grupo pelo nome: colar o membro antes deixa
-   a referência pendurada.
-3. **O bloco de cada peer**, na ordem que quiser: `out/<token>-cliente.txt`,
-   `out/<token>-upstream.txt`, `out/<token>-ix.txt`, `out/<token>-pni.txt`.
+   `out/<ASN>/grupo-<nome>.txt`. O membro sem política própria herda o que o
+   grupo define, e a sessão dele chama o grupo pelo nome: colar o membro antes
+   deixa a referência pendurada.
+3. **O bloco de cada peer**, na ordem que quiser:
+   `out/<ASN>/<token>-cliente.txt`, `out/<ASN>/<token>-upstream.txt`,
+   `out/<ASN>/<token>-ix.txt`, `out/<ASN>/<token>-pni.txt`.
 4. **A `CL-PEER-<T>` do quadro "ao criar o peer"**, na primeira vez que aquela
    sessão subir, e de novo sempre que a lista mudar. Vale para cliente e
    upstream: são os dois tipos que ganham community própria de sessão. O IX não
@@ -180,8 +183,8 @@ que ainda não está em `out/`, que é a parte que provavelmente não subiu.
    por linha" do formulário, então re-colar o quadro troca o conteúdo pelo que
    está no cadastro; reaplicar o bloco do peer mexe só nos filtros e não tem
    como zerar o que está lá dentro.
-5. **O bloco dos prefixos do próprio AS**, se houver: `out/blocos.txt`, escrito
-   no salvar da seção de blocos. Ele traz as estáticas de ancoragem, os
+5. **O bloco dos prefixos do próprio AS**, se houver: `out/<ASN>/blocos.txt`,
+   escrito no salvar da seção de blocos. Ele traz as estáticas de ancoragem, os
    `ORIGEM-<endereço>_<máscara>` e as linhas `network` de cada família, na
    ordem em que se cola. O bloco de remoção sai na tela, ao lado do de
    originação.

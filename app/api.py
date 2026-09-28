@@ -397,7 +397,7 @@ def excluir_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
 
 
 def _ler(caminho):
-    """O que esta salvo em out/, ou None quando o arquivo nao existe.
+    """O que esta salvo em out/<ASN>/, ou None quando o arquivo nao existe.
 
     O errors="replace" e para o arquivo editado a mao com acento: o diff da
     tela mostra a linha estranha em vez de a previa inteira cair.
