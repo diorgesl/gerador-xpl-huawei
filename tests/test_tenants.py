@@ -161,10 +161,28 @@ def test_o_boot_nao_cai_com_peers_yaml_torto(pasta, usuarios_em_tmp):
     from fastapi.testclient import TestClient
 
     from app import app as mod
-    from app import auth
 
     (pasta / "peers.yaml").write_text("asn: 264130\n")
     with TestClient(mod.app) as cliente:
         assert cliente.get("/api/sessao").status_code == 200
     assert tenants.listar() == []
     assert (pasta / "peers.yaml").exists()
+
+
+def test_o_boot_sobrevive_a_um_yaml_que_nao_parseia(pasta, usuarios_em_tmp):
+    """Um yaml torto de sintaxe nao e ValueError nem OSError.
+
+    O safe_load estoura um ParserError, que escaparia de um except estreito e
+    deixaria o app num laco de restart do docker por causa de uma virgula. O
+    arquivo fica onde esta, sem .bak, e a lista fica vazia.
+    """
+    from fastapi.testclient import TestClient
+
+    from app import app as mod
+
+    (pasta / "peers.yaml").write_text("asn: [264130\n")
+    with TestClient(mod.app) as cliente:
+        assert cliente.get("/api/sessao").status_code == 200
+    assert tenants.listar() == []
+    assert (pasta / "peers.yaml").read_text() == "asn: [264130\n"
+    assert not (pasta / "peers.yaml.bak").exists()

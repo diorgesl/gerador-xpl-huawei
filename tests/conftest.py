@@ -42,6 +42,31 @@ def fake_bgpq4(tmp_path, monkeypatch):
 SENHA_DE_TESTE = "senha-de-teste"
 
 
+@pytest.fixture(autouse=True)
+def sem_o_cadastro_do_checkout(tmp_path_factory, monkeypatch):
+    """Nenhum teste enxerga o peers.yaml, a pasta peers/ nem o out/ do checkout.
+
+    O boot roda a migracao, e a migracao MOVE o peers.yaml: sem este patch,
+    um pytest rodado no checkout do operador levaria o cadastro de producao
+    para peers/<asn>.yaml e deixaria um .bak atras.
+
+    O diretorio e um por teste e separado do tmp_path do caso de proposito:
+    meia duzia de testes fotografa a arvore do tmp_path para provar que uma
+    recusa nao deixou rastro (o `arvore` do dados_api.py), e o que o boot
+    escreve nao e rastro de requisicao nenhuma.
+
+    O patch e autouse, e nao so na fixture `api`, porque quem monta
+    TestClient por conta propria passa por fora dela.
+    """
+    from app import tenants
+
+    pasta = tmp_path_factory.mktemp("tenants")
+    monkeypatch.setattr(tenants, "PASTA", pasta / "peers")
+    monkeypatch.setattr(tenants, "SAIDA", pasta / "out")
+    monkeypatch.setattr(tenants, "ORIGEM", pasta / "peers.yaml")
+    monkeypatch.setattr(tenants, "BKP", pasta / "peers.yaml.bak")
+
+
 @pytest.fixture
 def usuarios_em_tmp(tmp_path_factory, monkeypatch):
     """O usuarios.yaml num tmp proprio, e a senha de teste no ambiente.

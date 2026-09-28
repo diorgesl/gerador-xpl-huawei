@@ -35,8 +35,15 @@ async def ciclo(app: FastAPI):
     auth.bootstrap()
     try:
         migrado = tenants.migrar()
-    except (ValueError, OSError) as exc:
-        print("bgpgen: peers.yaml nao migrou: %s" % exc, flush=True)
+    except Exception as exc:
+        # Qualquer coisa: o arquivo e editavel a mao, e um yaml torto de
+        # sintaxe nao e ValueError nem OSError - o safe_load estoura um
+        # ParserError, e uma raiz que nao e um mapa estoura AttributeError
+        # no .get do carregar_asn. Deixar qualquer um dos dois subir daqui
+        # poe o app num laco de restart do docker por causa de uma virgula
+        # no cadastro, que e exatamente o que a migracao tolerante existe
+        # para evitar.
+        print("bgpgen: a migracao do peers.yaml parou: %s" % exc, flush=True)
     else:
         if migrado is not None:
             print("bgpgen: peers.yaml virou %s (copia em peers.yaml.bak)"
