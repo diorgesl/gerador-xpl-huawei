@@ -1,11 +1,12 @@
 """A API dos prefixos proprios do AS."""
 
 from app import peers as peers_mod
-from dados_api import BLOCOS, arvore
+from dados_api import ASN_DE_TESTE, BLOCOS, arvore, caminho_tenant
 
 
 def _salvo(tmp_path):
-    return (tmp_path / "out" / "blocos.txt").read_text(encoding="ascii")
+    return (tmp_path / "out" / str(ASN_DE_TESTE)
+            / "blocos.txt").read_text(encoding="ascii")
 
 
 def test_sem_blocos_o_texto_e_vazio_e_nao_ha_saida(api):
@@ -21,16 +22,17 @@ def test_salvar_grava_o_yaml_e_o_out(api, tmp_path):
                                     "38.252.64.0/24 64512:211")
     assert _salvo(tmp_path) == corpo["originacao"]
     assert "undo xpl route-filter ORIGEM-38-252-64-0_22" in corpo["remover"]
-    blocos = peers_mod.carregar_blocos(tmp_path / "peers.yaml")
+    blocos = peers_mod.carregar_blocos(caminho_tenant(tmp_path))
     assert [b.prefixo for b in blocos["v4"]] == ["38.252.64.0/22", "38.252.64.0/24"]
     assert api.get("/api/blocos").json() == corpo
 
 
 def test_prefixo_torto_e_recusado_sem_gravar(api, tmp_path):
+    antes = arvore(tmp_path)
     r = api.put("/api/blocos", json={"v4": "torto", "v6": ""})
     assert r.status_code == 422
     assert r.json()["erros"]["blocos_v4"] == "prefixo invalido: torto (esperado CIDR)"
-    assert arvore(tmp_path) == {}
+    assert arvore(tmp_path) == antes
 
 
 def test_fora_de_servico_fica_no_texto_e_so_sai_na_remocao(api):
@@ -43,9 +45,10 @@ def test_fora_de_servico_fica_no_texto_e_so_sai_na_remocao(api):
 
 
 def test_a_previa_dos_blocos_nao_grava_e_bate_com_o_salvar(api, tmp_path):
+    antes = arvore(tmp_path)
     previa = api.post("/api/blocos/previa", json=BLOCOS).json()
     assert previa["salvo"] is None and previa["arquivo"] == "blocos.txt"
-    assert arvore(tmp_path) == {}
+    assert arvore(tmp_path) == antes
     api.put("/api/blocos", json=BLOCOS)
     assert previa["bloco"] == _salvo(tmp_path)
     assert api.post("/api/blocos/previa", json=BLOCOS).json()["salvo"] == _salvo(tmp_path)
@@ -59,6 +62,10 @@ def test_a_previa_com_prefixo_torto_volta_o_erro(api):
 
 
 def test_o_irr_mescla_e_marca_o_ausente_sem_gravar(api, tmp_path, fake_bgpq4):
+    # a consulta escreve o cache do bgpq4, e isso e dela; o que ela nao toca
+    # e o cadastro, que e o que o "sem gravar" deste caso sempre quis dizer
+    cadastro = caminho_tenant(tmp_path)
+    antes = cadastro.read_bytes()
     r = api.post("/api/blocos/irr", json=BLOCOS)
     assert r.status_code == 200, r.text
     assert r.json() == {
@@ -66,7 +73,7 @@ def test_o_irr_mescla_e_marca_o_ausente_sem_gravar(api, tmp_path, fake_bgpq4):
                "38.252.64.0/22 64512:613 64512:621  !- nao veio na consulta ao IRR\n"
                "38.252.64.0/24 64512:211  !- nao veio na consulta ao IRR"),
         "v6": "2001:db8::/32"}
-    assert not (tmp_path / "peers.yaml").exists()
+    assert cadastro.read_bytes() == antes
 
 
 def test_o_irr_com_prefixo_torto_recusa_antes_de_consultar(api):

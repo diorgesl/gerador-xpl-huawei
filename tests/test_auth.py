@@ -341,7 +341,8 @@ def test_os_assets_e_as_rotas_da_spa_seguem_abertos(api_anonimo):
 
 
 def test_o_cookie_adulterado_nao_abre_nada(api_anonimo):
-    api_anonimo.cookies.set(auth.COOKIE, "admin.9999999999." + "0" * 64)
+    # o cookie e do TestClient cru: o embrulho so sabe montar a chamada
+    api_anonimo.cru.cookies.set(auth.COOKIE, "admin.9999999999." + "0" * 64)
 
     assert api_anonimo.get("/api/plano").status_code == 401
 

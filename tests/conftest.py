@@ -9,6 +9,7 @@ o `coletar` de verdade.
 import pytest
 
 from app import prefixes
+from dados_api import ASN_DE_TESTE
 
 
 @pytest.fixture
@@ -89,27 +90,65 @@ def usuarios_em_tmp(tmp_path_factory, monkeypatch):
     return pasta / "usuarios.yaml"
 
 
+class ClienteComAsn:
+    """O TestClient com o ?asn= de teste em toda chamada.
+
+    O parametro entra por padrao aqui, e nao em cada chamada dos testes:
+    sao centenas, e o que quase todos provam nao e o tenant. Quem precisa
+    de outro ASN passa o proprio `params`, que vence; quem precisa de
+    nenhum usa o `.cru`, o TestClient de verdade.
+
+    O `params` de quem chamou e mesclado, e nao substituido: os testes que
+    ja mandam `params={"tipo": ...}` continuam funcionando sem mudanca.
+    """
+
+    def __init__(self, cliente, asn=ASN_DE_TESTE):
+        self.cru = cliente
+        self.asn = asn
+
+    def _chamada(self, metodo, url, **kw):
+        params = {"asn": self.asn, **kw.pop("params", {})}
+        return getattr(self.cru, metodo)(url, params=params, **kw)
+
+    def get(self, url, **kw):
+        return self._chamada("get", url, **kw)
+
+    def post(self, url, **kw):
+        return self._chamada("post", url, **kw)
+
+    def put(self, url, **kw):
+        return self._chamada("put", url, **kw)
+
+    def delete(self, url, **kw):
+        return self._chamada("delete", url, **kw)
+
+
 @pytest.fixture
 def api_anonimo(tmp_path, monkeypatch, usuarios_em_tmp):
-    """Um TestClient com o peers.yaml, o out/ e o cache do bgpq4 em tmp_path.
+    """Um TestClient com a pasta de tenants, o out/ e o cache em tmp_path.
 
-    A API e o app leem o peers_mod.PEERS_YAML na hora de cada chamada, entao
-    trocar o caminho aqui basta: o app.app nao guarda mais copia nenhuma. O
+    A pasta nasce com o tenant de teste dentro, porque toda rota de dados
+    resolve um tenant: sem arquivo nenhum, a suite inteira daria 404. O
     `with` roda o lifespan, e e ele que cria o admin no arquivo de
     usuarios_em_tmp.
+
+    O patch e o do tenants, e nao o de um PEERS_YAML/OUT de modulo: os
+    caminhos do arquivo do tenant e da pasta de saida saem os dois de la, e
+    sao lidos na hora da chamada, como o resto.
     """
     from fastapi.testclient import TestClient
 
     from app import app as mod
-    from app import peers as peers_mod
-    from app import prefixes, render
+    from app import prefixes, tenants
 
-    monkeypatch.setattr(peers_mod, "PEERS_YAML", tmp_path / "peers.yaml")
-    monkeypatch.setattr(peers_mod, "OUT", tmp_path / "out")
-    monkeypatch.setattr(render, "OUT", tmp_path / "out")
+    monkeypatch.setattr(tenants, "PASTA", tmp_path / "peers")
+    monkeypatch.setattr(tenants, "SAIDA", tmp_path / "out")
+    monkeypatch.setattr(tenants, "ORIGEM", tmp_path / "peers.yaml")
+    monkeypatch.setattr(tenants, "BKP", tmp_path / "peers.yaml.bak")
     monkeypatch.setattr(prefixes, "CACHE", tmp_path / "out" / ".cache")
     with TestClient(mod.app) as cliente:
-        yield cliente
+        tenants.criar(ASN_DE_TESTE)
+        yield ClienteComAsn(cliente)
 
 
 @pytest.fixture

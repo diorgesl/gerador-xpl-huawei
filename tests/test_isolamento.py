@@ -10,6 +10,12 @@ from app import app as servidor
 from app import auth
 from app import peers as mod
 from app import prefixes, render
+from conftest import ClienteComAsn
+from dados_api import ASN_DE_TESTE
+
+# a pasta de saida do tenant de teste, relativa ao tmp_path do caso: e onde
+# os blocos caem, dentro do out/ que o `out` da fixture e
+SAIDA = Path("out") / str(ASN_DE_TESTE)
 
 
 def faz(apelido, ident, asn, **kw):
@@ -33,35 +39,38 @@ def faz(apelido, ident, asn, **kw):
 
 
 @pytest.fixture
-def out(tmp_path, monkeypatch):
-    # patch dos dois OUT: escrever_peer faz o mkdir com render.OUT, e o caminho do arquivo sai de peers.OUT via peer.arquivo(); patchando so um, o out/ do repo e tocado
-    monkeypatch.setattr(mod, "OUT", tmp_path)
-    monkeypatch.setattr(render, "OUT", tmp_path)
+def out(tmp_path):
+    """A pasta de saida dos blocos, que agora vai por parametro.
+
+    Nao ha mais OUT nenhum para patchar: quem escreve recebe a pasta, e o
+    caminho do arquivo sai dela via peer.arquivo(saida). O nome `out` fica
+    porque estes casos falam da saida, e nao do diretorio em si.
+    """
     return tmp_path
 
 
 def test_gerar_b_nao_muda_a_saida_de_a(out):
     a, b = faz("CLIENTEA", 1, 64500), faz("CLIENTEB", 2, 64501)
 
-    render.escrever_peer(a)
-    primeira = a.arquivo().read_text(encoding="ascii")
+    render.escrever_peer(a, saida=out)
+    primeira = a.arquivo(out).read_text(encoding="ascii")
 
-    render.escrever_peer(b)
-    render.escrever_peer(a)
-    assert a.arquivo().read_text(encoding="ascii") == primeira
+    render.escrever_peer(b, saida=out)
+    render.escrever_peer(a, saida=out)
+    assert a.arquivo(out).read_text(encoding="ascii") == primeira
 
 
 def test_gerar_b_nao_toca_no_mtime_de_a(out):
     a, b = faz("CLIENTEA", 1, 64500), faz("CLIENTEB", 2, 64501)
-    render.escrever_peer(a)
-    mtime = a.arquivo().stat().st_mtime_ns
-    render.escrever_peer(b)
-    assert a.arquivo().stat().st_mtime_ns == mtime
+    render.escrever_peer(a, saida=out)
+    mtime = a.arquivo(out).stat().st_mtime_ns
+    render.escrever_peer(b, saida=out)
+    assert a.arquivo(out).stat().st_mtime_ns == mtime
 
 
 def test_a_saida_de_a_nao_menciona_b(out):
     a, b = faz("CLIENTEA", 1, 64500), faz("CLIENTEB", 2, 64501)
-    render.escrever_peer(b)
+    render.escrever_peer(b, saida=out)
     texto = render.render_peer(a)
     assert "CLIENTEB" not in texto
     assert "64501" not in texto
@@ -70,16 +79,16 @@ def test_a_saida_de_a_nao_menciona_b(out):
 
 def test_cada_peer_grava_no_proprio_arquivo(out):
     a, b = faz("CLIENTEA", 1, 64500), faz("CLIENTEB", 2, 64501)
-    render.escrever_peer(a)
-    render.escrever_peer(b)
-    assert a.arquivo().name == "CLIENTEA-cliente.txt"
-    assert b.arquivo().name == "CLIENTEB-cliente.txt"
-    assert a.arquivo().read_text() != b.arquivo().read_text()
+    render.escrever_peer(a, saida=out)
+    render.escrever_peer(b, saida=out)
+    assert a.arquivo(out).name == "CLIENTEA-cliente.txt"
+    assert b.arquivo(out).name == "CLIENTEB-cliente.txt"
+    assert a.arquivo(out).read_text() != b.arquivo(out).read_text()
 
 
 def test_gerar_um_peer_nao_cria_arquivo_alheio(out):
-    render.escrever_peer(faz("CLIENTEA", 1, 64500))
-    render.escrever_peer(faz("CLIENTEB", 2, 64501))
+    render.escrever_peer(faz("CLIENTEA", 1, 64500), saida=out)
+    render.escrever_peer(faz("CLIENTEB", 2, 64501), saida=out)
     assert sorted(p.name for p in out.iterdir()) == [
         "CLIENTEA-cliente.txt", "CLIENTEB-cliente.txt"]
 
@@ -87,10 +96,10 @@ def test_gerar_um_peer_nao_cria_arquivo_alheio(out):
 def test_o_bloco_base_nao_depende_de_peer_nenhum(out):
     vazio = render.render_base()
 
-    render.escrever_peer(faz("CLIENTEA", 1, 64500))
+    render.escrever_peer(faz("CLIENTEA", 1, 64500), saida=out)
     depois_de_a = render.render_base()
 
-    render.escrever_peer(faz("CLIENTEB", 2, 64501))
+    render.escrever_peer(faz("CLIENTEB", 2, 64501), saida=out)
     depois_de_b = render.render_base()
 
     assert depois_de_a == vazio
@@ -100,15 +109,15 @@ def test_o_bloco_base_nao_depende_de_peer_nenhum(out):
 def test_a_ordem_de_gravacao_nao_importa(out):
     a, b = faz("CLIENTEA", 1, 64500), faz("CLIENTEB", 2, 64501)
 
-    render.escrever_peer(a)
-    render.escrever_peer(b)
-    ab = (a.arquivo().read_text(encoding="ascii"),
-          b.arquivo().read_text(encoding="ascii"))
+    render.escrever_peer(a, saida=out)
+    render.escrever_peer(b, saida=out)
+    ab = (a.arquivo(out).read_text(encoding="ascii"),
+          b.arquivo(out).read_text(encoding="ascii"))
 
-    render.escrever_peer(b)
-    render.escrever_peer(a)
-    ba = (a.arquivo().read_text(encoding="ascii"),
-          b.arquivo().read_text(encoding="ascii"))
+    render.escrever_peer(b, saida=out)
+    render.escrever_peer(a, saida=out)
+    ba = (a.arquivo(out).read_text(encoding="ascii"),
+          b.arquivo(out).read_text(encoding="ascii"))
 
     assert ab == ba
 
@@ -118,11 +127,11 @@ def test_os_tipos_nao_dividem_arquivo(out):
     c = faz("PARCEIRO", 1, 64500, tipo="cliente")
     u = faz("PARCEIRO", 2, 64501, tipo="upstream", classe=None,
             aprendizado=3100, prefixos={"v4": [], "v6": []})
-    render.escrever_peer(c)
-    render.escrever_peer(u)
-    assert c.arquivo().name == "PARCEIRO-cliente.txt"
-    assert u.arquivo().name == "PARCEIRO-upstream.txt"
-    assert c.arquivo().read_text(encoding="ascii") == render.render_peer(c)
+    render.escrever_peer(c, saida=out)
+    render.escrever_peer(u, saida=out)
+    assert c.arquivo(out).name == "PARCEIRO-cliente.txt"
+    assert u.arquivo(out).name == "PARCEIRO-upstream.txt"
+    assert c.arquivo(out).read_text(encoding="ascii") == render.render_peer(c)
 
 
 def test_gerar_um_peer_de_cada_tipo_nao_mistura_nada(out):
@@ -136,9 +145,9 @@ def test_gerar_um_peer_de_cada_tipo_nao_mistura_nada(out):
             prefixos={"v4": [], "v6": []}, ap_allowed=["64504"]),
     ]
     for p in gente:
-        render.escrever_peer(p)
+        render.escrever_peer(p, saida=out)
     for p in gente:
-        texto = p.arquivo().read_text(encoding="ascii")
+        texto = p.arquivo(out).read_text(encoding="ascii")
         for outro in gente:
             if outro is p:
                 continue
@@ -205,27 +214,27 @@ def grupo_e_membro(tipo, nome="PARCEIROS_CDN", ident=0, **kw):
 def test_gerar_grupo_nao_muda_saida_de_peer_membro(out):
     for tipo in TIPOS:
         grupo, membro = grupo_e_membro(tipo)
-        render.escrever_grupo(grupo)
-        antes = render.escrever_peer(membro, grupo=grupo).read_text(
+        render.escrever_grupo(grupo, saida=out)
+        antes = render.escrever_peer(membro, grupo=grupo, saida=out).read_text(
             encoding="ascii")
 
         # o mesmo grupo regerado com outro conteudo: nem assim o arquivo do
         # membro muda
         render.escrever_grupo(replace(grupo, lp_base=250, origem=1110,
-                                      pop=2002))
+                                      pop=2002), saida=out)
 
-        depois = membro.arquivo().read_text(encoding="ascii")
+        depois = membro.arquivo(out).read_text(encoding="ascii")
         assert antes == depois, tipo
 
 
 def test_gerar_peer_membro_nao_muda_saida_do_grupo(out):
     for tipo in TIPOS:
         grupo, membro = grupo_e_membro(tipo)
-        antes = render.escrever_grupo(grupo).read_text(encoding="ascii")
+        antes = render.escrever_grupo(grupo, saida=out).read_text(encoding="ascii")
 
-        render.escrever_peer(membro, grupo=grupo)
+        render.escrever_peer(membro, grupo=grupo, saida=out)
 
-        depois = grupo.arquivo().read_text(encoding="ascii")
+        depois = grupo.arquivo(out).read_text(encoding="ascii")
         assert antes == depois, tipo
 
 
@@ -243,9 +252,11 @@ def test_gerar_um_membro_nao_muda_outro_membro(out):
                      aprendizado=a.aprendizado, ix_id=a.ix_id,
                      sessoes={"v4": {"local": "10.0.1.1", "remoto": "10.0.1.2"},
                               "v6": {}})
-        antes = render.escrever_peer(a, grupo=grupo).read_text(encoding="ascii")
-        render.escrever_peer(b, grupo=grupo)  # b tem override, filtro proprio
-        depois = a.arquivo().read_text(encoding="ascii")
+        antes = render.escrever_peer(a, grupo=grupo,
+                                     saida=out).read_text(encoding="ascii")
+        # b tem override, filtro proprio
+        render.escrever_peer(b, grupo=grupo, saida=out)
+        depois = a.arquivo(out).read_text(encoding="ascii")
         assert antes == depois, tipo
 
 
@@ -264,28 +275,36 @@ def _retrato(raiz):
 def cliente(out, usuarios_em_tmp, logar, monkeypatch):
     """O app apontando para o mesmo tmp_path que o `out` ja patcheia, logado.
 
-    A exclusao passa pela rota, entao o peers.yaml tambem tem que sair do
-    checkout: sem o patch, a rota leria o arquivo de verdade e o teste
+    A exclusao passa pela rota, entao o arquivo do tenant tambem tem que
+    sair do checkout: sem o patch, a rota leria a pasta de verdade e o teste
     apagaria o grupo do repositorio. O CACHE do bgpq4 entra junto pelo
     mesmo motivo. O admin nasce do bootstrap, e este cliente nao roda o
     lifespan (nao ha context manager): por isso a chamada explicita.
+
+    O ClienteComAsn entra aqui como no resto da suite: a rota e de dados, e
+    toda rota de dados resolve um tenant.
     """
+    from app import tenants
+
     auth.bootstrap()
-    monkeypatch.setattr(mod, "PEERS_YAML", out / "peers.yaml")
+    monkeypatch.setattr(tenants, "PASTA", out / "peers")
+    monkeypatch.setattr(tenants, "SAIDA", out / "out")
     monkeypatch.setattr(prefixes, "CACHE", out / ".cache")
-    return logar(TestClient(servidor.app))
+    tenants.criar(ASN_DE_TESTE)
+    return logar(ClienteComAsn(TestClient(servidor.app)))
 
 
 def test_excluir_grupo_com_membro_e_recusado_sem_tocar_em_arquivo(out, cliente):
+    arquivo = out / "peers" / ("%d.yaml" % ASN_DE_TESTE)
     grupo = mod.Grupo(id=0, nome="PARCEIROS_CDN", tipo="cliente",
                       classe="transito", lp_base=300, origem=1100, pop=2001)
     a = faz("CLIENTEA", 1, 64500, grupo_id=grupo.id)
     b = faz("CLIENTEB", 2, 64501, grupo_id=grupo.id)
-    mod.gravar_grupos([grupo], out / "peers.yaml")
-    mod.gravar([a, b], out / "peers.yaml")
-    render.escrever_grupo(grupo)
-    render.escrever_peer(a, grupo=grupo)
-    render.escrever_peer(b, grupo=grupo)
+    mod.gravar_grupos([grupo], arquivo)
+    mod.gravar([a, b], arquivo)
+    render.escrever_grupo(grupo, saida=out / SAIDA)
+    render.escrever_peer(a, grupo=grupo, saida=out / SAIDA)
+    render.escrever_peer(b, grupo=grupo, saida=out / SAIDA)
     antes = _retrato(out)
 
     r = cliente.delete("/api/grupos/%d" % grupo.id)
@@ -293,28 +312,27 @@ def test_excluir_grupo_com_membro_e_recusado_sem_tocar_em_arquivo(out, cliente):
     assert r.status_code == 409
     assert "CLIENTEA" in r.json()["erros"]["membros"]
     assert "CLIENTEB" in r.json()["erros"]["membros"]
-    assert [g.nome for g in mod.carregar_grupos(out / "peers.yaml")] == [
-        "PARCEIROS_CDN"]
+    assert [g.nome for g in mod.carregar_grupos(arquivo)] == ["PARCEIROS_CDN"]
     # a recusa nao pode deixar rastro: nem o yaml, nem a saida do grupo,
     # nem a dos membros mudam de byte
     assert _retrato(out) == antes
 
     # os membros saem do grupo por fora (nao ha tela para isso ainda, ver
     # "Fora do escopo deste plano" do plano): so entao a exclusao passa
-    mod.gravar([], out / "peers.yaml")
+    mod.gravar([], arquivo)
     antes = _retrato(out)
 
     r = cliente.delete("/api/grupos/%d" % grupo.id)
 
     assert r.status_code == 204
-    assert mod.carregar_grupos(out / "peers.yaml") == []
+    assert mod.carregar_grupos(arquivo) == []
     agora = _retrato(out)
     sumiu = set(antes) - set(agora)
-    assert sumiu == {Path("grupo-PARCEIROS_CDN.txt")}
+    assert sumiu == {SAIDA / "grupo-PARCEIROS_CDN.txt"}
     assert set(agora) - set(antes) == set()
     # so o yaml muda de conteudo, e so para perder a entrada do grupo: a
     # saida dos membros fica no disco, byte a byte, para o operador recolher
     for caminho, conteudo in antes.items():
-        if caminho in sumiu or caminho == Path("peers.yaml"):
+        if caminho in sumiu or caminho == Path("peers") / ("%d.yaml" % ASN_DE_TESTE):
             continue
         assert agora[caminho] == conteudo

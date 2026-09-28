@@ -24,7 +24,6 @@ from app.plan import FAMILIAS, Rede
 
 RAIZ = Path(__file__).resolve().parent.parent
 PEERS_YAML = RAIZ / "peers.yaml"
-OUT = RAIZ / "out"
 
 MAX_IDS = 100
 
@@ -156,8 +155,16 @@ class Peer:
                     or self.ap_allowed or self.ap_prefer
                     or self.prepend_base or self.bh_upstream)
 
-    def arquivo(self):
-        return OUT / ("%s-%s.txt" % (self.token, self.tipo))
+    def arquivo(self, saida):
+        """O caminho do bloco deste peer na pasta de saida do tenant dele.
+
+        A pasta vem por parametro e nao tem padrao: um default para a raiz
+        do out/ deixaria uma chamada esquecida escrever em
+        out/<token>-<tipo>.txt, que e o nome que a etapa dos tenants
+        elimina. O nome do arquivo continua saindo do token, que e unico
+        dentro de um tenant.
+        """
+        return Path(saida) / ("%s-%s.txt" % (self.token, self.tipo))
 
     def para_dict(self):
         return {
@@ -237,6 +244,26 @@ def carregar_asn(caminho=PEERS_YAML):
         return Rede()
     try:
         return Rede(asn=bruto, politica=dados.get(CHAVE_POLITICA))
+    except ValueError as erro:
+        raise ValueError("%s: %s" % (caminho, erro)) from erro
+
+
+def carregar_rede(caminho, asn):
+    """O plan.Rede do tenant: o ASN do nome do arquivo, o namespace de dentro.
+
+    O namespace so existe dentro do arquivo, e e de la que ele sai. O ASN,
+    nao: um arquivo editado a mao que diga outro numero na chave `asn`
+    geraria a config de outra rede em silencio, enquanto o seletor e a pasta
+    de saida seguem o nome. O nome ganha, e essa e a unica forma de o ganho
+    valer de verdade.
+
+    O ValueError do plan.Rede sai nomeando o arquivo, como no carregar_asn:
+    e a mensagem que a tela mostra no toast quando o par nao fecha (ASN de
+    32 bits sem namespace).
+    """
+    bruto = _ler_bruto(caminho).get(CHAVE_POLITICA)
+    try:
+        return Rede(asn=asn, politica=bruto)
     except ValueError as erro:
         raise ValueError("%s: %s" % (caminho, erro)) from erro
 
@@ -347,8 +374,14 @@ class Grupo:
     def token(self):
         return self.nome
 
-    def arquivo(self):
-        return OUT / ("grupo-%s.txt" % self.nome)
+    def arquivo(self, saida):
+        """O caminho do bloco deste grupo na pasta de saida do tenant dele.
+
+        Sem default pelo mesmo motivo do peer: uma chamada esquecida
+        escreveria na raiz do out/, que e o nome que a etapa dos tenants
+        elimina.
+        """
+        return Path(saida) / ("grupo-%s.txt" % self.nome)
 
     def para_dict(self):
         return {

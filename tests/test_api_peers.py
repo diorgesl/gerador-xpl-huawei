@@ -2,12 +2,14 @@
 
 from app import peers as peers_mod
 from app.api import modelo_do_peer
-from dados_api import CLIENTE, UPSTREAM, IX, GRUPO_PARCEIROS, arvore, membro_de
+from dados_api import (ASN_DE_TESTE, CLIENTE, UPSTREAM, IX,
+                       GRUPO_PARCEIROS, arvore, caminho_tenant, membro_de)
 from test_render import peer_cliente, peer_ix
 
 
 def _grava(tmp_path, *peers):
-    peers_mod.gravar(list(peers), tmp_path / "peers.yaml")
+    # o arquivo do tenant de teste, que e o unico que a API le
+    peers_mod.gravar(list(peers), caminho_tenant(tmp_path))
 
 
 def test_a_lista_comeca_vazia(api):
@@ -89,15 +91,16 @@ def test_criar_grava_o_yaml_e_o_bloco(api, tmp_path):
     corpo = r.json()
     assert corpo["arquivo"] == "268127-cliente.txt"
     assert (corpo["registro"]["id"], corpo["registro"]["token"]) == (0, "268127")
-    assert [p.asn for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [268127]
-    assert (tmp_path / "out" / "268127-cliente.txt").exists()
+    assert [p.asn for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [268127]
+    assert (tmp_path / "out" / str(ASN_DE_TESTE) / "268127-cliente.txt").exists()
 
 
 def test_erro_de_campo_volta_422_e_nao_grava(api, tmp_path):
+    antes = arvore(tmp_path)
     r = api.post("/api/peers", json=dict(CLIENTE, asn="abc"))
     assert r.status_code == 422
     assert r.json()["erros"]["asn"] == "valor numerico invalido"
-    assert arvore(tmp_path) == {}
+    assert arvore(tmp_path) == antes
 
 
 def test_asn_repetido_e_recusado_no_campo(api):
@@ -113,17 +116,19 @@ def test_asn_repetido_e_recusado_no_campo(api):
 
 
 def test_nome_com_acento_volta_422_no_campo(api, tmp_path):
+    antes = arvore(tmp_path)
     r = api.post("/api/peers", json=dict(CLIENTE, nome="Cliente S" + chr(0xE3) + "o Paulo"))
     assert r.status_code == 422
     assert r.json()["erros"]["nome"] == "nome so aceita ASCII puro, sem acento"
-    assert arvore(tmp_path) == {}
+    assert arvore(tmp_path) == antes
 
 
 def test_campo_desconhecido_volta_422_nomeando_o_campo(api, tmp_path):
+    antes = arvore(tmp_path)
     r = api.post("/api/peers", json=dict(CLIENTE, xpto="1"))
     assert r.status_code == 422
     assert "xpto" in r.json()["erros"]["_corpo"]
-    assert arvore(tmp_path) == {}
+    assert arvore(tmp_path) == antes
 
 
 def test_asn_privado_salva_com_aviso(api):
@@ -138,8 +143,8 @@ def test_trocar_o_asn_apaga_o_bloco_antigo(api, tmp_path):
     api.post("/api/peers", json=CLIENTE)
     r = api.put("/api/peers/0", json=dict(CLIENTE, asn="268128"))
     assert r.status_code == 200, r.text
-    assert not (tmp_path / "out" / "268127-cliente.txt").exists()
-    assert (tmp_path / "out" / "268128-cliente.txt").exists()
+    assert not (tmp_path / "out" / str(ASN_DE_TESTE) / "268127-cliente.txt").exists()
+    assert (tmp_path / "out" / str(ASN_DE_TESTE) / "268128-cliente.txt").exists()
 
 
 def test_trocar_o_id_no_corpo_move_o_registro_da_url(api, tmp_path):
@@ -147,7 +152,7 @@ def test_trocar_o_id_no_corpo_move_o_registro_da_url(api, tmp_path):
     r = api.put("/api/peers/0", json=dict(CLIENTE, id="7"))
     assert r.status_code == 200, r.text
     assert r.json()["registro"]["id"] == 7
-    assert [p.id for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [7]
+    assert [p.id for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [7]
     assert api.get("/api/peers/0").status_code == 404
 
 
@@ -166,13 +171,13 @@ def test_salvar_o_que_o_get_devolveu_nao_muda_nada(api, tmp_path):
 def test_excluir_apaga_o_registro_e_o_bloco(api, tmp_path):
     api.post("/api/peers", json=CLIENTE)
     assert api.delete("/api/peers/0").status_code == 204
-    assert peers_mod.carregar(tmp_path / "peers.yaml") == []
-    assert not (tmp_path / "out" / "268127-cliente.txt").exists()
+    assert peers_mod.carregar(caminho_tenant(tmp_path)) == []
+    assert not (tmp_path / "out" / str(ASN_DE_TESTE) / "268127-cliente.txt").exists()
     assert api.delete("/api/peers/0").status_code == 404
 
 
 def _salvo(tmp_path, nome="268127-cliente.txt"):
-    return (tmp_path / "out" / nome).read_text(encoding="ascii")
+    return (tmp_path / "out" / str(ASN_DE_TESTE) / nome).read_text(encoding="ascii")
 
 
 def test_a_previa_do_peer_novo_e_o_bloco_que_o_salvar_escreve(api, tmp_path):
@@ -207,7 +212,7 @@ def test_a_previa_de_um_peer_salvo_traz_o_arquivo_de_out(api, tmp_path):
 
 def test_arquivo_apagado_de_out_vira_salvo_nulo(api, tmp_path):
     api.post("/api/peers", json=CLIENTE)
-    (tmp_path / "out" / "268127-cliente.txt").unlink()
+    (tmp_path / "out" / str(ASN_DE_TESTE) / "268127-cliente.txt").unlink()
     previa = api.post("/api/peers/previa", params={"id": 0}, json=CLIENTE).json()
     assert previa["salvo"] is None
 
@@ -234,7 +239,7 @@ def test_a_saida_traz_bloco_remocao_e_quadro(api, tmp_path):
 
 
 def test_a_saida_de_membro_de_grupo_que_saiu_e_recusada(api, tmp_path):
-    peers_mod.gravar([peer_cliente(id=0, grupo_id=9)], tmp_path / "peers.yaml")
+    peers_mod.gravar([peer_cliente(id=0, grupo_id=9)], caminho_tenant(tmp_path))
     r = api.get("/api/peers/0/saida")
     assert r.status_code == 422
     assert r.json()["erros"]["grupo_id"] == "grupo nao encontrado"
@@ -252,14 +257,14 @@ def test_trocar_o_tipo_apaga_o_bloco_do_tipo_antigo(api, tmp_path):
     (test_trocar_o_asn_apaga_o_bloco_antigo) cobre a outra metade, o token.
     """
     assert api.post("/api/peers", json=CLIENTE).status_code == 201
-    assert (tmp_path / "out" / "268127-cliente.txt").exists()
+    assert (tmp_path / "out" / str(ASN_DE_TESTE) / "268127-cliente.txt").exists()
 
     r = api.put("/api/peers/0", json=dict(CLIENTE, tipo="upstream",
                                           aprendizado="3100", prefixos_v4=[]))
 
     assert r.status_code == 200, r.text
-    assert not (tmp_path / "out" / "268127-cliente.txt").exists()
-    assert (tmp_path / "out" / "268127-upstream.txt").exists()
+    assert not (tmp_path / "out" / str(ASN_DE_TESTE) / "268127-cliente.txt").exists()
+    assert (tmp_path / "out" / str(ASN_DE_TESTE) / "268127-upstream.txt").exists()
 
 
 def test_o_id_escolhido_no_corpo_e_o_do_registro(api, tmp_path):
@@ -274,7 +279,7 @@ def test_o_id_escolhido_no_corpo_e_o_do_registro(api, tmp_path):
 
     assert r.status_code == 201, r.text
     assert r.json()["registro"]["id"] == 7
-    assert [p.id for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [7]
+    assert [p.id for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [7]
 
 
 def test_tipo_desconhecido_no_corpo_e_erro_no_campo(api, tmp_path):
@@ -288,12 +293,12 @@ def test_tipo_desconhecido_no_corpo_e_erro_no_campo(api, tmp_path):
 
     assert r.status_code == 422
     assert r.json()["erros"]["tipo"] == "tipo desconhecido: xyz"
-    assert peers_mod.carregar(tmp_path / "peers.yaml") == []
+    assert peers_mod.carregar(caminho_tenant(tmp_path)) == []
 
     # e o tipo vazio nao e tipo desconhecido: campo em branco cai no cliente,
     # como os outros campos do formulario caem no default da tabela
     assert api.post("/api/peers", json=dict(CLIENTE, tipo="")).status_code == 201
-    assert [p.tipo for p in peers_mod.carregar(tmp_path / "peers.yaml")] == ["cliente"]
+    assert [p.tipo for p in peers_mod.carregar(caminho_tenant(tmp_path))] == ["cliente"]
 
 
 def test_peer_com_grupo_de_outro_tipo_e_recusado_no_campo(api, tmp_path):
@@ -311,7 +316,7 @@ def test_peer_com_grupo_de_outro_tipo_e_recusado_no_campo(api, tmp_path):
     assert r.status_code == 422
     assert r.json()["erros"]["grupo_id"] == (
         "grupo PARCEIROS_CDN e de parceiro, nao de upstream")
-    assert peers_mod.carregar(tmp_path / "peers.yaml") == []
+    assert peers_mod.carregar(caminho_tenant(tmp_path)) == []
 
 
 def test_membro_sem_filtro_proprio_nao_usa_o_lp_gravado(api, tmp_path):
@@ -331,7 +336,7 @@ def test_membro_sem_filtro_proprio_nao_usa_o_lp_gravado(api, tmp_path):
 
     bloco = api.get("/api/peers/%d/saida" % membro["id"]).json()["bloco"]
 
-    assert [p.lp_base for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [999]
+    assert [p.lp_base for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [999]
     assert "999" not in bloco
     assert "apply local-preference" not in bloco
     assert "group PARCEIROS_CDN" in bloco
@@ -349,7 +354,7 @@ def test_origem_fora_da_tabela_do_tipo_grava(api, tmp_path):
     r = api.post("/api/peers", json=dict(UPSTREAM, origem="14"))
 
     assert r.status_code == 201, r.text
-    assert [p.origem for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [14]
+    assert [p.origem for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [14]
 
 
 def test_origem_em_branco_cai_no_default_da_classe_e_do_tipo(api, tmp_path):
@@ -364,4 +369,44 @@ def test_origem_em_branco_cai_no_default_da_classe_e_do_tipo(api, tmp_path):
     assert api.post("/api/peers", json=dict(CLIENTE, origem="", classe="cgnat")).status_code == 201
     assert api.post("/api/peers", json=dict(UPSTREAM, origem="")).status_code == 201
 
-    assert [p.origem for p in peers_mod.carregar(tmp_path / "peers.yaml")] == [1130, 1400]
+    assert [p.origem for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [1130, 1400]
+
+
+def test_o_asn_sem_cadastro_da_404_no_formato_das_recusas(api):
+    resposta = api.get("/api/peers", params={"asn": 999})
+    assert resposta.status_code == 404
+    assert "999" in resposta.json()["erros"]["_"]
+
+
+def test_o_asn_que_falta_da_422(api):
+    resposta = api.cru.get("/api/peers")
+    assert resposta.status_code == 422
+    assert "_corpo" in resposta.json()["erros"]
+
+
+def test_o_base_txt_tambem_e_do_tenant(api):
+    """O /base.txt e fetch cru no front, e nao do cliente tipado.
+
+    Ele sai do schema como as outras rotas, mas o `?asn=` dele nao esta em
+    chamada nenhuma do openapi-fetch: quem o busca e o fetch cru da Casca e
+    da tela do bloco base. Sem esta prova, o parametro sumiria de la sem
+    nenhum teste reclamar.
+    """
+    assert api.get("/base.txt").status_code == 200
+    assert api.get("/base.txt", params={"asn": 999}).status_code == 404
+
+
+def test_o_bloco_do_peer_sai_na_pasta_do_tenant(api, tmp_path):
+    """O bloco cai em out/<ASN>/, e nao na raiz do out/.
+
+    O peer que ja estava no arquivo continua la: a rota le e grava o mesmo
+    arquivo que o _grava escreveu por fora. Sem essa metade, a pasta de
+    saida poderia estar certa com o tenant errado por tras.
+    """
+    _grava(tmp_path, peer_ix())
+    resposta = api.post("/api/peers", json=CLIENTE)
+    assert resposta.status_code == 201, resposta.text
+    assert (tmp_path / "out" / str(ASN_DE_TESTE)
+            / "268127-cliente.txt").exists()
+    assert [p.token for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [
+        "IX-SP", "268127"]

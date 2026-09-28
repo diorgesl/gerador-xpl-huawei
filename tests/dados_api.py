@@ -4,6 +4,10 @@ Os valores sao os dos formularios do test_app.py, no formato da API: texto nos
 escalares, lista nas listas, booleano nas caixas. Todos passam na validacao.
 """
 
+# o tenant que a suite usa; quem precisa de outro passa o proprio asn no
+# `params`, que vence o padrao do ClienteComAsn
+ASN_DE_TESTE = 64512
+
 CLIENTE = {
     "nome": "Cliente ACME", "tipo": "cliente", "asn": "268127",
     "classe": "residencial", "descricao": "CLIENTE-AS268127",
@@ -58,3 +62,15 @@ def arvore(raiz):
     """
     return {str(p.relative_to(raiz)): p.read_bytes()
             for p in sorted(raiz.rglob("*")) if p.is_file()}
+
+
+def caminho_tenant(tmp_path, asn=ASN_DE_TESTE):
+    """O arquivo do tenant na pasta que a fixture `api_anonimo` patcheia.
+
+    O nome do arquivo E o ASN, e e por ele que a API acha o tenant: toda
+    gravacao que um teste faz por fora da rota tem que cair aqui, senao a
+    rota procura o tenant em outro lugar e responde 404.
+    """
+    pasta = tmp_path / "peers"
+    pasta.mkdir(exist_ok=True)
+    return pasta / ("%d.yaml" % asn)

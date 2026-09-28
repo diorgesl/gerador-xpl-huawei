@@ -1477,10 +1477,10 @@ def test_o_bloco_do_grupo_de_downstream_nao_chama_apply_peer():
     assert "CL-PEER" not in texto
 
 
-def test_escrever_grupo_grava_no_arquivo_certo(tmp_path, monkeypatch):
-    monkeypatch.setattr(render, "OUT", tmp_path)
-    monkeypatch.setattr(peers, "OUT", tmp_path)
-    destino = render.escrever_grupo(grupo_com_asn())
+def test_escrever_grupo_grava_no_arquivo_certo(tmp_path):
+    # a pasta de saida vem por parametro, e e ela que o mkdir cria: nao ha
+    # mais um OUT de modulo para os testes trocarem
+    destino = render.escrever_grupo(grupo_com_asn(), saida=tmp_path)
     assert destino == tmp_path / "grupo-UP-REDUNDANTE.txt"
     assert destino.exists()
 
@@ -2258,9 +2258,8 @@ def test_o_bloco_do_asn_declarado_usa_o_namespace_dele():
     assert "64512:1000" not in texto
 
 
-def test_escrever_blocos_grava_em_out(tmp_path, monkeypatch):
-    monkeypatch.setattr(render, "OUT", tmp_path)
-    destino = render.escrever_blocos(dois_blocos())
+def test_escrever_blocos_grava_em_out(tmp_path):
+    destino = render.escrever_blocos(dois_blocos(), saida=tmp_path)
     assert destino == tmp_path / "blocos.txt"
     assert destino.read_text(encoding="ascii") == render.render_blocos(
         dois_blocos())

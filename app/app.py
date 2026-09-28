@@ -9,7 +9,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
                                RedirectResponse)
@@ -74,26 +74,29 @@ def docs_do_app():
     return get_swagger_ui_html(openapi_url="/openapi.json", title="bgpgen")
 
 
-def rede():
-    """O plan.Rede do AS declarado no topo do peers.yaml.
+def rede(asn):
+    """O plan.Rede do tenant do ASN pedido, para o bloco base.
 
-    Sai do arquivo a cada requisicao, como as outras leituras: o operador grava
-    o AS no topo e recarrega, sem reiniciar o app. Sem a chave no arquivo o
-    Rede e o de fabrica, e a config gerada e a de sempre.
+    O /base.txt nao esta em /api, mas e do tenant como as outras: quem
+    baixa o bloco base baixa o de uma rede, e o namespace das communities
+    que saem nele e o dela.
 
-    Le o PEERS_YAML do peers.py, e nao uma copia daqui: era a copia que os
-    testes trocavam por monkeypatch, e com uma fonte so o modulo do app nao
-    tem mais estado de arquivo nenhum.
+    Le o arquivo do tenant a cada requisicao, como as outras leituras: o
+    operador grava o namespace e recarrega, sem reiniciar o app.
     """
-    return peers_mod.carregar_asn(peers_mod.PEERS_YAML)
+    achado = tenants.abrir(asn)
+    if achado is None:
+        raise tenants.NaoEncontrado(asn)
+    return peers_mod.carregar_rede(achado.caminho, asn)
 
 
 @app.get("/base.txt", response_class=HTMLResponse,
          dependencies=[Depends(auth.exigir_login)])
-def baixar_base():
+def baixar_base(asn: int = Query(...)):
     # texto puro, e nao HTML: e o mesmo corpo de antes do corte, montado na
-    # hora do download (nao ha arquivo em out/ com uma versao antiga dele)
-    return HTMLResponse(render.render_base(rede=rede()), media_type="text/plain")
+    # hora do download (nao ha arquivo na pasta do tenant com uma versao
+    # antiga dele)
+    return HTMLResponse(render.render_base(rede=rede(asn)), media_type="text/plain")
 
 
 # --- o build do front (SPA) -------------------------------------------

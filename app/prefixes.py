@@ -9,10 +9,12 @@ import ipaddress
 import json
 import subprocess
 import time
-from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent.parent
-CACHE = RAIZ / "out" / ".cache"
+from app import tenants
+
+# o cache e derivado do IRR e nao da rede, entao ele fica na raiz do out/ e
+# nao na pasta de um tenant: a mesma consulta serve a todas.
+CACHE = tenants.SAIDA / ".cache"
 TTL_HORAS = 24
 SERVIDOR_IRR = "whois.radb.net"
 # sobe quando mudar o que a consulta devolve. Um cache gravado sob a

@@ -107,7 +107,8 @@ class RedeAtual(BaseModel):
 
 
 class RedeForm(Modelo):
-    asn: str = ""
+    # sem o ASN: ele e o nome do arquivo do tenant, e nao um campo do corpo.
+    # Quem troca de ASN e o seletor, que escolhe outro tenant
     politica: str = ""
 
 

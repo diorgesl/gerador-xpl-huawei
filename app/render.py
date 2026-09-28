@@ -12,7 +12,6 @@ from app import plan
 
 RAIZ = Path(__file__).resolve().parent.parent
 TEMPLATES = RAIZ / "templates"
-OUT = RAIZ / "out"
 
 CABECALHO_BASE = ("bloco base: sets e filtros compartilhados. "
                   "Cole antes do bloco de qualquer peer.")
@@ -53,9 +52,13 @@ def render_peer(peer, grupo=None, rede=None):
     return ambiente(rede).get_template(nome).render(peer=peer, grupo=grupo)
 
 
-def escrever_peer(peer, grupo=None, rede=None):
-    OUT.mkdir(parents=True, exist_ok=True)
-    destino = peer.arquivo()
+# o `saida` e so por palavra-chave e sem default: a chamada de antes desta
+# etapa, `escrever_peer(peer, grupo=..., rede=...)`, tem que reprovar com
+# TypeError ate alguem dizer de que tenant e o bloco, em vez de escrever na
+# raiz do out/, que e o nome que a etapa dos tenants elimina
+def escrever_peer(peer, grupo=None, rede=None, *, saida):
+    saida.mkdir(parents=True, exist_ok=True)
+    destino = peer.arquivo(saida)
     destino.write_text(render_peer(peer, grupo=grupo, rede=rede),
                        encoding="ascii")
     return destino
@@ -81,9 +84,9 @@ def render_remove_blocos(blocos, rede=None):
         blocos=blocos)
 
 
-def escrever_blocos(blocos, rede=None):
-    OUT.mkdir(parents=True, exist_ok=True)
-    destino = OUT / "blocos.txt"
+def escrever_blocos(blocos, rede=None, *, saida):
+    saida.mkdir(parents=True, exist_ok=True)
+    destino = saida / "blocos.txt"
     destino.write_text(render_blocos(blocos, rede=rede), encoding="ascii")
     return destino
 
@@ -108,8 +111,8 @@ def render_grupo(grupo, rede=None):
     return ambiente(rede).get_template(nome).render(grupo=grupo)
 
 
-def escrever_grupo(grupo, rede=None):
-    OUT.mkdir(parents=True, exist_ok=True)
-    destino = grupo.arquivo()
+def escrever_grupo(grupo, rede=None, *, saida):
+    saida.mkdir(parents=True, exist_ok=True)
+    destino = grupo.arquivo(saida)
     destino.write_text(render_grupo(grupo, rede=rede), encoding="ascii")
     return destino

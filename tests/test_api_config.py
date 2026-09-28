@@ -1,6 +1,7 @@
 """A config inteira numa resposta so: base, originacao, grupos e peers."""
 
-from dados_api import BLOCOS, CLIENTE, GRUPO_PARCEIROS, arvore
+from dados_api import (ASN_DE_TESTE, BLOCOS, CLIENTE, GRUPO_PARCEIROS, arvore,
+                       caminho_tenant)
 
 
 def _chaves(api):
@@ -93,7 +94,8 @@ def test_o_bloco_sem_arquivo_em_out_vem_marcado(api, tmp_path):
     esta no equipamento" que o app sabe. Sem o arquivo, o bloco na tela e um
     que talvez nunca tenha sido colado."""
     ident = _criar(api, "/api/peers", CLIENTE)
-    (tmp_path / "out" / _secoes(api)["peer-%d" % ident]["arquivo"]).unlink()
+    pasta = tmp_path / "out" / str(ASN_DE_TESTE)
+    (pasta / _secoes(api)["peer-%d" % ident]["arquivo"]).unlink()
     assert _secoes(api)["peer-%d" % ident]["salvo"] is False
 
 
@@ -101,7 +103,7 @@ def test_peer_apontando_para_grupo_que_saiu_recusa_a_config(api, tmp_path):
     """O membro herda o que o grupo define: sem o grupo o bloco sai errado, e
     a config inteira sai junto com ele, como no /saida do peer."""
     _criar(api, "/api/peers", CLIENTE)
-    yaml = tmp_path / "peers.yaml"
+    yaml = caminho_tenant(tmp_path)
     yaml.write_text(yaml.read_text(encoding="ascii").replace(
         "grupo_id: null", "grupo_id: 7"), encoding="ascii")
     r = api.get("/api/config")

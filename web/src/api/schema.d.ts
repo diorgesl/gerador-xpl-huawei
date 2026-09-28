@@ -100,8 +100,12 @@ export interface paths {
         get?: never;
         /**
          * Gravar Rede
-         * @description O AS da rede no topo do peers.yaml, pelas conferencias do
+         * @description O namespace das standard do tenant, pelas conferencias do
          *     _asn_do_formulario.
+         *
+         *     O ASN nao vem do corpo: ele e o nome do arquivo, e quem troca de ASN e
+         *     o seletor, criando ou escolhendo outro tenant. Editar o campo para
+         *     renomear o arquivo fica para a rodada do rename.
          */
         put: operations["gravar_rede_api_rede_put"];
         post?: never;
@@ -250,7 +254,10 @@ export interface paths {
          * @description Os prefixos do ASN no IRR, pelo bgpq4, sem gravar nada.
          *
          *     A consulta precisa so do ASN e do apelido: o resultado vai para os campos
-         *     de prefixo da tela, que o operador ainda edita antes de salvar.
+         *     de prefixo da tela, que o operador ainda edita antes de salvar. O ASN e o
+         *     do peer consultado, e nao o do tenant, entao o `t` nao e lido: ele existe
+         *     porque a varredura das rotas cobra o ?asn= de toda rota de dados, e uma
+         *     consulta de IRR nao e excecao para quem esta numa rede.
          */
         post: operations["consultar_irr_api_irr_post"];
         delete?: never;
@@ -445,8 +452,8 @@ export interface paths {
          * @description A config inteira numa resposta so, montada na hora pelo render.
          *
          *     Quem cola no equipamento le daqui: e a mesma saida das telas de cada
-         *     registro, na ordem em que os blocos se apoiam, e sem nada gravado em
-         *     out/ no caminho.
+         *     registro, na ordem em que os blocos se apoiam, e sem nada gravado na
+         *     pasta do tenant no caminho.
          */
         get: operations["ler_config_api_config_get"];
         put?: never;
@@ -748,6 +755,11 @@ export interface components {
             registro: components["schemas"]["GrupoRegistro"];
             /** Arquivo */
             arquivo: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
         /** IrrPedido */
         IrrPedido: {
@@ -1132,11 +1144,6 @@ export interface components {
         /** RedeForm */
         RedeForm: {
             /**
-             * Asn
-             * @default
-             */
-            asn: string;
-            /**
              * Politica
              * @default
              */
@@ -1196,6 +1203,15 @@ export interface components {
             timer_keepalive: number | null;
             /** Timer Hold */
             timer_hold: number | null;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
         };
     };
     responses: never;
@@ -1326,7 +1342,9 @@ export interface operations {
     };
     ler_plano_api_plano_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1373,7 +1391,9 @@ export interface operations {
     };
     gravar_rede_api_rede_put: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1424,7 +1444,9 @@ export interface operations {
     };
     listar_peers_api_peers_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1471,7 +1493,9 @@ export interface operations {
     };
     criar_peer_api_peers_post: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1522,8 +1546,9 @@ export interface operations {
     };
     novo_peer_api_peers_novo_get: {
         parameters: {
-            query?: {
+            query: {
                 tipo?: string;
+                asn: number;
             };
             header?: never;
             path?: never;
@@ -1571,7 +1596,9 @@ export interface operations {
     };
     ler_peer_api_peers__ident__get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -1620,7 +1647,9 @@ export interface operations {
     };
     atualizar_peer_api_peers__ident__put: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -1673,7 +1702,9 @@ export interface operations {
     };
     excluir_peer_api_peers__ident__delete: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -1720,7 +1751,9 @@ export interface operations {
     };
     copiar_peer_api_peers__ident__copia_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -1769,8 +1802,9 @@ export interface operations {
     };
     previa_peer_api_peers_previa_post: {
         parameters: {
-            query?: {
+            query: {
                 id?: number | null;
+                asn: number;
             };
             header?: never;
             path?: never;
@@ -1822,7 +1856,9 @@ export interface operations {
     };
     saida_peer_api_peers__ident__saida_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -1871,7 +1907,9 @@ export interface operations {
     };
     consultar_irr_api_irr_post: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1931,7 +1969,9 @@ export interface operations {
     };
     listar_grupos_api_grupos_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1978,7 +2018,9 @@ export interface operations {
     };
     criar_grupo_api_grupos_post: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2029,8 +2071,9 @@ export interface operations {
     };
     novo_grupo_api_grupos_novo_get: {
         parameters: {
-            query?: {
+            query: {
                 tipo?: string;
+                asn: number;
             };
             header?: never;
             path?: never;
@@ -2078,7 +2121,9 @@ export interface operations {
     };
     ler_grupo_api_grupos__ident__get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -2127,7 +2172,9 @@ export interface operations {
     };
     atualizar_grupo_api_grupos__ident__put: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -2180,7 +2227,9 @@ export interface operations {
     };
     excluir_grupo_api_grupos__ident__delete: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -2236,7 +2285,9 @@ export interface operations {
     };
     copiar_grupo_api_grupos__ident__copia_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -2285,8 +2336,9 @@ export interface operations {
     };
     previa_grupo_api_grupos_previa_post: {
         parameters: {
-            query?: {
+            query: {
                 id?: number | null;
+                asn: number;
             };
             header?: never;
             path?: never;
@@ -2338,7 +2390,9 @@ export interface operations {
     };
     saida_grupo_api_grupos__ident__saida_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path: {
                 ident: number;
@@ -2387,7 +2441,9 @@ export interface operations {
     };
     ler_blocos_api_blocos_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2434,7 +2490,9 @@ export interface operations {
     };
     salvar_blocos_api_blocos_put: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2485,7 +2543,9 @@ export interface operations {
     };
     previa_blocos_api_blocos_previa_post: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2536,7 +2596,9 @@ export interface operations {
     };
     consultar_blocos_api_blocos_irr_post: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2596,7 +2658,9 @@ export interface operations {
     };
     ler_config_api_config_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2643,7 +2707,9 @@ export interface operations {
     };
     baixar_base_base_txt_get: {
         parameters: {
-            query?: never;
+            query: {
+                asn: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2657,6 +2723,15 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

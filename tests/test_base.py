@@ -29,11 +29,14 @@ def test_o_base_baixado_e_o_render_de_agora(api):
     assert api.get("/base.txt").text == render.render_base()
 
 
-def test_o_base_segue_o_as_gravado(api):
-    # o caminho de ponta a ponta do PUT /api/rede: o AS vai para o topo do
-    # yaml, e a proxima leitura do base ja sai com ele, sem reiniciar o app
-    assert api.put("/api/rede",
-                   json={"asn": "64500", "politica": ""}).status_code == 200
+def test_o_base_segue_o_namespace_gravado(api):
+    """O caminho de ponta a ponta do PUT /api/rede.
+
+    O namespace vai para o arquivo do tenant, e a proxima leitura do base ja
+    sai com ele, sem reiniciar o app. O ASN do bloco e o do tenant e nao
+    muda por aqui: quem troca de ASN e o seletor, escolhendo outro arquivo.
+    """
+    assert api.put("/api/rede", json={"politica": "64500"}).status_code == 200
     texto = api.get("/base.txt").text
     assert "64500:1000" in texto
     assert "64512:" not in texto

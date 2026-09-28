@@ -18,6 +18,7 @@ from app import auth
 from app import formulario as form
 from app import peers as peers_mod
 from app import plan, prefixes, render, validate
+from app import tenants as tenants_mod
 from app.modelos_api import (Aviso, Blocos, BlocosIrrPedido, BlocosTexto,
                              Config, ErroResposta, GrupoForm, GrupoRegistro,
                              GrupoResumo, GrupoSalvo, IrrPedido, LoginPedido,
@@ -126,22 +127,46 @@ roteador = APIRouter(prefix="/api", dependencies=[Depends(auth.exigir_login)],
                          422: {"model": ErroResposta}})
 
 
-def _yaml():
-    # lido na hora, e nao no import: os testes trocam o peers_mod.PEERS_YAML
-    # por um arquivo temporario depois que este modulo ja foi importado
-    return peers_mod.PEERS_YAML
+def tenant(asn: int = Query(...)) -> tenants_mod.Tenant:
+    """O Tenant do ?asn= da URL, ou 404.
+
+    A dependencia e o unico lugar do app que transforma o numero da query
+    num arquivo: as rotas recebem o Tenant pronto e nao voltam a falar de
+    caminho. Toda rota de dados declara `t: Tenant = Depends(tenant)`, e o
+    test_toda_rota_de_dados_pede_o_asn varre a tabela de rotas para uma
+    rota nova nao nascer sem ela.
+
+    O ?asn= que falta, ou que nao e numero, nem chega aqui: o FastAPI
+    recusa antes, e o _pedido_invalido responde 422 no formato das outras
+    recusas.
+    """
+    achado = tenants_mod.abrir(asn)
+    if achado is None:
+        raise tenants_mod.NaoEncontrado(asn)
+    return achado
 
 
-def _rede():
-    return peers_mod.carregar_asn(_yaml())
+def _rede(t):
+    """O plan.Rede do tenant: o ASN do nome do arquivo, o namespace de dentro.
+
+    O ASN nao sai da chave `asn` do arquivo: ela e copia de leitura, e um
+    arquivo editado a mao que discorde do nome geraria em silencio a config
+    de outra rede enquanto o seletor mostra o nome. Quem junta as duas
+    metades e o carregar_rede do peers.py.
+
+    O carregar_asn continua existindo para a migracao, que e o unico lugar
+    sem nome de arquivo de onde tirar o ASN: o peers.yaml migrado tem o ASN
+    dentro dele e em lugar nenhum mais.
+    """
+    return peers_mod.carregar_rede(t.caminho, t.asn)
 
 
-def _peers():
-    return peers_mod.carregar(_yaml())
+def _peers(t):
+    return peers_mod.carregar(t.caminho)
 
 
-def _grupos():
-    return peers_mod.carregar_grupos(_yaml())
+def _grupos(t):
+    return peers_mod.carregar_grupos(t.caminho)
 
 
 def _avisos(avisos):
@@ -167,9 +192,9 @@ def _modelo_rede(rede):
 
 
 @roteador.get("/plano", response_model=Plano)
-def ler_plano():
+def ler_plano(t: tenants_mod.Tenant = Depends(tenant)):
     """A rede e as tabelas do plano que o formulario usa para se preencher."""
-    rede, peers, grupos = _rede(), _peers(), _grupos()
+    rede, peers, grupos = _rede(t), _peers(t), _grupos(t)
     return Plano(
         rede=_modelo_rede(rede),
         padroes=form._padroes(rede),
@@ -195,21 +220,21 @@ def ler_plano():
 
 
 @roteador.put("/rede", response_model=RedeAtual)
-def gravar_rede(pedido: RedeForm):
-    """O AS da rede no topo do peers.yaml, pelas conferencias do
-    _asn_do_formulario."""
+def gravar_rede(pedido: RedeForm, t: tenants_mod.Tenant = Depends(tenant)):
+    """O namespace das standard do tenant, pelas conferencias do
+    _asn_do_formulario.
+
+    O ASN nao vem do corpo: ele e o nome do arquivo, e quem troca de ASN e
+    o seletor, criando ou escolhendo outro tenant. Editar o campo para
+    renomear o arquivo fica para a rodada do rename.
+    """
     asn, politica, erros = form._asn_do_formulario(
-        {"asn_rede": pedido.asn, "asn_politica": pedido.politica})
+        {"asn_rede": str(t.asn), "asn_politica": pedido.politica})
     if not erros:
-        try:
-            peers_mod.gravar_asn(asn, politica, _yaml())
-        except ValueError as exc:
-            # as faixas ja foram conferidas; o que chega aqui e o que escapou
-            # delas, e a mensagem do plan e a que nomeia
-            erros = [validate.Erro("asn_rede", str(exc))]
+        peers_mod.gravar_asn(asn, politica, t.caminho)
     if erros:
         return _falha(422, erros)
-    return _modelo_rede(_rede())
+    return _modelo_rede(_rede(t))
 
 
 def _nao_encontrado(o_que):
@@ -223,35 +248,35 @@ def _registro_peer(peer):
 
 
 @roteador.get("/peers", response_model=list[PeerResumo])
-def listar_peers():
+def listar_peers(t: tenants_mod.Tenant = Depends(tenant)):
     return [PeerResumo(id=p.id, token=p.token, tipo=p.tipo, asn=p.asn,
                        apelido=p.apelido, nome=p.nome, grupo_id=p.grupo_id)
-            for p in _peers()]
+            for p in _peers(t)]
 
 
 # /peers/novo vem antes de /peers/{ident}: na ordem inversa o "novo" cairia
 # no {ident} e voltaria 422 por nao ser numero
 @roteador.get("/peers/novo", response_model=PeerRegistro)
-def novo_peer(tipo: str = "cliente"):
-    return _registro_peer(form.peer_em_branco(tipo, _peers(), _grupos()))
+def novo_peer(t: tenants_mod.Tenant = Depends(tenant), tipo: str = "cliente"):
+    return _registro_peer(form.peer_em_branco(tipo, _peers(t), _grupos(t)))
 
 
 @roteador.get("/peers/{ident}", response_model=PeerRegistro)
-def ler_peer(ident: int):
-    peer = peers_mod.achar_id(_peers(), ident)
+def ler_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
+    peer = peers_mod.achar_id(_peers(t), ident)
     if peer is None:
         return _nao_encontrado("peer")
     return _registro_peer(peer)
 
 
 @roteador.get("/peers/{ident}/copia", response_model=PeerRegistro)
-def copiar_peer(ident: int):
+def copiar_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
     """O peer inteiro com o proximo ID livre, para abrir como peer novo.
 
     Nao grava nada. O salvar recusa o que a copia repetir (token, IP remoto,
     prefixo de downstream) e aponta o campo, e o operador corrige ali.
     """
-    peers, grupos = _peers(), _grupos()
+    peers, grupos = _peers(t), _grupos(t)
     peer = peers_mod.achar_id(peers, ident)
     if peer is None:
         return _nao_encontrado("peer")
@@ -276,8 +301,8 @@ def _grupo_do_peer(peer, grupos):
     return peers_mod.achar_grupo_id(grupos, peer.grupo_id)
 
 
-def _salvar_peer(formulario, peers, anterior):
-    grupos, rede = _grupos(), _rede()
+def _salvar_peer(t, formulario, peers, anterior):
+    grupos, rede = _grupos(t), _rede(t)
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior)
     avisos = validate.avisos(peer, peers, rede=rede)
     if erros:
@@ -286,46 +311,48 @@ def _salvar_peer(formulario, peers, anterior):
         peers.append(peer)
     else:
         peers[peers.index(anterior)] = peer
-        if anterior.arquivo() != peer.arquivo():
-            # trocou o token ou o tipo: o bloco com o nome velho sai de out/,
-            # senao fica um orfao que o operador pode colar por engano
-            anterior.arquivo().unlink(missing_ok=True)
-    peers_mod.gravar(peers, _yaml())
+        if anterior.arquivo(t.saida) != peer.arquivo(t.saida):
+            # trocou o token ou o tipo: o bloco com o nome velho sai da pasta
+            # do tenant, senao fica um orfao que o operador pode colar por
+            # engano
+            anterior.arquivo(t.saida).unlink(missing_ok=True)
+    peers_mod.gravar(peers, t.caminho)
     destino = render.escrever_peer(peer, grupo=_grupo_do_peer(peer, grupos),
-                                   rede=rede)
+                                   rede=rede, saida=t.saida)
     return PeerSalvo(registro=_registro_peer(peer), arquivo=destino.name,
                      avisos=_avisos(avisos))
 
 
 @roteador.post("/peers", response_model=PeerSalvo, status_code=201)
-def criar_peer(formulario: PeerForm):
-    return _salvar_peer(formulario, _peers(), None)
+def criar_peer(formulario: PeerForm, t: tenants_mod.Tenant = Depends(tenant)):
+    return _salvar_peer(t, formulario, _peers(t), None)
 
 
 @roteador.put("/peers/{ident}", response_model=PeerSalvo)
-def atualizar_peer(ident: int, formulario: PeerForm):
+def atualizar_peer(ident: int, formulario: PeerForm,
+                   t: tenants_mod.Tenant = Depends(tenant)):
     """Atualiza o registro do ID da URL.
 
     O ID do corpo e editavel: se o operador o trocou, o registro da URL passa
     ao ID novo, e o validar recusa o que ja for de outro peer ou grupo.
     """
-    peers = _peers()
+    peers = _peers(t)
     anterior = peers_mod.achar_id(peers, ident)
     if anterior is None:
         return _nao_encontrado("peer")
-    return _salvar_peer(formulario, peers, anterior)
+    return _salvar_peer(t, formulario, peers, anterior)
 
 
 @roteador.delete("/peers/{ident}", status_code=204)
-def excluir_peer(ident: int):
+def excluir_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
     # a confirmacao e um dialogo na tela nova, e nao um campo do pedido
-    peers = _peers()
+    peers = _peers(t)
     peer = peers_mod.achar_id(peers, ident)
     if peer is None:
         return _nao_encontrado("peer")
-    peer.arquivo().unlink(missing_ok=True)
+    peer.arquivo(t.saida).unlink(missing_ok=True)
     peers.remove(peer)
-    peers_mod.gravar(peers, _yaml())
+    peers_mod.gravar(peers, t.caminho)
     return Response(status_code=204)
 
 
@@ -350,6 +377,7 @@ def _criar_lista_do_peer(peer, rede):
 
 @roteador.post("/peers/previa", response_model=Previa)
 def previa_peer(formulario: PeerForm,
+                t: tenants_mod.Tenant = Depends(tenant),
                 ident: int | None = Query(default=None, alias="id")):
     """Valida e monta os blocos do formulario sem gravar nada.
 
@@ -358,11 +386,11 @@ def previa_peer(formulario: PeerForm,
     desfaz o que esta no equipamento, e o que esta no equipamento e o registro
     salvo, que o GET /api/peers/{ident}/saida devolve.
     """
-    peers, grupos, rede = _peers(), _grupos(), _rede()
+    peers, grupos, rede = _peers(t), _grupos(t), _rede(t)
     anterior = peers_mod.achar_id(peers, ident) if ident is not None else None
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior)
     avisos = _avisos(validate.avisos(peer, peers, rede=rede))
-    salvo = _ler(anterior.arquivo()) if anterior is not None else None
+    salvo = _ler(anterior.arquivo(t.saida)) if anterior is not None else None
     if erros:
         return Previa(erros=validate.erros_para_dict(erros), avisos=avisos,
                       salvo=salvo)
@@ -370,34 +398,37 @@ def previa_peer(formulario: PeerForm,
         bloco=render.render_peer(peer, grupo=_grupo_do_peer(peer, grupos),
                                  rede=rede),
         criar_lista=_criar_lista_do_peer(peer, rede),
-        arquivo=peer.arquivo().name, salvo=salvo, avisos=avisos)
+        arquivo=peer.arquivo(t.saida).name, salvo=salvo, avisos=avisos)
 
 
 @roteador.get("/peers/{ident}/saida", response_model=Saida)
-def saida_peer(ident: int):
-    peer = peers_mod.achar_id(_peers(), ident)
+def saida_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
+    peer = peers_mod.achar_id(_peers(t), ident)
     if peer is None:
         return _nao_encontrado("peer")
-    grupo = _grupo_do_peer(peer, _grupos())
+    grupo = _grupo_do_peer(peer, _grupos(t))
     if peer.grupo_id is not None and grupo is None:
         # o yaml aponta para um grupo que saiu (edicao a mao, gravacao pela
         # metade): sem ele o membro perde o que herdava, e a rota recusa com
         # 422 no lugar da Saida
         return _falha(422, [validate.Erro("grupo_id", "grupo nao encontrado")])
-    rede = _rede()
+    rede = _rede(t)
     return Saida(bloco=render.render_peer(peer, grupo=grupo, rede=rede),
                  remover=render.render_remove(peer, grupo=grupo, rede=rede),
                  criar_lista=_criar_lista_do_peer(peer, rede),
-                 arquivo=peer.arquivo().name)
+                 arquivo=peer.arquivo(t.saida).name)
 
 
 @roteador.post("/irr", response_model=Prefixos,
                responses={502: {"model": ErroResposta}})
-def consultar_irr(pedido: IrrPedido):
+def consultar_irr(pedido: IrrPedido, t: tenants_mod.Tenant = Depends(tenant)):
     """Os prefixos do ASN no IRR, pelo bgpq4, sem gravar nada.
 
     A consulta precisa so do ASN e do apelido: o resultado vai para os campos
-    de prefixo da tela, que o operador ainda edita antes de salvar.
+    de prefixo da tela, que o operador ainda edita antes de salvar. O ASN e o
+    do peer consultado, e nao o do tenant, entao o `t` nao e lido: ele existe
+    porque a varredura das rotas cobra o ?asn= de toda rota de dados, e uma
+    consulta de IRR nao e excecao para quem esta numa rede.
     """
     bruto = pedido.asn.strip()
     if bruto and not (bruto.isascii() and bruto.isdigit()):
@@ -446,8 +477,8 @@ def _grupo_do_pedido(formulario, grupos, peers, anterior):
     return grupo, erros
 
 
-def _salvar_grupo(formulario, grupos, anterior):
-    peers = _peers()
+def _salvar_grupo(t, formulario, grupos, anterior):
+    peers = _peers(t)
     grupo, erros = _grupo_do_pedido(formulario, grupos, peers, anterior)
     if erros:
         return _falha(422, erros)
@@ -456,40 +487,41 @@ def _salvar_grupo(formulario, grupos, anterior):
     else:
         grupos[grupos.index(anterior)] = grupo
         if anterior.nome != grupo.nome:
-            anterior.arquivo().unlink(missing_ok=True)
-    peers_mod.gravar_grupos(grupos, _yaml())
-    destino = render.escrever_grupo(grupo, rede=_rede())
+            anterior.arquivo(t.saida).unlink(missing_ok=True)
+    peers_mod.gravar_grupos(grupos, t.caminho)
+    destino = render.escrever_grupo(grupo, rede=_rede(t), saida=t.saida)
     return GrupoSalvo(registro=_registro_grupo(grupo, peers), arquivo=destino.name)
 
 
 @roteador.get("/grupos", response_model=list[GrupoResumo])
-def listar_grupos():
-    peers = _peers()
+def listar_grupos(t: tenants_mod.Tenant = Depends(tenant)):
+    peers = _peers(t)
     return [GrupoResumo(id=g.id, nome=g.nome, tipo=g.tipo,
                         membros=len(_membros(g, peers)))
-            for g in _grupos()]
+            for g in _grupos(t)]
 
 
 # /grupos/novo antes de /grupos/{ident}, pelo mesmo motivo do peer
 @roteador.get("/grupos/novo", response_model=GrupoRegistro)
-def novo_grupo(tipo: str = "parceiro"):
-    peers = _peers()
-    return _registro_grupo(form.grupo_em_branco(tipo, peers, _grupos()), peers)
+def novo_grupo(t: tenants_mod.Tenant = Depends(tenant),
+               tipo: str = "parceiro"):
+    peers = _peers(t)
+    return _registro_grupo(form.grupo_em_branco(tipo, peers, _grupos(t)), peers)
 
 
 @roteador.get("/grupos/{ident}", response_model=GrupoRegistro)
-def ler_grupo(ident: int):
-    grupo = peers_mod.achar_grupo_id(_grupos(), ident)
+def ler_grupo(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
+    grupo = peers_mod.achar_grupo_id(_grupos(t), ident)
     if grupo is None:
         return _nao_encontrado("grupo")
-    return _registro_grupo(grupo, _peers())
+    return _registro_grupo(grupo, _peers(t))
 
 
 @roteador.get("/grupos/{ident}/copia", response_model=GrupoRegistro)
-def copiar_grupo(ident: int):
+def copiar_grupo(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
     """O grupo inteiro com o proximo ID livre. O nome repetido e o que o
     salvar recusa. A copia nasce sem membro: os peers seguem no original."""
-    peers, grupos = _peers(), _grupos()
+    peers, grupos = _peers(t), _grupos(t)
     grupo = peers_mod.achar_grupo_id(grupos, ident)
     if grupo is None:
         return _nao_encontrado("grupo")
@@ -498,27 +530,28 @@ def copiar_grupo(ident: int):
 
 
 @roteador.post("/grupos", response_model=GrupoSalvo, status_code=201)
-def criar_grupo(formulario: GrupoForm):
-    return _salvar_grupo(formulario, _grupos(), None)
+def criar_grupo(formulario: GrupoForm, t: tenants_mod.Tenant = Depends(tenant)):
+    return _salvar_grupo(t, formulario, _grupos(t), None)
 
 
 @roteador.put("/grupos/{ident}", response_model=GrupoSalvo)
-def atualizar_grupo(ident: int, formulario: GrupoForm):
-    grupos = _grupos()
+def atualizar_grupo(ident: int, formulario: GrupoForm,
+                    t: tenants_mod.Tenant = Depends(tenant)):
+    grupos = _grupos(t)
     anterior = peers_mod.achar_grupo_id(grupos, ident)
     if anterior is None:
         return _nao_encontrado("grupo")
-    return _salvar_grupo(formulario, grupos, anterior)
+    return _salvar_grupo(t, formulario, grupos, anterior)
 
 
 @roteador.delete("/grupos/{ident}", status_code=204,
                  responses={409: {"model": ErroResposta}})
-def excluir_grupo(ident: int):
-    grupos = _grupos()
+def excluir_grupo(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
+    grupos = _grupos(t)
     grupo = peers_mod.achar_grupo_id(grupos, ident)
     if grupo is None:
         return _nao_encontrado("grupo")
-    membros = [m.token for m in _membros(grupo, _peers())]
+    membros = [m.token for m in _membros(grupo, _peers(t))]
     if membros:
         # o membro sem filtro proprio herda a politica do grupo: apagar o
         # grupo por baixo dele deixa a saida dele estourando, e por isso a
@@ -526,9 +559,9 @@ def excluir_grupo(ident: int):
         return _falha(409, [validate.Erro(
             "membros", "o grupo ainda tem peers membros: %s. Tire-os do grupo "
                        "antes de excluir." % ", ".join(membros))])
-    grupo.arquivo().unlink(missing_ok=True)
+    grupo.arquivo(t.saida).unlink(missing_ok=True)
     grupos.remove(grupo)
-    peers_mod.gravar_grupos(grupos, _yaml())
+    peers_mod.gravar_grupos(grupos, t.caminho)
     return Response(status_code=204)
 
 
@@ -541,29 +574,30 @@ def _criar_lista_do_grupo(grupo, rede):
 
 @roteador.post("/grupos/previa", response_model=Previa)
 def previa_grupo(formulario: GrupoForm,
+                 t: tenants_mod.Tenant = Depends(tenant),
                  ident: int | None = Query(default=None, alias="id")):
     """A previa do grupo, com o mesmo contrato da do peer."""
-    grupos, peers, rede = _grupos(), _peers(), _rede()
+    grupos, peers, rede = _grupos(t), _peers(t), _rede(t)
     anterior = peers_mod.achar_grupo_id(grupos, ident) if ident is not None else None
     grupo, erros = _grupo_do_pedido(formulario, grupos, peers, anterior)
-    salvo = _ler(anterior.arquivo()) if anterior is not None else None
+    salvo = _ler(anterior.arquivo(t.saida)) if anterior is not None else None
     if erros:
         return Previa(erros=validate.erros_para_dict(erros), salvo=salvo)
     return Previa(bloco=render.render_grupo(grupo, rede=rede),
                   criar_lista=_criar_lista_do_grupo(grupo, rede),
-                  arquivo=grupo.arquivo().name, salvo=salvo)
+                  arquivo=grupo.arquivo(t.saida).name, salvo=salvo)
 
 
 @roteador.get("/grupos/{ident}/saida", response_model=Saida)
-def saida_grupo(ident: int):
-    grupo = peers_mod.achar_grupo_id(_grupos(), ident)
+def saida_grupo(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
+    grupo = peers_mod.achar_grupo_id(_grupos(t), ident)
     if grupo is None:
         return _nao_encontrado("grupo")
-    rede = _rede()
+    rede = _rede(t)
     # o grupo nao tem bloco de remocao: o Saida sai com o remover nulo
     return Saida(bloco=render.render_grupo(grupo, rede=rede),
                  criar_lista=_criar_lista_do_grupo(grupo, rede),
-                 arquivo=grupo.arquivo().name)
+                 arquivo=grupo.arquivo(t.saida).name)
 
 
 def _blocos_do_pedido(pedido):
@@ -594,30 +628,29 @@ def _resposta_blocos(blocos, rede):
 
 
 @roteador.get("/blocos", response_model=Blocos)
-def ler_blocos():
-    return _resposta_blocos(peers_mod.carregar_blocos(_yaml()), _rede())
+def ler_blocos(t: tenants_mod.Tenant = Depends(tenant)):
+    return _resposta_blocos(peers_mod.carregar_blocos(t.caminho), _rede(t))
 
 
 @roteador.put("/blocos", response_model=Blocos)
-def salvar_blocos(pedido: BlocosTexto):
-    rede = _rede()
+def salvar_blocos(pedido: BlocosTexto, t: tenants_mod.Tenant = Depends(tenant)):
+    rede = _rede(t)
     blocos = _blocos_do_pedido(pedido)
     erros = validate.validar_blocos(blocos, rede)
     if erros:
         return _falha(422, erros)
-    peers_mod.gravar_blocos(blocos, _yaml())
+    peers_mod.gravar_blocos(blocos, t.caminho)
     # o arquivo de onde o operador cola, com os ativos
-    render.escrever_blocos(form._ativos(blocos), rede)
+    render.escrever_blocos(form._ativos(blocos), rede, saida=t.saida)
     return _resposta_blocos(blocos, rede)
 
 
 @roteador.post("/blocos/previa", response_model=Previa)
-def previa_blocos(pedido: BlocosTexto):
+def previa_blocos(pedido: BlocosTexto, t: tenants_mod.Tenant = Depends(tenant)):
     """O bloco de originacao que o salvar escreveria, sem gravar nada."""
-    rede = _rede()
+    rede = _rede(t)
     blocos = _blocos_do_pedido(pedido)
-    # o OUT e lido na hora, como o PEERS_YAML: os testes o trocam
-    salvo = _ler(render.OUT / "blocos.txt")
+    salvo = _ler(t.saida / "blocos.txt")
     erros = validate.validar_blocos(blocos, rede)
     if erros:
         return Previa(erros=validate.erros_para_dict(erros), salvo=salvo)
@@ -627,14 +660,15 @@ def previa_blocos(pedido: BlocosTexto):
 
 @roteador.post("/blocos/irr", response_model=BlocosTexto,
                responses={502: {"model": ErroResposta}})
-def consultar_blocos(pedido: BlocosIrrPedido):
+def consultar_blocos(pedido: BlocosIrrPedido,
+                     t: tenants_mod.Tenant = Depends(tenant)):
     """Consulta o IRR do AS da rede e mescla com o texto recebido.
 
     A base da mesclagem e o texto que veio, e nao o arquivo: o operador pode
     ter mexido numa linha antes de consultar. O prefixo torto e recusado antes
     da consulta, nomeado no campo dele. Nada e gravado.
     """
-    rede = _rede()
+    rede = _rede(t)
     blocos = _blocos_do_pedido(pedido)
     erros = validate.validar_blocos(blocos, rede)
     if erros:
@@ -663,28 +697,28 @@ def _secao_base(rede):
                        texto=render.render_base(rede=rede))
 
 
-def _secao_originacao(blocos, rede):
+def _secao_originacao(blocos, rede, saida):
     # sem prefixo proprio em servico nao ha bloco, e a secao vazia so faria
     # volume numa pagina que ja e longa
     texto = _originacao(blocos, rede)
     if texto is None:
         return None
-    arquivo = render.OUT / "blocos.txt"
+    arquivo = saida / "blocos.txt"
     return SecaoConfig(chave="originacao",
                        titulo="Originacao dos prefixos proprios",
                        texto=texto, arquivo=arquivo.name,
                        salvo=arquivo.exists())
 
 
-def _secao_grupo(grupo, rede):
-    destino = grupo.arquivo()
+def _secao_grupo(grupo, rede, saida):
+    destino = grupo.arquivo(saida)
     return SecaoConfig(chave="grupo-%s" % grupo.id,
                        titulo="%s (%s)" % (grupo.nome, grupo.tipo),
                        texto=render.render_grupo(grupo, rede=rede),
                        arquivo=destino.name, salvo=destino.exists())
 
 
-def _secao_peer(peer, grupo, rede):
+def _secao_peer(peer, grupo, rede, saida):
     """O bloco do peer mais o quadro "ao criar", na ordem das abas da tela.
 
     O texto e a juncao dos dois porque quem cola no equipamento cola a secao
@@ -695,7 +729,7 @@ def _secao_peer(peer, grupo, rede):
     criar = _criar_lista_do_peer(peer, rede)
     if criar is not None:
         partes.append(criar)
-    destino = peer.arquivo()
+    destino = peer.arquivo(saida)
     return SecaoConfig(chave="peer-%s" % peer.id,
                        titulo="%s (%s, AS%s)" % (_nome_do_peer(peer), peer.tipo,
                                                  peer.asn),
@@ -704,19 +738,19 @@ def _secao_peer(peer, grupo, rede):
 
 
 @roteador.get("/config", response_model=Config)
-def ler_config():
+def ler_config(t: tenants_mod.Tenant = Depends(tenant)):
     """A config inteira numa resposta so, montada na hora pelo render.
 
     Quem cola no equipamento le daqui: e a mesma saida das telas de cada
-    registro, na ordem em que os blocos se apoiam, e sem nada gravado em
-    out/ no caminho.
+    registro, na ordem em que os blocos se apoiam, e sem nada gravado na
+    pasta do tenant no caminho.
     """
-    peers, grupos, rede = _peers(), _grupos(), _rede()
+    peers, grupos, rede = _peers(t), _grupos(t), _rede(t)
     # a ordem e a do "Ordem de colagem no F1A" do README: o base primeiro, o
     # grupo antes dos membros que herdam dele, e os prefixos proprios por
     # ultimo, que nao dependem de nem sustentam bloco nenhum
     secoes = [_secao_base(rede)]
-    secoes.extend(_secao_grupo(grupo, rede) for grupo in grupos)
+    secoes.extend(_secao_grupo(grupo, rede, t.saida) for grupo in grupos)
     for peer in peers:
         grupo = _grupo_do_peer(peer, grupos)
         if peer.grupo_id is not None and grupo is None:
@@ -726,8 +760,9 @@ def ler_config():
             return _falha(422, [validate.Erro(
                 "grupo_id", "o grupo %s do peer %s nao existe"
                             % (peer.grupo_id, _nome_do_peer(peer)))])
-        secoes.append(_secao_peer(peer, grupo, rede))
-    originacao = _secao_originacao(peers_mod.carregar_blocos(_yaml()), rede)
+        secoes.append(_secao_peer(peer, grupo, rede, t.saida))
+    originacao = _secao_originacao(peers_mod.carregar_blocos(t.caminho), rede,
+                                   t.saida)
     if originacao is not None:
         secoes.append(originacao)
     return Config(secoes=secoes)
@@ -800,10 +835,16 @@ async def _sem_sessao(request: Request, exc: auth.NaoAutenticado):
     return _falha(401, [validate.Erro("_", str(exc))])
 
 
+async def _sem_tenant(request: Request, exc: tenants_mod.NaoEncontrado):
+    """O 404 do ASN sem arquivo, no formato das outras recusas."""
+    return _falha(404, [validate.Erro("_", str(exc))])
+
+
 def instalar(app: FastAPI):
-    """Monta as rotas /api e os tres tratadores de erro no app."""
+    """Monta as rotas /api e os tratadores de erro no app."""
     app.include_router(publico)
     app.include_router(roteador)
     app.add_exception_handler(RequestValidationError, _pedido_invalido)
     app.add_exception_handler(auth.NaoAutenticado, _sem_sessao)
+    app.add_exception_handler(tenants_mod.NaoEncontrado, _sem_tenant)
     app.add_exception_handler(Exception, _falha_inesperada)

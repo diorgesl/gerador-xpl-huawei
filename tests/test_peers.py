@@ -93,10 +93,11 @@ def test_token_sai_do_asn_quando_o_apelido_esta_vazio():
     assert p.token == "268127"
 
 
-def test_arquivo_do_peer(tmp_path, monkeypatch):
-    monkeypatch.setattr(mod, "OUT", tmp_path)
+def test_arquivo_do_peer(tmp_path):
+    # a pasta de saida vem por parametro: o nome continua saindo do token, e
+    # o peer nao tem mais um out/ de modulo de onde tirar o resto do caminho
     p = mod.Peer(id=1, nome="x", tipo="cliente", asn=268127)
-    assert p.arquivo().name == "268127-cliente.txt"
+    assert p.arquivo(tmp_path) == tmp_path / "268127-cliente.txt"
 
 
 def test_familias_so_as_preenchidas():

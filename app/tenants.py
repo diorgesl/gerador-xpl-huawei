@@ -140,3 +140,17 @@ def _mover_saida(asn):
                   flush=True)
             continue
         os.replace(arquivo, alvo)
+
+
+class NaoEncontrado(Exception):
+    """O ASN pedido nao tem arquivo na pasta.
+
+    E o mesmo desenho do auth.NaoAutenticado: quem transforma em resposta e
+    um handler registrado no instalar() do api.py, no formato das outras
+    recusas. Um HTTPException daria {"detail": ...}, que a SPA le como
+    resposta fora do modelo.
+    """
+
+    def __init__(self, asn):
+        self.asn = asn
+        super().__init__("ASN %s nao tem cadastro em peers/" % asn)

@@ -2,16 +2,17 @@
 
 from app import peers as peers_mod
 from app import plan
-from dados_api import CLIENTE, GRUPO_PARCEIROS, GRUPO_UPSTREAM, arvore, membro_de
+from dados_api import (ASN_DE_TESTE, CLIENTE, GRUPO_PARCEIROS,
+                       GRUPO_UPSTREAM, arvore, caminho_tenant, membro_de)
 
 
 def test_criar_grupo_grava_o_yaml_e_o_bloco(api, tmp_path):
     r = api.post("/api/grupos", json=GRUPO_PARCEIROS)
     assert r.status_code == 201, r.text
     assert r.json()["arquivo"] == "grupo-PARCEIROS_CDN.txt"
-    grupos = peers_mod.carregar_grupos(tmp_path / "peers.yaml")
+    grupos = peers_mod.carregar_grupos(caminho_tenant(tmp_path))
     assert [g.nome for g in grupos] == ["PARCEIROS_CDN"]
-    assert (tmp_path / "out" / "grupo-PARCEIROS_CDN.txt").exists()
+    assert (tmp_path / "out" / str(ASN_DE_TESTE) / "grupo-PARCEIROS_CDN.txt").exists()
 
 
 def test_criar_com_id_de_outro_grupo_e_recusado(api, tmp_path):
@@ -65,15 +66,15 @@ def test_editar_mantem_o_id_da_url(api, tmp_path):
     api.post("/api/grupos", json=GRUPO_PARCEIROS)
     r = api.put("/api/grupos/0", json=dict(GRUPO_PARCEIROS, id="5", lp_base="250"))
     assert r.status_code == 200, r.text
-    grupos = peers_mod.carregar_grupos(tmp_path / "peers.yaml")
+    grupos = peers_mod.carregar_grupos(caminho_tenant(tmp_path))
     assert [(g.id, g.lp_base) for g in grupos] == [(0, 250)]
 
 
 def test_renomear_apaga_o_bloco_antigo(api, tmp_path):
     api.post("/api/grupos", json=GRUPO_PARCEIROS)
     assert api.put("/api/grupos/0", json=dict(GRUPO_PARCEIROS, nome="CDNS")).status_code == 200
-    assert not (tmp_path / "out" / "grupo-PARCEIROS_CDN.txt").exists()
-    assert (tmp_path / "out" / "grupo-CDNS.txt").exists()
+    assert not (tmp_path / "out" / str(ASN_DE_TESTE) / "grupo-PARCEIROS_CDN.txt").exists()
+    assert (tmp_path / "out" / str(ASN_DE_TESTE) / "grupo-CDNS.txt").exists()
 
 
 def test_salvar_o_que_o_get_do_grupo_devolveu_nao_muda_nada(api, tmp_path):
@@ -97,8 +98,8 @@ def test_excluir_grupo_com_membro_e_recusado_sem_mexer_em_nada(api, tmp_path):
 def test_excluir_grupo_sem_membro(api, tmp_path):
     api.post("/api/grupos", json=GRUPO_PARCEIROS)
     assert api.delete("/api/grupos/0").status_code == 204
-    assert peers_mod.carregar_grupos(tmp_path / "peers.yaml") == []
-    assert not (tmp_path / "out" / "grupo-PARCEIROS_CDN.txt").exists()
+    assert peers_mod.carregar_grupos(caminho_tenant(tmp_path)) == []
+    assert not (tmp_path / "out" / str(ASN_DE_TESTE) / "grupo-PARCEIROS_CDN.txt").exists()
 
 
 def test_grupo_que_nao_existe_e_404(api):
@@ -109,7 +110,7 @@ def test_grupo_que_nao_existe_e_404(api):
 
 
 def _salvo(tmp_path, nome):
-    return (tmp_path / "out" / nome).read_text(encoding="ascii")
+    return (tmp_path / "out" / str(ASN_DE_TESTE) / nome).read_text(encoding="ascii")
 
 
 def test_a_previa_do_grupo_e_o_bloco_que_o_salvar_escreve(api, tmp_path):
@@ -188,7 +189,7 @@ def test_criar_grupo_com_id_de_peer_e_recusado(api, tmp_path):
 
     assert r.status_code == 422
     assert r.json()["erros"]["id"] == "ID 0 ja usado pelo peer Cliente ACME"
-    assert peers_mod.carregar_grupos(tmp_path / "peers.yaml") == []
+    assert peers_mod.carregar_grupos(caminho_tenant(tmp_path)) == []
 
 
 def test_o_default_do_grupo_nao_engole_o_valor_zero(api, tmp_path):
@@ -205,7 +206,7 @@ def test_o_default_do_grupo_nao_engole_o_valor_zero(api, tmp_path):
     assert api.post("/api/grupos", json=dict(GRUPO_PARCEIROS, nome="ID_TORTO",
                                              id="abc")).status_code == 201
 
-    grupos = peers_mod.carregar_grupos(tmp_path / "peers.yaml")
+    grupos = peers_mod.carregar_grupos(caminho_tenant(tmp_path))
     assert [(g.nome, g.lp_base) for g in grupos] == [
         ("PARCEIROS_CDN", 0),
         ("SEM_LP", plan.LP_BASE["parceiro"]),
@@ -228,4 +229,4 @@ def test_valor_numerico_torto_no_grupo_e_erro_no_campo(api, tmp_path):
 
     assert r.status_code == 422
     assert r.json()["erros"]["lp_base"] == "valor numerico invalido"
-    assert peers_mod.carregar_grupos(tmp_path / "peers.yaml") == []
+    assert peers_mod.carregar_grupos(caminho_tenant(tmp_path)) == []
