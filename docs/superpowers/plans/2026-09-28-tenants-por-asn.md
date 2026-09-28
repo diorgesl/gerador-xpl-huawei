@@ -1386,9 +1386,11 @@ export function usePlano() {
     enabled: asn !== null,
     queryFn: async () => {
       const { data, error } = await cliente.GET("/api/plano", {
-        // o `as string` e o mesmo idioma do `id as number` do usePeer: o
-        // `enabled` acima garante que a consulta so roda com o ASN na mao
-        params: { query: { asn: asn as string } },
+        // o `Number` e a conversao de borda: o contexto guarda texto (o que
+        // o sessionStorage e a lista do /api/asns devolvem) e o schema tipa
+        // o parametro como inteiro. O `enabled` acima garante que a consulta
+        // so roda com o ASN na mao, entao o null nao chega aqui
+        params: { query: { asn: Number(asn) } },
       })
       if (error) throw new Error("falha ao ler o plano")
       return data
@@ -1402,7 +1404,9 @@ O mesmo em `usePeers`, `usePeer`, `useGrupos`, `useGrupo`, `useBlocos` e `useCon
 
 As chaves que já são função ganham o ASN como último item: `[...chaves.peer(id ?? -1), asn]`.
 
-`web/src/api/inicial.ts` e `web/src/api/previa.ts` seguem o mesmo: os dois recebem o ASN do `useAsn()`, acrescentam-no à chave e mandam `params: { query: { ...params.query, asn } }`. No `usePeerInicial`/`useGrupoInicial` as três chamadas de cada um ganham o `asn` na query; no `usePrevia`, o `params` montado na linha 47 passa a ser `{ params: { query: { id: id ?? undefined, asn: asn as string } } }`.
+`web/src/api/inicial.ts` e `web/src/api/previa.ts` seguem o mesmo: os dois recebem o ASN do `useAsn()`, acrescentam-no à chave e mandam `params: { query: { ...params.query, asn } }`. No `usePeerInicial`/`useGrupoInicial` as três chamadas de cada um ganham o `asn` na query; no `usePrevia`, o `params` montado na linha 47 passa a ser `{ params: { query: { id: id ?? undefined, asn: Number(asn) } } }`.
+
+**O `?asn=` é `number`, e não texto.** O `asn: int = Query(...)` do FastAPI sai no schema como inteiro, e o `schema.d.ts` gerado tipa o parâmetro como `number`: um `asn as string` não compila. O contexto guarda texto, porque é o que o `sessionStorage` e a lista do `/api/asns` devolvem, e a conversão mora na borda, na hora da chamada.
 
 - [ ] **Step 7: A rota ambiente no arnês de teste**
 
@@ -1440,15 +1444,22 @@ Os hooks (`consultas.ts`, `inicial.ts`, `previa.ts`) já levam o ASN desde o pas
 | `PrefixosTela.tsx` | 71 | `PUT /api/blocos` |
 | `PrefixosTela.tsx` | 103 | `POST /api/blocos/irr` |
 
-O `ConfiguracoesTela.tsx:38` (`PUT /api/rede`) fica de fora aqui de propósito: ele muda o corpo junto com o campo que vira leitura, e é a tarefa 6 inteira. O padrão, para a que grava o peer:
+O `ConfiguracoesTela.tsx:38` (`PUT /api/rede`) também entra aqui, e não na tarefa 6: enquanto ele não tiver o `?asn=`, o `tsc -b` não fecha, e uma tarefa que termina com o front não compilando não tem como provar o próprio passo de build. A tarefa 6 fica com o que é de tela nesta mudança: o campo do AS virando leitura, a nota que aponta para o seletor e as asserções do teste que falam do campo.
+
+Duas coisas que **não** são chamadas do cliente tipado, e por isso o `tsc` não cobra, mas quebram igual:
+
+- **O `/base.txt`** é buscado com `fetch` cru em dois lugares (`casca.tsx:32`, no "baixar o bloco base" da paleta, e `BaseTela.tsx:16`): os dois passam a levar o `?asn=`. Sem isso os dois downloads batem numa rota que agora exige o parâmetro, e o sintoma é um 422 no meio de uma ação que não tem nada a ver com o ASN.
+- **As chaves de consulta próprias das telas** (as do `saida` do peer e do grupo, e as da prévia dos blocos) são cache como as dos hooks, e sem o ASN na chave a troca de tenant serviria o bloco da rede anterior até o refetch chegar.
+
+O padrão, para a que grava o peer:
 
 ```ts
 const asn = useAsn()
 ...
         ? await cliente.POST("/api/peers", {
-            params: { query: { asn: asn as string } }, body: corpo })
+            params: { query: { asn: Number(asn) } }, body: corpo })
         : await cliente.PUT("/api/peers/{ident}", {
-            params: { path: { ident }, query: { asn: asn as string } }, body: corpo })
+            params: { path: { ident }, query: { asn: Number(asn) } }, body: corpo })
 ```
 
 As chamadas que já têm `params` só acrescentam o `query` (o `body`, o `signal` e o `path` ficam como estão). O `POST /api/irr` e o `POST /api/blocos/irr` entram na lista: são rotas de dados como as outras.
@@ -1484,9 +1495,9 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 - [ ] **Step 1: A tela de Configurações**
 
-As outras 16 chamadas diretas do front subiram para o passo 8 da tarefa 5, que é onde o `tsc -b` passou a fechar. O que sobra aqui é esta tela, que muda em dois lugares ao mesmo tempo e por isso não cabia lá: o campo do AS vira leitura e o corpo do `PUT /api/rede` perde o `asn`.
+O `?asn=` desta tela e o corpo do `PUT /api/rede` já foram tratados no passo 8 da tarefa 5: sem isso o `tsc -b` não fechava lá, e o passo de build de quem deixa a linha quebrada não prova nada. O que sobra aqui é o comportamento da tela, que é uma mudança de interface com o operador e merece o próprio gate: o campo do AS vira leitura, com a nota que aponta para o seletor, e as asserções do teste que falam dele acompanham.
 
-`web/src/telas/configuracoes/ConfiguracoesTela.tsx`: o `Input` do AS (linhas 98-106) vira texto, e o `gravar` deixa de mandar o ASN.
+`web/src/telas/configuracoes/ConfiguracoesTela.tsx`: o `Input` do AS (linhas 98-106) vira texto.
 
 ```tsx
           {/* O campo nao e editavel nesta rodada: quem troca de ASN e o
@@ -1498,15 +1509,6 @@ As outras 16 chamadas diretas do front subiram para o passo 8 da tarefa 5, que �
                  ajuda="quem troca e o seletor, na barra lateral">
             <Input id="asn_rede" className="dado" value={rede.asn} readOnly />
           </Campo>
-```
-
-e o `gravar`:
-
-```ts
-    mutationFn: () => cliente.PUT("/api/rede", {
-      params: { query: { asn: asn as string } },
-      body: { politica: rede.politica },
-    }),
 ```
 
 O `rascunho` deixa de guardar o `asn` (só o `politica`): o `RedeAtual.asn` continua vindo do plano, que é o eco do tenant selecionado. O aviso do fim do fieldset ("Trocar o AS muda o nome de toda community...") passa a dizer o que a troca faz hoje: "Trocar o ASN no seletor muda o nome de toda community e o nome dos arquivos em `out/<ASN>/`."
