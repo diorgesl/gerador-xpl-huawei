@@ -95,7 +95,7 @@ def test_export_sanity_barra_a_infra_interna_antes_de_tudo():
 def test_export_sanity_dispensa_a_marca_da_rota_originada_aqui():
     corpo = render.render_base().split(
         "xpl route-filter EXPORT-SANITY")[1].split("end-filter")[0]
-    assert "if not as-path matches-any AP-LOCAL-ORIGIN" in corpo
+    assert "if not as-path in AP-LOCAL-ORIGIN" in corpo
     assert "if not community matches-any CL-ORIGEM-ANUNCIAVEL" in corpo
 
 
@@ -311,7 +311,7 @@ def test_filtro_com_asn_falsy_pula_confinamento_por_as_path():
     texto = render.render_peer(peer_cliente(asn=0))
 
     importe = texto.split("xpl route-filter CUST-0-IMPORT-V4")[1].split("end-filter")[0]
-    assert "as-path matches-any AP-CUST-0" not in importe
+    assert "as-path in AP-CUST-0" not in importe
     assert importe.count("apply large-community") == 1  # so a do blackhole, que nao depende do asn
     assert "call route-filter IMPORT-SANITY-V4" in importe
     assert "call route-filter APPLY-CUSTOMER-LP" in importe
@@ -512,7 +512,7 @@ def test_import_do_upstream_recusa_o_ap_block():
     texto = render.render_peer(peer_upstream())
     import_ = texto.split("xpl route-filter UP-14840-IMPORT-V4")[1].split("end-filter")[0]
     codigo = "\n".join(l for l in import_.splitlines() if not l.strip().startswith("!-"))
-    assert "if as-path matches-any AP-BLOCK-14840 then" in codigo
+    assert "if as-path in AP-BLOCK-14840 then" in codigo
 
 
 def test_te_em_branco_nao_emite_o_ramo_nem_a_lista():
@@ -566,7 +566,7 @@ def test_ap_te_sozinho_sai_nas_duas_familias():
         # viesse a citar a lista ou o LP satisfaria a positiva e quebraria a
         # negativa sem a operacao mudar. Hoje nenhum !- cita os dois.
         codigo = "\n".join(l for l in corpo.splitlines() if not l.strip().startswith("!-"))
-        assert "if as-path matches-any AP-TE-PREFER-14840 then" in codigo
+        assert "if as-path in AP-TE-PREFER-14840 then" in codigo
         assert "apply local-preference 250" in codigo
     assert "xpl ip-prefix-list PL-TE-PREFER-14840-V4" not in texto
 
@@ -691,8 +691,8 @@ def test_nenhum_objeto_sem_eixo_de_familia_sai_definido_duas_vezes():
     assert not repetidas, "definido duas vezes: %s" % ", ".join(repetidas)
     # o inventario do dual-stack: os 7 sets sem eixo, a prefix-list do v4 (a
     # do v6 nao sai, o fixture nao tem prefixo de TE em v6), os 4 filtros, a
-    # AP-BLOCK, a AP-TE-PREFER e a APPLY-PEER
-    assert len(definicoes) == 15
+    # AP-BLOCK, a AP-TE-PREFER, a AP-OWN e a APPLY-PEER
+    assert len(definicoes) == 16
 
 
 def test_ap_block_em_branco_nao_emite_a_lista_nem_o_ramo():
@@ -703,7 +703,7 @@ def test_ap_block_em_branco_nao_emite_a_lista_nem_o_ramo():
     # e prosa pode cita-la.
     codigo = "\n".join(l for l in texto.splitlines() if not l.strip().startswith("!-"))
     assert "xpl as-path-list AP-BLOCK-14840" not in texto
-    assert "if as-path matches-any AP-BLOCK-14840" not in codigo
+    assert "if as-path in AP-BLOCK-14840" not in codigo
     # o portao do ap_te e independente: a lista de TE continua saindo
     assert "xpl as-path-list AP-TE-PREFER-14840" in texto
 
@@ -796,7 +796,7 @@ def test_ix_import_carimba_com_overwrite_e_a_informativa_do_ix():
 def test_ix_import_sobe_lp_para_membro_preferido():
     texto = render.render_peer(peer_ix())
     import_ = texto.split("xpl route-filter IX-IX-SP-IMPORT-V4")[1].split("end-filter")[0]
-    assert "if as-path matches-any AP-IX-IX-SP then" in import_
+    assert "if as-path in AP-IX-IX-SP then" in import_
     assert "apply local-preference 195" in import_
     assert "apply local-preference 190" in import_
 
@@ -975,7 +975,7 @@ def test_allowlist_usa_pass():
 def test_pni_import_recusa_quem_nao_esta_na_allowlist():
     texto = render.render_peer(peer_pni())
     import_ = texto.split("xpl route-filter PNI-CDN-A-IMPORT-V4")[1].split("end-filter")[0]
-    assert "if not as-path matches-any AP-CDN-A-ALLOWED then" in import_
+    assert "if not as-path in AP-CDN-A-ALLOWED then" in import_
     assert "refuse" in import_
 
 
@@ -1437,7 +1437,7 @@ def test_bloco_do_grupo_com_asn_confina_prefixo_e_as_path():
     assert "xpl ip-prefix-list PL-CUST-UP-REDUNDANTE-V4" in texto
     assert "xpl as-path-list AP-CUST-UP-REDUNDANTE" in texto
     assert "if not ip route-destination in PL-CUST-UP-REDUNDANTE-V4 then" in texto
-    assert "if not as-path matches-any AP-CUST-UP-REDUNDANTE then" in texto
+    assert "if not as-path in AP-CUST-UP-REDUNDANTE then" in texto
     assert "peer UP-REDUNDANTE route-filter CUST-UP-REDUNDANTE-IMPORT-V4 import" in texto
     assert "peer UP-REDUNDANTE route-filter CUST-UP-REDUNDANTE-EXPORT-V4 export" in texto
 
@@ -2328,3 +2328,72 @@ def test_nenhum_bloco_redistribui_rota_local():
             assert not re.match(r"\s*(import-route|aggregate)\b", linha), (
                 nome, linha)
 
+
+
+def test_nenhum_filtro_usa_matches_any_em_as_path():
+    """O operador de as-path e o `in`; `matches-any` nao existe nessa clausula.
+
+    `community` e `large-community` tem o `matches-any`, e e dai que vem a
+    confusao: o que o equipamento recusa e so a clausula de as-path. Ela
+    sobreviveu em tres filtros quando o resto migrou para o `in`, os dois do
+    upstream (AP-BLOCK e AP-TE-PREFER) e o do cliente (AP-CUST).
+
+    O caso varre os cinco tipos e os dois alvos porque a clausula mora em
+    macro compartilhada: conferir um tipo so deixaria os outros passarem.
+    """
+    do_tipo = {"cliente": peer_cliente, "parceiro": peer_parceiro,
+               "upstream": peer_upstream, "ix": peer_ix, "pni": peer_pni}
+    for tipo, monta in do_tipo.items():
+        for alvo, renderiza in ((monta(), render.render_peer),
+                                (grupo_do_tipo(tipo), render.render_grupo)):
+            linhas = [l for l in renderiza(alvo).splitlines()
+                      if "as-path matches-any" in l]
+            assert not linhas, (tipo, linhas)
+
+
+# --- a preferencia dos blocos do proprio upstream ----------------------
+#
+# O peer anuncia os blocos dele, e a rota que vem por ele mesmo e o melhor
+# caminho para esses prefixos. A clausula marca isso com local-preference,
+# para que a rota nao perca para um caminho mais longo aprendido alhures.
+
+
+def test_o_upstream_prefere_os_blocos_dele_mesmo():
+    """`origin` e nao `pass`: a pergunta e quem originou o prefixo.
+
+    O peer pode prependar o proprio bloco, e o path sai "14840 14840": um
+    `pass` deixaria de casar justamente na rota prependada, e a preferencia
+    sumiria sem aviso. `origin` olha o ultimo AS do path e sobrevive ao
+    prepend. E a mesma escolha, pelo mesmo motivo, do AP-CUST.
+    """
+    texto = render.render_peer(peer_upstream())
+    assert "xpl as-path-list AP-OWN-14840" in texto
+    assert " origin '14840'" in texto
+
+    import_ = texto.split("xpl route-filter UP-14840-IMPORT-V4")[1].split("end-filter")[0]
+    assert "if as-path in AP-OWN-14840 then" in import_
+    assert "apply local-preference 500" in import_
+
+
+def test_a_preferencia_do_bloco_vence_a_excecao_de_te():
+    """A ordem das duas clausulas e a regra, e nao um detalhe de leitura.
+
+    As duas escrevem local-preference no import, e a ultima vence. A lista
+    de excecao de TE e de prefixos alcancados melhor pela borda do
+    upstream, que e onde os blocos dele costumam estar: com a clausula nova
+    antes, o 250 do TE passaria por cima do 500 nos prefixos que ela existe
+    para marcar, e a preferencia nao apareceria em lugar nenhum.
+    """
+    import_ = (render.render_peer(peer_upstream())
+               .split("xpl route-filter UP-14840-IMPORT-V4")[1]
+               .split("end-filter")[0])
+    assert import_.index("apply local-preference 500") > import_.index(
+        "apply local-preference 250")
+
+
+def test_so_o_upstream_ganha_a_preferencia_do_bloco_do_peer():
+    # a sessao de cliente anuncia os prefixos que ele comprou, e nao tem
+    # "bloco proprio" para preferir: a lista e a clausula sao do upstream
+    for monta in (peer_cliente, peer_parceiro, peer_ix, peer_pni):
+        texto = render.render_peer(monta())
+        assert "AP-OWN" not in texto, monta.__name__

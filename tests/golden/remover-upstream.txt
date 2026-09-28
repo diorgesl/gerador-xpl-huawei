@@ -15,6 +15,7 @@ undo xpl large-community-list LC-PREP1-14840
 undo xpl large-community-list LC-PREP2-14840
 undo xpl large-community-list LC-PREP3-14840
 undo xpl as-path-list AP-BLOCK-14840
+undo xpl as-path-list AP-OWN-14840
 undo xpl community-list CL-NOADV-14840
 undo xpl large-community-list LC-NOADV-14840
 undo xpl route-filter APPLY-PEER-14840

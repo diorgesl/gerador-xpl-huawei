@@ -57,6 +57,9 @@ undo xpl as-path-list AP-BLOCK-{{ peer.token }}
 {% if peer.ap_te %}
 undo xpl as-path-list AP-TE-PREFER-{{ peer.token }}
 {% endif %}
+{# incondicional, como a criacao: a preferencia pelos blocos do proprio
+   upstream vale em todo upstream, e nao depende de campo nenhum #}
+undo xpl as-path-list AP-OWN-{{ peer.token }}
 undo xpl community-list CL-NOADV-{{ peer.token }}
 undo xpl large-community-list LC-NOADV-{{ peer.token }}
 undo xpl route-filter APPLY-PEER-{{ peer.token }}

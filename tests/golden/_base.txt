@@ -115,13 +115,13 @@ xpl route-filter IMPORT-SANITY-V4
  if ip route-destination in PL-BOGONS-V4 then
   refuse
  endif
- if as-path matches-any AP-BOGON-ASN then
+ if as-path in AP-BOGON-ASN then
   refuse
  endif
- if as-path matches-any AP-PATH-TOO-LONG then
+ if as-path in AP-PATH-TOO-LONG then
   refuse
  endif
- if as-path matches-any AP-LOCAL-ORIGIN then
+ if as-path in AP-LOCAL-ORIGIN then
   refuse
  endif
  break
@@ -131,13 +131,13 @@ xpl route-filter IMPORT-SANITY-V6
  if ip route-destination in PL-BOGONS-V6 then
   refuse
  endif
- if as-path matches-any AP-BOGON-ASN then
+ if as-path in AP-BOGON-ASN then
   refuse
  endif
- if as-path matches-any AP-PATH-TOO-LONG then
+ if as-path in AP-PATH-TOO-LONG then
   refuse
  endif
- if as-path matches-any AP-LOCAL-ORIGIN then
+ if as-path in AP-LOCAL-ORIGIN then
   refuse
  endif
  break
@@ -147,7 +147,7 @@ xpl route-filter EXPORT-SANITY
  if community matches-any {64512:1900, 64512:1901} then
   refuse
  endif
- if not as-path matches-any AP-LOCAL-ORIGIN then
+ if not as-path in AP-LOCAL-ORIGIN then
   if not community matches-any CL-ORIGEM-ANUNCIAVEL then
    refuse
   endif

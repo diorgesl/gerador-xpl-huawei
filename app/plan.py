@@ -73,6 +73,11 @@ TIPOS_DOWNSTREAM = ("cliente", "parceiro")
 LP_BASE = {"cliente": 300, "parceiro": 300, "upstream": 100, "ix": 190, "pni": 200}
 LP_IX_CDN = 195          # membro de IX marcado no AP-IX-<T>
 LP_TE_PREFER = 250       # excecao de TE no import de upstream
+# Os blocos que o proprio upstream origina. A rota que vem dele e o melhor
+# caminho para esses prefixos, e o valor fica acima de tudo que se aprende
+# por sessao (o teto e 350, o degrau mais alto da escada de cliente) e
+# abaixo do LP_ORIGEM: o que nos mesmos originamos continua na frente.
+LP_PREFIXO_DO_PEER = 500
 LP_BLACKHOLE = 400       # ramo de blackhole do import de cliente
 
 # escada do APPLY-CUSTOMER-LP, na ordem em que os ramos saem no filtro. O

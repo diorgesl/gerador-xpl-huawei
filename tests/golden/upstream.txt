@@ -9,14 +9,17 @@ end-list
 
 xpl route-filter UP-14840-IMPORT-V4
  call route-filter IMPORT-SANITY-V4
- if as-path matches-any AP-BLOCK-14840 then
+ if as-path in AP-BLOCK-14840 then
   refuse
  endif
  apply local-preference 100
  apply community {64512:1400, 64512:3100, 64512:2000} overwrite
  apply large-community {64512:1000:14840} overwrite
- if ip route-destination in PL-TE-PREFER-14840-V4 or as-path matches-any AP-TE-PREFER-14840 then
+ if ip route-destination in PL-TE-PREFER-14840-V4 or as-path in AP-TE-PREFER-14840 then
   apply local-preference 250
+ endif
+ if as-path in AP-OWN-14840 then
+  apply local-preference 500
  endif
  approve
 end-filter
@@ -107,6 +110,10 @@ end-list
 
 xpl as-path-list AP-TE-PREFER-14840
  origin '264381'
+end-list
+
+xpl as-path-list AP-OWN-14840
+ origin '14840'
 end-list
 
 xpl route-filter APPLY-PEER-14840

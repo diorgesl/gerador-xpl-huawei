@@ -148,7 +148,7 @@ xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
  endif
 {% endif %}
 {% if alvo.asn %}
- if not as-path matches-any AP-CUST-{{ alvo.token }} then
+ if not as-path in AP-CUST-{{ alvo.token }} then
   refuse
  endif
 {% endif %}
@@ -256,7 +256,7 @@ end-list
 xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
  call route-filter IMPORT-SANITY-{{ U }}
 {% if alvo.ap_block %}
- if as-path matches-any AP-BLOCK-{{ alvo.token }} then
+ if as-path in AP-BLOCK-{{ alvo.token }} then
   refuse
  endif
 {% endif %}
@@ -270,10 +270,20 @@ xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
  {# excecoes de TE, aplicadas depois do carimbo base. Se a lista ficar vazia a
     excecao simplesmente nao existe; o risco e o oposto, prefixo errado faz o
     trafego sair e voltar. #}
- if{% if alvo.te_prefixos[fam] %} ip route-destination in PL-TE-PREFER-{{ alvo.token }}-{{ U }}{% endif %}{% if alvo.te_prefixos[fam] and alvo.ap_te %} or{% endif %}{% if alvo.ap_te %} as-path matches-any AP-TE-PREFER-{{ alvo.token }}{% endif %} then
+ if{% if alvo.te_prefixos[fam] %} ip route-destination in PL-TE-PREFER-{{ alvo.token }}-{{ U }}{% endif %}{% if alvo.te_prefixos[fam] and alvo.ap_te %} or{% endif %}{% if alvo.ap_te %} as-path in AP-TE-PREFER-{{ alvo.token }}{% endif %} then
   apply local-preference {{ plan.LP_TE_PREFER }}
  endif
 {% endif %}
+{# os blocos que o proprio upstream origina: a rota que vem dele e o melhor
+   caminho para esses prefixos. Vem DEPOIS do TE de proposito. As duas
+   clausulas escrevem local-preference, e a ultima vence; o prefixo do
+   proprio upstream costuma estar tambem na lista de excecao de TE, que e
+   de "prefixos alcancados melhor pela borda dele". Antes do TE, o 250
+   passaria por cima do 500 exatamente onde a preferencia existe para
+   marcar. #}
+ if as-path in AP-OWN-{{ alvo.token }} then
+  apply local-preference {{ plan.LP_PREFIXO_DO_PEER }}
+ endif
  approve
 end-filter
 {%- endmacro %}
@@ -426,6 +436,16 @@ xpl as-path-list AP-TE-PREFER-{{ alvo.token }}
 {% endfor %}
 end-list
 {%- endif %}
+{{ "\n" }}
+{# Os blocos do proprio upstream. origin e nao pass pelo mesmo motivo do
+   AP-CUST e do AP-TE-PREFER: o peer pode prependar o bloco dele, e o path
+   sai "14840 14840" - com pass a rota prependada deixaria de casar e a
+   preferencia sumiria sem aviso. A lista e incondicional porque a
+   preferencia vale para todo upstream; so o IX e o PNI nao a tem, e la o
+   bloco do peer nao e melhor caminho para nada. #}
+xpl as-path-list AP-OWN-{{ alvo.token }}
+ origin '{{ alvo.asn }}'
+end-list
 {%- endmacro %}
 
 {# O miolo do IX. Tudo do IX sem eixo de familia cabe em listas_ix: nem o
@@ -446,7 +466,7 @@ xpl route-filter IX-{{ alvo.token }}-IMPORT-{{ U }}
  apply large-community {{ plan.conjunto(plan.c_large(1001, alvo.ix_id)) }} overwrite
 
 {% if alvo.ap_prefer %}
- if as-path matches-any AP-IX-{{ alvo.token }} then
+ if as-path in AP-IX-{{ alvo.token }} then
   apply local-preference {{ plan.LP_IX_CDN }}
  else
   apply local-preference {{ alvo.lp_base }}
@@ -536,7 +556,7 @@ xpl route-filter PNI-{{ alvo.token }}-IMPORT-{{ U }}
  call route-filter IMPORT-SANITY-{{ U }}
 
  {# sessao bilateral: so entra o que a CDN pode anunciar #}
- if not as-path matches-any AP-{{ alvo.token }}-ALLOWED then
+ if not as-path in AP-{{ alvo.token }}-ALLOWED then
   refuse
  endif
 

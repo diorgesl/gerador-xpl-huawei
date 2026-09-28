@@ -23,7 +23,7 @@ xpl route-filter CUST-268127-IMPORT-V4
  if not ip route-destination in PL-CUST-268127-V4 then
   refuse
  endif
- if not as-path matches-any AP-CUST-268127 then
+ if not as-path in AP-CUST-268127 then
   refuse
  endif
  call route-filter APPLY-CUSTOMER-LP

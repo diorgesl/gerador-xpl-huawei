@@ -667,6 +667,11 @@ xpl as-path-list AP-TE-PREFER-14840
  origin '264381'
  end-list
 
+!- os blocos que o proprio AS14840 origina
+xpl as-path-list AP-OWN-14840
+ origin '14840'
+ end-list
+
 xpl as-path-list AP-IX-CDN-A
  peer-is '64510'
  end-list
@@ -890,16 +895,16 @@ xpl route-filter IMPORT-SANITY
  if ip route-destination in PL-BOGONS-V4 then
   refuse
  endif
- if as-path matches-any AP-BOGON-ASN then
+ if as-path in AP-BOGON-ASN then
   refuse
  endif
- if as-path matches-any AP-PATH-TOO-LONG then
+ if as-path in AP-PATH-TOO-LONG then
   refuse
  endif
  !- AS-path vazio vindo de sessao eBGP so acontece se o check-first-as
  !- estiver desligado naquela sessao. Com ele no default, esta linha
  !- nunca dispara; mantida para quando alguem desligar.
- if as-path matches-any AP-LOCAL-ORIGIN then
+ if as-path in AP-LOCAL-ORIGIN then
   refuse
  endif
  break
@@ -946,7 +951,7 @@ xpl route-filter EXPORT-SANITY
  !- entao "originada localmente" tem uma definicao so nos dois lados.
  !- Isto depende de ninguem colocar rota local com path vazio na RIB por
  !- import-route nem por aggregate.
- if not as-path matches-any AP-LOCAL-ORIGIN then
+ if not as-path in AP-LOCAL-ORIGIN then
   if not community matches-any CL-ORIGEM-ANUNCIAVEL then
    refuse
   endif
@@ -1047,7 +1052,7 @@ xpl route-filter CUST-IMPORT-268127
   refuse
  endif
 
- if not as-path matches-any AP-CUST-268127 then
+ if not as-path in AP-CUST-268127 then
   refuse
  endif
 
@@ -1143,7 +1148,7 @@ Sessão com o AS14840, peer de ID `01`. Este é o filtro que substitui o `ASN148
 xpl route-filter UP-IMPORT-14840($lp_base)
  call route-filter IMPORT-SANITY
 
- if as-path matches-any AP-BLOCK-14840 then
+ if as-path in AP-BLOCK-14840 then
   refuse
  endif
 
@@ -1156,8 +1161,16 @@ xpl route-filter UP-IMPORT-14840($lp_base)
  apply large-community {64512:1000:14840} overwrite
 
  !- excecoes de TE, aplicadas depois do carimbo base
- if ip route-destination in PL-TE-PREFER-14840 or as-path matches-any AP-TE-PREFER-14840 then
+ if ip route-destination in PL-TE-PREFER-14840 or as-path in AP-TE-PREFER-14840 then
   apply local-preference 250
+ endif
+
+ !- os blocos que o proprio upstream origina: a rota que veio dele e o
+ !- melhor caminho para esses prefixos. Vem depois do TE de proposito: as
+ !- duas clausulas escrevem local-preference e a ultima vence, e o prefixo
+ !- do proprio upstream costuma estar tambem na lista de excecao de TE.
+ if as-path in AP-OWN-14840 then
+  apply local-preference 500
  endif
 
  approve
@@ -1167,6 +1180,8 @@ xpl route-filter UP-IMPORT-14840($lp_base)
 O `overwrite` vem antes das exceções de TE de propósito: ele substitui o conjunto inteiro, então precisa ser o primeiro `apply community`, não o último. Feito ao contrário, apagaria o `64512:1400` que acabou de ser gravado.
 
 O valor 250 nas exceções de TE é deliberado: fica acima dos demais upstreams mas **abaixo** do LP 300 de cliente. O legado usava 1000 aqui, o que fazia o anúncio do upstream ganhar do anúncio do próprio cliente. Se algum desses prefixos for de cliente, o tráfego saía pela internet e voltava — tromboning caro e difícil de diagnosticar.
+
+O 500 dos blocos do próprio upstream não cai na mesma armadilha, e a diferença está na condição, não no número. `AP-OWN-14840` casa por `origin`: só entra o prefixo cujo último AS do path é o 14840, isto é, o que o próprio AS14840 origina. O 1000 do legado era aplicado por lista de prefixo, e lista de prefixo não sabe quem originou — bastava um prefixo de cliente estar nela para o anúncio do upstream ganhar do anúncio do cliente. A preferência por origem não tem como pegar prefixo de terceiro. Ele fica acima de tudo que se aprende por sessão (o teto é 350, o degrau mais alto da escada de cliente) e abaixo do 900 das nossas próprias rotas originadas.
 
 ### Export
 
@@ -1312,7 +1327,7 @@ xpl route-filter IX-IMPORT-SP
  apply community {64512:1300, 64512:3010, 64512:2000} overwrite
  apply large-community {64512:1001:9999} overwrite
 
- if as-path matches-any AP-IX-CDN-A then
+ if as-path in AP-IX-CDN-A then
   apply local-preference 195
  else
   apply local-preference 190
@@ -1373,7 +1388,7 @@ Sessão bilateral, onde prepend por peer funciona normalmente.
 xpl route-filter PNI-IMPORT-CDNA
  call route-filter IMPORT-SANITY
 
- if not as-path matches-any AP-CDNA-ALLOWED then
+ if not as-path in AP-CDNA-ALLOWED then
   refuse
  endif
 

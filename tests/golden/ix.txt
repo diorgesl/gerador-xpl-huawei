@@ -12,7 +12,7 @@ xpl route-filter IX-IX-SP-IMPORT-V4
  apply community {64512:1300, 64512:3010, 64512:2000} overwrite
  apply large-community {64512:1001:9999} overwrite
 
- if as-path matches-any AP-IX-IX-SP then
+ if as-path in AP-IX-IX-SP then
   apply local-preference 195
  else
   apply local-preference 190
