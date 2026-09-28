@@ -76,6 +76,20 @@ def docs_do_app():
     return get_swagger_ui_html(openapi_url="/openapi.json", title="bgpgen")
 
 
+def tenant(asn):
+    """O tenant do ASN pedido, para as rotas de arquivo.
+
+    As duas rotas fora de /api montam um arquivo na hora do download, e as
+    duas resolvem o tenant do mesmo jeito: sem esta funcao, a recusa do
+    ASN sem cadastro ficaria escrita duas vezes, e uma delas sairia com o
+    status errado sem ninguem notar.
+    """
+    achado = tenants.abrir(asn)
+    if achado is None:
+        raise tenants.NaoEncontrado(asn)
+    return achado
+
+
 def rede(asn):
     """O plan.Rede do tenant do ASN pedido, para o bloco base.
 
@@ -86,10 +100,7 @@ def rede(asn):
     Le o arquivo do tenant a cada requisicao, como as outras leituras: o
     operador grava o namespace e recarrega, sem reiniciar o app.
     """
-    achado = tenants.abrir(asn)
-    if achado is None:
-        raise tenants.NaoEncontrado(asn)
-    return peers_mod.carregar_rede(achado.caminho, asn)
+    return peers_mod.carregar_rede(tenant(asn).caminho, asn)
 
 
 @app.get("/base.txt", response_class=HTMLResponse,
@@ -109,9 +120,18 @@ def politica_do_cliente(asn: int = Query(...)):
     Fora de /api pelo mesmo motivo do /base.txt: nao e um dado do cadastro,
     e um arquivo montado na hora do download. A data sai daqui e nao do
     politica.py, que fica sem relogio e por isso testavel.
+
+    O cadastro entra junto com a Rede porque a tabela do alias publica o
+    identificador dos upstreams, que so existe no arquivo do tenant. Os
+    grupos vao junto porque o upstream agrupado nao emite 5PPA proprio: o
+    identificador que vale e o do grupo.
     """
+    achado = tenant(asn)
     documento = politica.documento(
-        rede(asn), emitido_em=date.today().strftime("%d/%m/%Y"))
+        peers_mod.carregar_rede(achado.caminho, asn),
+        peers=peers_mod.carregar(achado.caminho),
+        grupos=peers_mod.carregar_grupos(achado.caminho),
+        emitido_em=date.today().strftime("%d/%m/%Y"))
     return Response(
         content=pdf.gerar(documento),
         media_type="application/pdf",

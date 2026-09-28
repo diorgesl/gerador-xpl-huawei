@@ -47,6 +47,15 @@ no `.gitignore`.
   para todos os clientes dela: não sai com os prefixos, o route-limit nem as
   sessões de quem vai receber. O bloco da sessão daquele cliente continua sendo
   o `out/<ASN>/<token>-<tipo>.txt`.
+- **O PDF publica os identificadores que emitem `5PPA`, e só eles.** A tabela
+  do alias em standard sai do cadastro da rede, com o ID e o ASN de cada fonte,
+  porque o cliente não tem como descobrir esse número. Quem entra é o upstream
+  sem grupo e o **grupo** de upstream: o membro de um grupo não tem `CL-5PPA`
+  nenhum no bloco dele, então o ID do membro não é publicado. IX e PNI ficam de
+  fora pelo mesmo motivo: o filtro do IX não tem ramo de alias (o route server
+  repassa o mesmo AS-path a todos os membros) e o do PNI ainda não implementa.
+  Publicar ID que o equipamento não consome ensina o cliente a mandar community
+  que morre no filtro.
 - **Não tem gestão de usuários.** É um admin só, criado no boot, e sem papéis.
   Trocar a senha é apagar o `usuarios.yaml` e reiniciar; não há tela para isso.
 

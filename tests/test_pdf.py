@@ -5,6 +5,8 @@ e a unica ponta que prova que a tabela chegou na folha. E por isso que o
 gerador nao comprime as paginas - o texto vai literal no arquivo.
 """
 
+from dados_api import UPSTREAM
+
 from app import pdf, plan, politica
 
 REDE = plan.Rede(264130, 65532)
@@ -45,6 +47,32 @@ def test_o_pdf_traz_o_as_e_a_data_de_emissao():
     assert DATA.encode("ascii") in dados
 
 
+def test_o_cabecalho_da_tabela_sai_em_negrito():
+    """A faixa cinza sozinha nao separa o cabecalho do corpo.
+
+    O estilo CABECALHO existia sem nenhum consumidor desde o primeiro
+    commit: o cabecalho saia com a fonte do corpo, e a tabela do alias, que
+    e a mais larga do documento, e a que mais depende disso.
+    """
+    assert pdf.estilo_da_celula(0, 0).fontName == "Helvetica-Bold"
+    assert pdf.estilo_da_celula(0, 3).fontName == "Helvetica-Bold"
+    # a primeira coluna do corpo e mono; o resto, nao
+    assert pdf.estilo_da_celula(1, 0).fontName == "Courier"
+    assert pdf.estilo_da_celula(1, 3).fontName == "Helvetica"
+
+
+def test_a_tabela_do_alias_cabe_na_folha():
+    """Sete colunas sao a tabela mais larga do documento.
+
+    As larguras eram fixas em duas colunas (`[LARGURA/2]*2`) e uma tabela de
+    sete sairia com duas celulas para sete valores, o que o reportlab aceita
+    calado: a linha some da folha sem erro nenhum.
+    """
+    larguras = pdf._colunas(7)
+    assert len(larguras) == 7
+    assert abs(sum(larguras) - pdf.LARGURA) < 0.01
+
+
 def test_o_pdf_nao_depende_do_relogio():
     # o mesmo documento gera os mesmos bytes: sem isto, um caso que cobra a
     # data so passa no dia em que foi escrito
@@ -83,6 +111,66 @@ def test_a_rota_segue_o_namespace_gravado(api):
     corpo = api.get("/politica-cliente.pdf").content
     assert b"64500:101" in corpo
     assert b"64512:101" not in corpo
+
+
+def test_o_pdf_publica_os_upstreams_do_cadastro(api):
+    """A tabela do alias sai do cadastro da rede, e nao de uma lista fixa.
+
+    Quem le o PDF nao descobre o identificador de um upstream sozinho, e o
+    que o operador cadastra pela tela e o que tem que aparecer na folha. O
+    caso le o ID de volta da lista, como faria quem acabou de criar o peer.
+    """
+    assert api.post("/api/peers", json=UPSTREAM).status_code == 201
+    ident = api.get("/api/peers").json()[0]["id"]
+
+    corpo = api.get("/politica-cliente.pdf").content
+
+    assert plan.c5ppa(ident, 1, "64512").encode("ascii") in corpo
+    assert b"14840" in corpo
+
+
+def test_o_pdf_publica_o_id_do_grupo_e_nao_o_do_membro(api):
+    """O caminho de ponta a ponta do upstream agrupado.
+
+    O operador cria o grupo de upstream, poe o peer como membro e gera o
+    PDF. O identificador que sai na folha tem que ser o do grupo: o membro
+    nao tem CL-5PPA nenhum no bloco dele.
+    """
+    from dados_api import GRUPO_UPSTREAM
+
+    assert api.post("/api/grupos", json=GRUPO_UPSTREAM).status_code == 201
+    grupo_id = api.get("/api/grupos").json()[0]["id"]
+    # o apelido vira o token do peer, e o nome do grupo e o token dele
+    # disputam o mesmo nome de objeto: com o mesmo texto nos dois, o
+    # cadastro recusa antes de chegar ao PDF
+    membro = dict(UPSTREAM, apelido="OPERADORA-SP", grupo_id=str(grupo_id))
+    assert api.post("/api/peers", json=membro).status_code == 201
+    membro_id = api.get("/api/peers").json()[0]["id"]
+    # os dois IDs saem da mesma faixa de 0 a 99, e o proximo_id nao repete
+    # nenhum: se repetissem, este caso passaria por acidente
+    assert grupo_id != membro_id
+
+    corpo = api.get("/politica-cliente.pdf").content
+
+    assert plan.c5ppa(grupo_id, 1, "64512").encode("ascii") in corpo
+    assert plan.c5ppa(membro_id, 1, "64512").encode("ascii") not in corpo
+
+
+def test_o_pdf_nao_publica_identificador_de_ix(api):
+    """O IX tem ID no cadastro, mas nao tem ramo de alias no filtro.
+
+    O filtro do route server repassa o mesmo AS-path a todos os membros, e
+    por isso nao ha 5PPA para IX nenhum. A tabela do PDF so pode listar o
+    que o equipamento executa.
+    """
+    from dados_api import IX
+
+    assert api.post("/api/peers", json=IX).status_code == 201
+    ident = api.get("/api/peers").json()[0]["id"]
+
+    corpo = api.get("/politica-cliente.pdf").content
+
+    assert plan.c5ppa(ident, 1, "64512").encode("ascii") not in corpo
 
 
 def test_a_rota_recusa_sem_o_asn(api):

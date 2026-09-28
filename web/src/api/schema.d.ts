@@ -530,6 +530,11 @@ export interface paths {
          *     Fora de /api pelo mesmo motivo do /base.txt: nao e um dado do cadastro,
          *     e um arquivo montado na hora do download. A data sai daqui e nao do
          *     politica.py, que fica sem relogio e por isso testavel.
+         *
+         *     O cadastro entra junto com a Rede porque a tabela do alias publica o
+         *     identificador dos upstreams, que so existe no arquivo do tenant. Os
+         *     grupos vao junto porque o upstream agrupado nao emite 5PPA proprio: o
+         *     identificador que vale e o do grupo.
          */
         get: operations["politica_do_cliente_politica_cliente_pdf_get"];
         put?: never;

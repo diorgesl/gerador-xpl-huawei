@@ -66,15 +66,44 @@ def _marcado(texto):
         lambda m: '<font name="Courier">%s</font>' % m.group(1), escapado)
 
 
+def estilo_da_celula(linha, coluna):
+    """A fonte de uma celula: o cabecalho, a primeira coluna, ou o corpo.
+
+    O cabecalho e a unica linha em negrito; a faixa cinza sozinha nao o
+    separa do corpo quando a tabela e longa. A primeira coluna sai em mono
+    porque e ela que carrega community e faixa de numeros, onde a largura
+    fixa ajuda a comparar duas linhas.
+    """
+    if linha == 0:
+        return CABECALHO
+    return CODIGO if coluna == 0 else CELULA
+
+
+def _colunas(quantas):
+    """As larguras de uma tabela de `quantas` colunas.
+
+    Duas colunas sao o caso comum (Envie/Efeito e Faixa/Significado), e ali
+    a primeira e estreita de proposito: o texto que importa esta na outra.
+    Nas outras a divisao e igual, que e o que a tabela de identificadores
+    dos upstreams precisa.
+    """
+    if quantas == 1:
+        return [LARGURA]
+    if quantas == 2:
+        return [COLUNA_ESTREITA, LARGURA - COLUNA_ESTREITA]
+    return [LARGURA / quantas] * quantas
+
+
 def _tabela(tabela):
-    linhas = [[Paragraph(_marcado(c), CODIGO if i == 0 else CELULA)
-               for i, c in enumerate(tabela.colunas)]]
-    for linha in tabela.linhas:
-        linhas.append([Paragraph(_marcado(c), CODIGO if i == 0 else CELULA)
-                       for i, c in enumerate(linha)])
-    largura = COLUNA_ESTREITA if len(tabela.colunas) == 1 else None
-    colunas = [largura, LARGURA - largura] if largura else [LARGURA / 2] * 2
-    return Table(linhas, colWidths=colunas, repeatRows=1, hAlign="LEFT",
+    def linhas_de(celulas, indice):
+        return [Paragraph(_marcado(c), estilo_da_celula(indice, i))
+                for i, c in enumerate(celulas)]
+
+    linhas = [linhas_de(tabela.colunas, 0)]
+    for i, linha in enumerate(tabela.linhas, start=1):
+        linhas.append(linhas_de(linha, i))
+    return Table(linhas, colWidths=_colunas(len(tabela.colunas)),
+                 repeatRows=1, hAlign="LEFT",
                  style=TableStyle([
                      ("BACKGROUND", (0, 0), (-1, 0), CINZA),
                      ("GRID", (0, 0), (-1, -1), 0.4, LINHA),

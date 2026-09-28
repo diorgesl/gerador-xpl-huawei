@@ -76,6 +76,19 @@ FUNCOES_LARGE = (
     (4, "Anunciar somente para o `<ASN>`"),
 )
 
+# As cinco acoes do alias em standard, na ordem da escala. O digito e o
+# ultimo campo do 5PPA, e o 1 e o P1 explicito, que so existe neste eixo: em
+# large nao ha como dizer "anuncie sem prepend nenhum"
+ACOES_5PPA = (
+    (0, "Não anunciar"),
+    (1, "P1, sem prepend"),
+    (2, "Prepend 1x"),
+    (3, "Prepend 2x"),
+    (4, "Prepend 3x"),
+)
+
+TITULO_ALIAS = "Controle por upstream (alias em standard)"
+
 
 @dataclass(frozen=True)
 class Tabela:
@@ -189,10 +202,6 @@ def _prepend(rede):
 def _por_asn(rede):
     linhas = [("%s:%d:<ASN>" % (rede.ns, funcao), efeito)
               for funcao, efeito in FUNCOES_LARGE]
-    # Os exemplos do alias sao montados pelo c5ppa como qualquer outra
-    # community do plano: o ID 01 e o digito 3 (dois prepends), o ID 10 e o
-    # digito 1 (P1, sem prepend)
-    exemplo = rede.c5ppa(1, 3)
     return Secao(
         titulo="Controle por ASN específico",
         textos=(
@@ -202,17 +211,81 @@ def _por_asn(rede):
             "ASN é o mesmo e a community também.",
             "O `4:<ASN>`, anunciar somente para um ASN, existe apenas no "
             "formato large. Não há equivalente em standard community.",
-            "Se o seu equipamento não envia large community, use o alias em "
-            "standard: `%s:5` mais dois dígitos do identificador do peer e um "
-            "dígito da escala de prepend. O exemplo `%s` é P3, dois prepends, "
-            "no peer de identificador 01; `%s` é P1, sem prepend, no peer 10."
-            % (rede.ns, exemplo, rede.c5ppa(10, 1)),
-            "O alias cobre o que a tabela por ASN cobre, menos o `4:<ASN>`. A "
-            "lista dos identificadores dos nossos peers acompanha o anexo "
-            "técnico do contrato.",
         ),
         tabelas=(_tabela(("Envie", "Efeito"), linhas),),
     )
+
+
+def _fontes_5ppa(peers, grupos):
+    """Os identificadores que emitem 5PPA, com o ASN de cada um.
+
+    Quem emite nao e o cadastro do upstream e sim o bloco de filtro que
+    carrega o CL-5PPA, e num upstream agrupado esse bloco e o do grupo: o
+    membro nao tem 5PPA nenhum. Por isso o ID publicado e o do grupo, e os
+    membros dele nao entram um a um - o equipamento nao tem onde consumir o
+    ID deles, e a tabela mostraria destinos que nao existem.
+
+    O ASN do grupo vence o do membro quando o grupo declara um; sem ele, o
+    grupo herda dos membros, e ASNs diferentes viram uma celula so.
+    """
+    por_id = {g.id: g for g in grupos}
+    fontes = {}
+    for p in peers:
+        if p.tipo != "upstream":
+            continue
+        g = por_id.get(p.grupo_id) if p.grupo_id is not None else None
+        # um grupo que nao seja de upstream nao tem ramo de 5PPA: o numero
+        # dele e reservado na faixa, e reservar nao e publicar
+        if p.grupo_id is not None and (g is None or g.tipo != "upstream"):
+            continue
+        ident = p.id if g is None else g.id
+        asn = g.asn if g is not None and g.asn else p.asn
+        fontes.setdefault(ident, set()).add(asn)
+    return [(ident, ", ".join(str(a) for a in sorted(asns)))
+            for ident, asns in sorted(fontes.items())]
+
+
+def _alias(rede, peers, grupos):
+    """O alias em standard, com o identificador de cada upstream.
+
+    O identificador e do nosso cadastro, e nao do cliente: sem a tabela a
+    secao manda quem le procurar um numero que ele nao tem como descobrir.
+    So o upstream entra, porque so o export dele tem ramo de 5PPA - no IX o
+    route server repassa o mesmo AS-path a todos os membros, e no PNI o
+    alias esta na lista de pendencias do PLANO. Publicar o ID dos dois
+    ensinaria o cliente a mandar community que o filtro descarta.
+    """
+    fontes = _fontes_5ppa(peers, grupos)
+    textos = [
+        "Se o seu equipamento não envia large community, use o alias em "
+        "standard: `%s:5` mais os dois dígitos do identificador do upstream "
+        "e um dígito da escala." % rede.ns,
+    ]
+    if not fontes:
+        # uma rede sem upstream cadastrado nao tem ID nenhum a publicar, e a
+        # secao nao pode sair com uma tabela vazia
+        textos.append(
+            "O exemplo `%s` é P3, dois prepends, no identificador 01; `%s` é "
+            "P1, sem prepend, no identificador 10." % (
+                rede.c5ppa(1, 3), rede.c5ppa(10, 1)))
+        # sem cadastro a secao nao explica o motivo ao cliente: "a rede nao
+        # tem upstream cadastrado" e problema do operador, e a folha que vai
+        # para a mesa dele so precisa dizer onde a lista esta
+        textos.append(
+            "A lista dos identificadores dos nossos upstreams acompanha o "
+            "anexo técnico do contrato.")
+        return Secao(titulo=TITULO_ALIAS, textos=tuple(textos), tabelas=())
+    textos.append(
+        "O identificador não é o ASN, e é o da tabela abaixo. Os links de um "
+        "mesmo upstream dividem um identificador só, porque dividem o "
+        "filtro: a community vale para o conjunto deles. O `4:<ASN>` não tem "
+        "equivalente neste eixo.")
+    linhas = [["%02d" % ident, asn]
+              + [rede.c5ppa(ident, digito) for digito, _ in ACOES_5PPA]
+              for ident, asn in fontes]
+    colunas = ("ID", "ASN") + tuple(rotulo for _digito, rotulo in ACOES_5PPA)
+    return Secao(titulo=TITULO_ALIAS, textos=tuple(textos),
+                 tabelas=(_tabela(colunas, linhas),))
 
 
 def _blackhole(rede):
@@ -296,12 +369,17 @@ def _limitacoes(rede):
     )
 
 
-def documento(rede=None, emitido_em=""):
+def documento(rede=None, peers=(), grupos=(), emitido_em=""):
     """O documento da rede, pronto para imprimir.
 
     O `rede` e um plan.Rede, como nos templates: o namespace das standard,
     o ASN do `bgp` e os rotulos de origem saem todos dele. Sem argumento o
     documento e o da rede de fabrica.
+
+    O `peers` e o `grupos` sao o cadastro da rede, que so a tabela do alias
+    consulta: e dali que saem os identificadores que o cliente digita, e
+    eles sao do grupo quando o upstream esta num. Sem cadastro o documento
+    continua valendo, e a secao do alias manda para o anexo.
 
     O `emitido_em` entra por parametro em vez de sair de um `date.today()`
     daqui: um documento que o cliente guarda precisa da data, e um modulo
@@ -322,6 +400,7 @@ def documento(rede=None, emitido_em=""):
             _anuncio(rede),
             _prepend(rede),
             _por_asn(rede),
+            _alias(rede, peers, grupos),
             _blackhole(rede),
             _manutencao(rede),
             _informativas(rede),
