@@ -99,7 +99,9 @@ export function PrefixosTela() {
         return
       }
       setRecusa(null)
-      toast("blocos gravados em out/blocos.txt")
+      // a pasta do tenant, e nao a raiz do out/: e o caminho de onde o
+      // operador copia o bloco que acabou de gravar
+      toast(`blocos gravados em out/${asn}/${ARQUIVO}`)
       void consultas.invalidateQueries({ queryKey: chaves.blocos })
       // A previa tem chave propria, com o texto: invalidar o registro nao a
       // toca, e o `salvo` dela continuaria sendo o arquivo de ANTES do salvar.

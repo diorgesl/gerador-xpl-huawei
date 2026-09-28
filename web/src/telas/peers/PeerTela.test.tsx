@@ -632,7 +632,9 @@ describe("a tela do peer", () => {
     }
     await userEvent.click(screen.getByRole("button", { name: /tentar de novo/i }))
     await waitFor(() => expect(peticoes().filter((p) => p.metodo === "PUT")).toHaveLength(2))
-    expect(await screen.findByText(/gravado em out\//)).toBeInTheDocument()
+    // o toast diz a pasta de verdade do arquivo, e nao so o nome dele: e por
+    // ele que o operador acha o bloco que acabou de gravar
+    expect(await screen.findByText(/gravado em out\/64512\/268127-cliente.txt/)).toBeInTheDocument()
   })
 
   it("o 500 no salvar avisa com tentar de novo, sem pintar campo nenhum", async () => {

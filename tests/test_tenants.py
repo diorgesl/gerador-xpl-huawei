@@ -140,6 +140,44 @@ def test_migrar_nao_sobrescreve_um_tenant_que_ja_existe(pasta):
     assert not (pasta / "peers.yaml.bak").exists()
 
 
+def test_migrar_com_destino_ocupado_diz_qual_e_nao_toca_em_nada(
+        pasta, capsys, usuarios_em_tmp):
+    """O caso do arquivo posto a mao: nada se move e sobra a linha no log.
+
+    O destino ocupado e o unico caminho de falha da migracao que nao deixa
+    rastro em arquivo nenhum: nao nasce .bak, o peers.yaml fica onde esta e
+    a pasta ja tinha o tenant. Sem a linha o operador fica com o app de pe,
+    um ASN plausivel e o cadastro que nao e o dele, sem sinal de que a
+    migracao parou.
+    """
+    from fastapi.testclient import TestClient
+
+    from app import app as mod
+
+    (pasta / "peers").mkdir()
+    (pasta / "peers" / "264130.yaml").write_text(
+        "asn: 264130\nasn_politica: 65532\n")
+    (pasta / "peers.yaml").write_text(
+        "asn: 264130\nasn_politica: 65532\npeers: []\n")
+
+    # o boot inteiro, e nao so o migrar(): e ele que engole o None em
+    # silencio quando a linha nao existe
+    with TestClient(mod.app) as cliente:
+        assert cliente.get("/api/sessao").status_code == 200
+
+    saida = capsys.readouterr().out
+    assert "nao migrou" in saida
+    # a linha nomeia o destino, que e o que colidiu: o caminho do tenant que
+    # ja estava la, e nao o do peers.yaml
+    assert str(pasta / "peers" / "264130.yaml") in saida
+    assert "sem copia em %s" % (pasta / "peers.yaml.bak") in saida
+    # e os dois arquivos ficaram exatamente onde estavam, sem .bak
+    assert (pasta / "peers.yaml").exists()
+    assert (pasta / "peers" / "264130.yaml").read_text() == (
+        "asn: 264130\nasn_politica: 65532\n")
+    assert not (pasta / "peers.yaml.bak").exists()
+
+
 def test_migrar_duas_vezes_e_no_op(pasta):
     (pasta / "peers.yaml").write_text("asn: 264130\nasn_politica: 65532\n")
     assert tenants.migrar() is not None

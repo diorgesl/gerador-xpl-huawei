@@ -227,7 +227,9 @@ export function GrupoTela() {
       return null
     }
     setRecusa(null)
-    toast(`gravado em out/${r.data.arquivo}`)
+    // o arquivo mora na pasta do tenant, e nao na raiz do out/: o nome que a
+    // API devolve e so o do arquivo, e a pasta e a do ASN desta aba
+    toast(`gravado em out/${asn}/${r.data.arquivo}`)
     void consultas.invalidateQueries({ queryKey: chaves.grupos })
     void consultas.invalidateQueries({ queryKey: chaves.peers })
     // o /api/plano monta as listas de "ja cadastrado" (o POP e o aprendizado)

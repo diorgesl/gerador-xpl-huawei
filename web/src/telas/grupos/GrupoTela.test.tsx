@@ -241,7 +241,8 @@ describe("a tela do grupo", () => {
     // o corpo inteiro, e nao so o campo que o caso digita: e o id vazio dele a
     // parte que nada mais exercita
     expect(post?.corpo).toEqual(CAMPO_BRANCO_GRUPO)
-    expect(await screen.findByText(/gravado em out\/grupo-NOVO.txt/)).toBeInTheDocument()
+    // o toast diz a pasta de verdade do arquivo, e nao so o nome dele
+    expect(await screen.findByText(/gravado em out\/64512\/grupo-NOVO.txt/)).toBeInTheDocument()
     // a URL andou para o id do registro gravado
     await waitFor(() => expect(peticoes().map((p) => `${p.metodo} ${p.caminho}`)).toContain("GET /api/grupos/3"))
   })

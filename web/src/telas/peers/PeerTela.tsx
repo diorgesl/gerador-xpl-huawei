@@ -256,7 +256,9 @@ export function PeerTela() {
       return null
     }
     setRecusa(null)
-    toast(`gravado em out/${r.data.arquivo}`)
+    // o arquivo mora na pasta do tenant, e nao na raiz do out/: o nome que a
+    // API devolve e so o do arquivo, e a pasta e a do ASN desta aba
+    toast(`gravado em out/${asn}/${r.data.arquivo}`)
     void consultas.invalidateQueries({ queryKey: chaves.peers })
     void consultas.invalidateQueries({ queryKey: chaves.plano })
     // A aba de remocao vem de GET /saida, e nao da previa: sem invalidar, ela

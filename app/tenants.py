@@ -107,14 +107,23 @@ def migrar():
     ele: aqui nada e adivinhado e nenhum arquivo e tocado.
 
     Devolve o caminho do tenant migrado, ou None quando nao havia o que
-    migrar.
+    migrar ou quando o destino ja estava ocupado (que e o caso em que a
+    linha no log diz qual dos dois arquivos ficou valendo).
     """
     if not ORIGEM.is_file():
         return None
     destino = caminho(peers_mod.carregar_asn(ORIGEM).asn)
     if destino.exists():
         # a pasta ja tem esse tenant: nao ha o que mover, e sobrescrever o
-        # que esta la seria trocar um cadastro por outro em silencio
+        # que esta la seria trocar um cadastro por outro em silencio.
+        #
+        # A linha e o unico rastro deste caminho: nao nasce .bak e nenhum dos
+        # dois arquivos se move, entao sem ela o operador fica com o app de
+        # pe, um ASN plausivel e o cadastro velho na tela, sem saber qual dos
+        # dois mandou. E o caso que a spec abencoa, o de um arquivo copiado a
+        # mao para a pasta enquanto o peers.yaml do mesmo ASN ainda existe
+        print("bgpgen: %s nao migrou: %s ja existe (o original fica onde esta,"
+              " e sem copia em %s)" % (ORIGEM, destino, BKP), flush=True)
         return None
     destino.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ORIGEM, BKP)

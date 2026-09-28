@@ -35,7 +35,9 @@ test("criar um peer do zero", async ({ page }) => {
 
   await page.getByRole("button", { name: /^salvar$/ }).click()
   await expect(page).toHaveURL(/\/peers\/\d+$/)
-  await expect(page.getByText(new RegExp(`gravado em out/${APELIDO}`))).toBeVisible()
+  // o toast nomeia a pasta do tenant, e nao so o arquivo: o 64512 e o do
+  // cadastro do e2e (web/e2e/peers/64512.yaml), o unico ASN que a copia tem
+  await expect(page.getByText(new RegExp(`gravado em out/64512/${APELIDO}`))).toBeVisible()
   await expect(page.getByRole("link", { name: new RegExp(APELIDO) })).toBeVisible()
 })
 

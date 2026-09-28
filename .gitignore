@@ -25,10 +25,14 @@ web/playwright-report/
 # macOS
 .DS_Store
 
-# saida gerada: derivada do tenant, nao e fonte. A pasta por ASN entra
-# inteira: out/*.txt nao casa com out/264130/blocos.txt, e sem esta linha os
-# blocos de producao aparecem como nao rastreados e entram num `git add .`
+# saida gerada: derivada do tenant, nao e fonte. As duas formas entram, e
+# nenhuma cobre a outra: out/*/ e a pasta de cada ASN, e out/*.txt e o bloco
+# que a migracao DEIXA na raiz do out/ quando o destino ja tem o arquivo com
+# o mesmo nome (o _mover_saida, em app/tenants.py, nao sobrescreve o que ja
+# estava la). Sem elas os blocos de producao aparecem como nao rastreados e
+# entram num `git add .`
 out/*/
+out/*.txt
 out/.cache/
 
 # o cadastro de cada rede. A barra da frente ancora a regra na pasta da
@@ -37,8 +41,10 @@ out/.cache/
 /peers/
 peers.yaml.bak
 
-# excecao: o cadastro do e2e e fixture do repositorio; o peers/ ignorado
-# acima e o do equipamento, na raiz
+# excecao que hoje nao pega nada, e que fica de proposito: quem protege a
+# fixture do e2e e a ancora da regra /peers/ acima, que nunca casou com este
+# caminho. O seguro e para quem um dia tirar a barra da frente e soltar a
+# regra, que ai passaria a casar com web/src/telas/peers/ e com este
 !web/e2e/peers/
 
 # o cadastro de antes da pasta dos tenants: quem migra e o boot, e o .bak
