@@ -132,15 +132,15 @@ xpl route-filter IMPORT-SANITY-{{ fam|upper }}
  if ip route-destination in PL-BOGONS-{{ fam|upper }} then
   refuse
  endif
- if as-path matches-any AP-BOGON-ASN then
+ if as-path in AP-BOGON-ASN then
   refuse
  endif
- if as-path matches-any AP-PATH-TOO-LONG then
+ if as-path in AP-PATH-TOO-LONG then
   refuse
  endif
  {# path vazio vindo de sessao eBGP so acontece com o check-first-as
     desligado naquela sessao; com ele no default esta linha nunca dispara #}
- if as-path matches-any AP-LOCAL-ORIGIN then
+ if as-path in AP-LOCAL-ORIGIN then
   refuse
  endif
  break
@@ -162,7 +162,7 @@ xpl route-filter EXPORT-SANITY
     entao "originada localmente" tem uma definicao so nos dois lados.
     Isto depende de ninguem colocar rota local com path vazio na RIB por
     import-route nem por aggregate. #}
- if not as-path matches-any AP-LOCAL-ORIGIN then
+ if not as-path in AP-LOCAL-ORIGIN then
   if not community matches-any CL-ORIGEM-ANUNCIAVEL then
    refuse
   endif
