@@ -485,7 +485,7 @@ Esta é a tarefa grande, e é uma ideia só: toda rota de dados resolve um `Tena
 
 **Interfaces:**
 - Consumes: `tenants.abrir(asn)`, `tenant.saida`, `tenant.caminho` (tarefa 1).
-- Produces: `tenants.NaoEncontrado(asn)` (a exceção que vira 404); `tenants.Tenant` como tipo da dependência `app.api.tenant`; `Peer.arquivo(saida)` e `Grupo.arquivo(saida)` com `saida` posicional obrigatório; `render.escrever_peer(peer, grupo=None, rede=None, *, saida)`, `escrever_grupo(grupo, rede=None, *, saida)` e `escrever_blocos(blocos, rede=None, *, saida)`, com `saida` obrigatório e só por palavra-chave.
+- Produces: `tenants.NaoEncontrado(asn)` (a exceção que vira 404); `tenants.Tenant` como tipo da dependência `app.api.tenant`; `peers.carregar_rede(caminho, asn)`, que monta o `plan.Rede` do tenant a partir do nome do arquivo e do `asn_politica` de dentro; `Peer.arquivo(saida)` e `Grupo.arquivo(saida)` com `saida` posicional obrigatório; `render.escrever_peer(peer, grupo=None, rede=None, *, saida)`, `escrever_grupo(grupo, rede=None, *, saida)` e `escrever_blocos(blocos, rede=None, *, saida)`, com `saida` obrigatório e só por palavra-chave.
 
 - [ ] **Step 1: A pasta de saída vira parâmetro**
 
@@ -505,6 +505,29 @@ Esta é a tarefa grande, e é uma ideia só: toda rota de dados resolve um `Tena
 ```
 
 e o mesmo para `Grupo.arquivo(self, saida)`, com `"grupo-%s.txt" % self.nome`.
+
+Ainda no `app/peers.py`, ao lado do `carregar_asn` (`app/peers.py:221`), o `Rede` do tenant passa a nascer dos dois lugares certos:
+
+```python
+def carregar_rede(caminho, asn):
+    """O plan.Rede do tenant: o ASN do nome do arquivo, o namespace de dentro.
+
+    O namespace so existe dentro do arquivo, e e de la que ele sai. O ASN,
+    nao: um arquivo editado a mao que diga outro numero na chave `asn`
+    geraria a config de outra rede em silencio, enquanto o seletor e a pasta
+    de saida seguem o nome. O nome ganha, e essa e a unica forma de o ganho
+    valer de verdade.
+
+    O ValueError do plan.Rede sai nomeando o arquivo, como no carregar_asn:
+    e a mensagem que a tela mostra no toast quando o par nao fecha (ASN de
+    32 bits sem namespace).
+    """
+    bruto = _ler_bruto(caminho).get(CHAVE_POLITICA)
+    try:
+        return Rede(asn=asn, politica=bruto)
+    except ValueError as erro:
+        raise ValueError("%s: %s" % (caminho, erro)) from erro
+```
 
 `app/render.py`: apague `OUT = RAIZ / "out"` (linha 15) e troque as três funções de escrita:
 
@@ -565,7 +588,18 @@ def tenant(asn: int = Query(...)) -> tenants_mod.Tenant:
 
 
 def _rede(t):
-    return peers_mod.carregar_asn(t.caminho)
+    """O plan.Rede do tenant: o ASN do nome do arquivo, o namespace de dentro.
+
+    O ASN nao sai da chave `asn` do arquivo: ela e copia de leitura, e um
+    arquivo editado a mao que discorde do nome geraria em silencio a config
+    de outra rede enquanto o seletor mostra o nome. Quem junta as duas
+    metades e o carregar_rede do peers.py.
+
+    O carregar_asn continua existindo para a migracao, que e o unico lugar
+    sem nome de arquivo de onde tirar o ASN: o peers.yaml migrado tem o ASN
+    dentro dele e em lugar nenhum mais.
+    """
+    return peers_mod.carregar_rede(t.caminho, t.asn)
 
 
 def _peers(t):
@@ -682,7 +716,7 @@ def rede(asn):
     achado = tenants.abrir(asn)
     if achado is None:
         raise tenants.NaoEncontrado(asn)
-    return peers_mod.carregar_asn(achado.caminho)
+    return peers_mod.carregar_rede(achado.caminho, asn)
 
 
 @app.get("/base.txt", response_class=HTMLResponse,
@@ -805,7 +839,8 @@ Repare que `api_anonimo` passa a devolver o cliente embrulhado: `api` (`conftest
 
 Os testes que patcham caminho na mão passam a apontar os do `tenants`:
 
-- `tests/test_api.py:84` (que patcha `peers_mod.carregar_asn`) segue igual, porque o nome não mudou.
+- `tests/test_api.py:84` e `:96` patcham `peers_mod.carregar_asn` com um `quebrado` para provar o 500 do `_falha_inesperada`. A rota passou a chamar o `carregar_rede`, então o patch tem que ser nele: com o nome velho o teste continuaria passando por acidente, porque o yaml quebrado dele é um `peers.yaml` que agora nem é lido.
+- O `tests/test_peers.py` testa o `carregar_asn` direto e não muda: ele continua existindo para a migração.
 - `tests/test_isolamento.py:36-39` patcha `mod.OUT` e `render.OUT`: passa a patchar `tenants.PASTA` e `tenants.SAIDA` e a criar o tenant de teste, como a fixture do conftest.
 - `tests/test_isolamento.py:264-275` monta o próprio cliente: usa o `ClienteComAsn` e `tenants.criar`.
 - `tests/test_render.py:1480` e `:2261` patcham `render.OUT` e `peers.OUT`: passam a passar `saida=tmp_path` para o `escrever_*`.
