@@ -13,6 +13,9 @@ que sabe dizer em que campo o operador errou. Aqui so o par incoerente
 estoura, pelo plan.Rede, e o arquivo nunca chega a nascer.
 """
 
+import os
+import shutil
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -89,3 +92,51 @@ def criar(asn, politica=None):
     destino = caminho(asn)
     peers_mod.gravar_asn(asn, politica, destino)
     return Tenant(asn=asn, caminho=destino, saida=saida(asn))
+
+
+def migrar():
+    """O peers.yaml de antes desta etapa vira o tenant do AS dele.
+
+    Roda uma vez, no boot. A copia para o .bak vem ANTES do move de
+    proposito: e ela que faz o boot seguinte ser no-op, porque depois do
+    move o ORIGEM nao existe mais. Ou os dois arquivos estao la (a
+    migracao nao chegou a acontecer), ou so o .bak esta (terminou).
+
+    O ASN sai do carregar_asn de sempre, que estoura com o mesmo ValueError
+    de antes num arquivo que nao fecha. Quem chama decide o que fazer com
+    ele: aqui nada e adivinhado e nenhum arquivo e tocado.
+
+    Devolve o caminho do tenant migrado, ou None quando nao havia o que
+    migrar.
+    """
+    if not ORIGEM.is_file():
+        return None
+    destino = caminho(peers_mod.carregar_asn(ORIGEM).asn)
+    if destino.exists():
+        # a pasta ja tem esse tenant: nao ha o que mover, e sobrescrever o
+        # que esta la seria trocar um cadastro por outro em silencio
+        return None
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ORIGEM, BKP)
+    os.replace(ORIGEM, destino)
+    _mover_saida(destino.stem)
+    return destino
+
+
+def _mover_saida(asn):
+    """Os blocos da raiz do out/ para a pasta do tenant.
+
+    So os .txt da raiz entram: o .cache/ do bgpq4 e derivado do IRR e nao
+    da rede, e continua onde esta, compartilhado. O que ja existe no destino
+    fica: em duvida entre o arquivo que ja estava e o que chegou, o que ja
+    estava e o que corresponde a uma pasta de tenant que alguem criou.
+    """
+    destino = saida(int(asn))
+    destino.mkdir(parents=True, exist_ok=True)
+    for arquivo in sorted(SAIDA.glob("*.txt")):
+        alvo = destino / arquivo.name
+        if alvo.exists():
+            print("bgpgen: %s nao migrou: %s ja existe" % (arquivo, alvo),
+                  flush=True)
+            continue
+        os.replace(arquivo, alvo)

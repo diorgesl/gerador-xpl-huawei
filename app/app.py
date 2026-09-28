@@ -14,7 +14,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
                                RedirectResponse)
 
-from app import api, auth, render
+from app import api, auth, render, tenants
 from app import peers as peers_mod
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -24,11 +24,23 @@ RAIZ = Path(__file__).resolve().parent.parent
 async def ciclo(app: FastAPI):
     """O que roda uma vez por processo, antes da primeira requisicao.
 
-    Hoje e o bootstrap do admin: o app nasce com login, e sem usuario
-    nenhum nao haveria como entrar. A senha criada sai no log, e o boot
-    seguinte nao imprime nada.
+    Hoje e o bootstrap do admin e a migracao do peers.yaml para a pasta
+    dos tenants, nesta ordem: o login primeiro, para um erro na migracao
+    nao deixar o app inalcancavel.
+
+    A migracao nao pode derrubar o boot: um yaml torto (ASN de 32 bits sem
+    namespace) deixaria o app num laco de restart do docker, quando o que
+    ele tem a fazer e subir vazio e dizer no log o que houve.
     """
     auth.bootstrap()
+    try:
+        migrado = tenants.migrar()
+    except (ValueError, OSError) as exc:
+        print("bgpgen: peers.yaml nao migrou: %s" % exc, flush=True)
+    else:
+        if migrado is not None:
+            print("bgpgen: peers.yaml virou %s (copia em peers.yaml.bak)"
+                  % migrado, flush=True)
     yield
 
 

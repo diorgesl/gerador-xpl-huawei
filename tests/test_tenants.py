@@ -79,3 +79,92 @@ def test_criar_asn_de_32_bits_sem_politica_e_erro(pasta):
     with pytest.raises(ValueError, match="nao cabe nos 16 bits"):
         tenants.criar(264130)
     assert not (pasta / "peers" / "264130.yaml").exists()
+
+
+def test_migrar_sem_peers_yaml_nao_faz_nada(pasta):
+    assert tenants.migrar() is None
+    assert not (pasta / "peers").exists()
+
+
+def test_migrar_move_o_arquivo_e_deixa_o_bak(pasta):
+    (pasta / "peers.yaml").write_text("asn: 264130\nasn_politica: 65532\npeers: []\n")
+    destino = tenants.migrar()
+    assert destino == pasta / "peers" / "264130.yaml"
+    assert not (pasta / "peers.yaml").exists()
+    assert (pasta / "peers.yaml.bak").read_text() == (
+        "asn: 264130\nasn_politica: 65532\npeers: []\n")
+    # o conteudo atravessa inteiro, e nao so a chave do ASN
+    assert destino.read_text() == (pasta / "peers.yaml.bak").read_text()
+
+
+def test_migrar_usa_o_as_de_fabrica_sem_a_chave(pasta):
+    (pasta / "peers.yaml").write_text("peers: []\n")
+    assert tenants.migrar() == pasta / "peers" / "64512.yaml"
+
+
+def test_migrar_leva_os_blocos_da_raiz_do_out(pasta):
+    (pasta / "peers.yaml").write_text("asn: 264130\nasn_politica: 65532\n")
+    (pasta / "out").mkdir()
+    (pasta / "out" / "14840-upstream.txt").write_text("bloco\n")
+    (pasta / "out" / "blocos.txt").write_text("origem\n")
+    tenants.migrar()
+    assert (pasta / "out" / "264130" / "14840-upstream.txt").read_text() == "bloco\n"
+    assert (pasta / "out" / "264130" / "blocos.txt").read_text() == "origem\n"
+    assert not (pasta / "out" / "14840-upstream.txt").exists()
+
+
+def test_migrar_nao_toca_no_cache_do_bgpq4(pasta):
+    (pasta / "peers.yaml").write_text("asn: 264130\nasn_politica: 65532\n")
+    (pasta / "out" / ".cache").mkdir(parents=True)
+    (pasta / "out" / ".cache" / "14840.json").write_text("{}")
+    tenants.migrar()
+    assert (pasta / "out" / ".cache" / "14840.json").exists()
+
+
+def test_migrar_nao_sobrescreve_o_que_ja_esta_no_destino(pasta):
+    (pasta / "peers.yaml").write_text("asn: 264130\nasn_politica: 65532\n")
+    (pasta / "out" / "264130").mkdir(parents=True)
+    (pasta / "out" / "264130" / "blocos.txt").write_text("novo\n")
+    (pasta / "out" / "blocos.txt").write_text("velho\n")
+    tenants.migrar()
+    assert (pasta / "out" / "264130" / "blocos.txt").read_text() == "novo\n"
+    assert (pasta / "out" / "blocos.txt").read_text() == "velho\n"
+
+
+def test_migrar_nao_sobrescreve_um_tenant_que_ja_existe(pasta):
+    (pasta / "peers").mkdir()
+    (pasta / "peers" / "264130.yaml").write_text("asn: 264130\nasn_politica: 65532\n")
+    (pasta / "peers.yaml").write_text("asn: 264130\nasn_politica: 65532\npeers: []\n")
+    assert tenants.migrar() is None
+    assert (pasta / "peers.yaml").exists()
+    assert not (pasta / "peers.yaml.bak").exists()
+
+
+def test_migrar_duas_vezes_e_no_op(pasta):
+    (pasta / "peers.yaml").write_text("asn: 264130\nasn_politica: 65532\n")
+    assert tenants.migrar() is not None
+    assert tenants.migrar() is None
+
+
+def test_migrar_yaml_torto_estoura_e_nao_move_nada(pasta):
+    # ASN de 32 bits sem namespace: o mesmo ValueError que hoje estoura na
+    # primeira requisicao
+    (pasta / "peers.yaml").write_text("asn: 264130\n")
+    with pytest.raises(ValueError, match="nao cabe nos 16 bits"):
+        tenants.migrar()
+    assert (pasta / "peers.yaml").exists()
+    assert not (pasta / "peers.yaml.bak").exists()
+
+
+def test_o_boot_nao_cai_com_peers_yaml_torto(pasta, usuarios_em_tmp):
+    """O lifespan roda a migracao e segue de pe, com a lista vazia."""
+    from fastapi.testclient import TestClient
+
+    from app import app as mod
+    from app import auth
+
+    (pasta / "peers.yaml").write_text("asn: 264130\n")
+    with TestClient(mod.app) as cliente:
+        assert cliente.get("/api/sessao").status_code == 200
+    assert tenants.listar() == []
+    assert (pasta / "peers.yaml").exists()
