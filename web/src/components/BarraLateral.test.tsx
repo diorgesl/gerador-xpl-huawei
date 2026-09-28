@@ -107,6 +107,53 @@ describe("a barra lateral", () => {
     expect(aoNovo).toHaveBeenCalledWith("/grupos/novo?tipo=upstream")
   })
 
+  it("o item do PDF baixa o documento do cliente", async () => {
+    // o /politica-cliente.pdf e fetch cru, como o /base.txt: a rota nao esta
+    // no cliente tipado, e o `?asn=` entra na mao
+    const baixados: HTMLAnchorElement[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      baixados.push(this)
+    })
+    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:pdf"), revokeObjectURL: vi.fn() })
+    mockFetch({ "GET /politica-cliente.pdf": { binario: "%PDF-1.4" } })
+    montarRota([
+      { path: "*", element: <BarraLateral peers={PEERS} grupos={GRUPOS} aoNovo={vi.fn()} /> },
+    ])
+
+    await userEvent.click(screen.getByRole("button", { name: /política do cliente/i }))
+
+    const pedido = peticoes().find((p) => p.caminho === "/politica-cliente.pdf")
+    expect(pedido?.query).toBe("asn=64512")
+    expect(baixados[0]?.download).toBe("politica-bgp-64512.pdf")
+    vi.unstubAllGlobals()
+  })
+
+  it("a sessao vencida no PDF nao baixa uma folha de erro", async () => {
+    // o mesmo cuidado do bloco base: sem a conferencia o operador salvaria a
+    // resposta do servidor com o nome do documento, e entregaria aquilo ao
+    // cliente
+    const baixados: HTMLAnchorElement[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      baixados.push(this)
+    })
+    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:pdf"), revokeObjectURL: vi.fn() })
+    mockFetch({
+      "GET /politica-cliente.pdf": {
+        status: 401,
+        corpo: { erros: { _: "sessao expirada ou ausente" }, avisos: [] },
+      },
+    })
+    montarRota([
+      { path: "*", element: <BarraLateral peers={PEERS} grupos={GRUPOS} aoNovo={vi.fn()} /> },
+    ])
+
+    await userEvent.click(screen.getByRole("button", { name: /política do cliente/i }))
+
+    await vi.waitFor(() => expect(peticoes().some((p) => p.caminho === "/politica-cliente.pdf")).toBe(true))
+    expect(baixados).toHaveLength(0)
+    vi.unstubAllGlobals()
+  })
+
   it("a busca esconde o que nao casa", async () => {
     montar()
     await userEvent.type(screen.getByRole("searchbox"), "acme")

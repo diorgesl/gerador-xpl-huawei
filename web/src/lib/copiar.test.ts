@@ -87,4 +87,27 @@ describe("o download do bloco", () => {
     expect(cliques[0].href).toContain("blob:x")
     vi.unstubAllGlobals()
   })
+
+  it("salva um Blob como ele veio, sem virar texto no caminho", () => {
+    // o PDF do cliente e bytes, e nao uma string: um `new Blob([blob])` sem
+    // o tipo perde o application/pdf, e um texto(blob) no meio do caminho
+    // corromperia o arquivo antes de o operador salvar
+    const criados: Blob[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn((b: Blob) => {
+        criados.push(b)
+        return "blob:x"
+      }),
+      revokeObjectURL: vi.fn(),
+    })
+    const pdf = new Blob(["%PDF-1.4"], { type: "application/pdf" })
+
+    baixar(pdf, "politica-bgp-64512.pdf")
+
+    expect(criados[0]).toBe(pdf)
+    expect(criados[0].type).toBe("application/pdf")
+    vi.unstubAllGlobals()
+  })
 })

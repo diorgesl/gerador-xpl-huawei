@@ -8,14 +8,15 @@ arquivo por ASN da rede.
 
 import os
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import (FileResponse, HTMLResponse, PlainTextResponse,
-                               RedirectResponse)
+                               RedirectResponse, Response)
 
-from app import api, auth, render, tenants
+from app import api, auth, pdf, politica, render, tenants
 from app import peers as peers_mod
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -98,6 +99,26 @@ def baixar_base(asn: int = Query(...)):
     # hora do download (nao ha arquivo na pasta do tenant com uma versao
     # antiga dele)
     return HTMLResponse(render.render_base(rede=rede(asn)), media_type="text/plain")
+
+
+@app.get("/politica-cliente.pdf", response_class=Response,
+         dependencies=[Depends(auth.exigir_login)])
+def politica_do_cliente(asn: int = Query(...)):
+    """O documento que o ISP entrega ao cliente, em PDF.
+
+    Fora de /api pelo mesmo motivo do /base.txt: nao e um dado do cadastro,
+    e um arquivo montado na hora do download. A data sai daqui e nao do
+    politica.py, que fica sem relogio e por isso testavel.
+    """
+    documento = politica.documento(
+        rede(asn), emitido_em=date.today().strftime("%d/%m/%Y"))
+    return Response(
+        content=pdf.gerar(documento),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                'attachment; filename="politica-bgp-%d.pdf"' % asn,
+        })
 
 
 # --- o build do front (SPA) -------------------------------------------

@@ -64,9 +64,16 @@ function selecionar(alvo?: HTMLElement | null) {
   selecao.addRange(intervalo)
 }
 
-/** O bloco como arquivo .txt, com o nome que ele tem em out/. */
-export function baixar(texto: string, arquivo: string) {
-  const blob = new Blob([texto], { type: "text/plain;charset=utf-8" })
+/**
+ * O bloco como arquivo, com o nome que ele tem em out/.
+ *
+ * O que chega e um texto (o bloco XPL) ou um Blob ja pronto (o PDF do
+ * cliente, que vem da resposta e nao de uma string). O Blob passa direto,
+ * sem reembrulhar: um `new Blob([blob])` perde o tipo do arquivo, e o
+ * navegador salvaria um PDF como binario sem nome de tipo.
+ */
+export function baixar(texto: string | Blob, arquivo: string) {
+  const blob = texto instanceof Blob ? texto : new Blob([texto], { type: "text/plain;charset=utf-8" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url

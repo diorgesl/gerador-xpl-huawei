@@ -516,6 +516,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/politica-cliente.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Politica Do Cliente
+         * @description O documento que o ISP entrega ao cliente, em PDF.
+         *
+         *     Fora de /api pelo mesmo motivo do /base.txt: nao e um dado do cadastro,
+         *     e um arquivo montado na hora do download. A data sai daqui e nao do
+         *     politica.py, que fica sem relogio e por isso testavel.
+         */
+        get: operations["politica_do_cliente_politica_cliente_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -2880,6 +2904,35 @@ export interface operations {
                 content: {
                     "text/html": string;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    politica_do_cliente_politica_cliente_pdf_get: {
+        parameters: {
+            query: {
+                asn: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
