@@ -410,3 +410,37 @@ def test_o_bloco_do_peer_sai_na_pasta_do_tenant(api, tmp_path):
             / "268127-cliente.txt").exists()
     assert [p.token for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [
         "IX-SP", "268127"]
+
+
+def test_o_segundo_link_do_mesmo_cliente_e_aceito(api):
+    """O caso que o operador nao conseguia cadastrar, pela API.
+
+    O cliente com link principal e backup tem dois peers com o mesmo ASN, e
+    os dois anunciam os mesmos blocos: o mesmo cliente, o mesmo espaco. A
+    recusa vinha da sobreposicao de prefixo, que comparava todo peer
+    downstream com todo outro sem olhar de quem era o bloco.
+
+    O apelido e obrigatorio aqui: sem ele o token seria o ASN, e dois peers
+    com o mesmo ASN colidiriam no nome do objeto - que e outra regra, e
+    continua valendo.
+    """
+    assert api.post("/api/peers", json=CLIENTE).status_code == 201
+    backup = dict(CLIENTE, apelido="ACME-BKP", id="",
+                  sessao_v4_local="198.51.100.9", sessao_v4_remoto="198.51.100.10")
+    r = api.post("/api/peers", json=backup)
+    assert r.status_code == 201, r.text
+    assert r.json()["registro"]["token"] == "ACME-BKP"
+
+
+def test_o_bloco_de_outro_cliente_continua_recusado(api):
+    """A dispensa pelo mesmo ASN nao afrouxou a regra do caso oposto.
+
+    Dois clientes, dois ASNs, o mesmo bloco: e conflito, e o segundo
+    cadastro tem que continuar sendo recusado.
+    """
+    assert api.post("/api/peers", json=CLIENTE).status_code == 201
+    outro = dict(CLIENTE, asn="268128", apelido="OUTRO", id="",
+                 sessao_v4_local="198.51.100.9", sessao_v4_remoto="198.51.100.10")
+    r = api.post("/api/peers", json=outro)
+    assert r.status_code == 422
+    assert "sobrepoe" in r.json()["erros"]["prefixos"]

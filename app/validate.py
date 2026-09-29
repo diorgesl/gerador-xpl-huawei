@@ -738,7 +738,18 @@ def validar(peer, peers, anterior=None, grupos=None):
             if remoto and remoto == outro_remoto:
                 erros.append(Erro("sessoes.%s.remoto" % fam,
                                   "endereco ja usado pelo peer %s" % outro.nome))
-        if peer.tipo in plan.TIPOS_DOWNSTREAM and outro.tipo in plan.TIPOS_DOWNSTREAM:
+        # Dois clientes diferentes com o mesmo bloco sao conflito ou erro de
+        # cadastro. O mesmo cliente em dois links nao: o principal e o backup
+        # anunciam os mesmos prefixos por definicao, e ali o bloco repetido e
+        # o desenho, nao o defeito. Sem a comparacao do ASN, o segundo link
+        # do cliente nao tinha como ser cadastrado.
+        #
+        # O ASN cru basta como chave: um peer salvo sempre tem ASN de
+        # verdade, porque o zero e recusado acima, e o membro de grupo com o
+        # campo em branco nao chega a ser gravado.
+        if (peer.tipo in plan.TIPOS_DOWNSTREAM
+                and outro.tipo in plan.TIPOS_DOWNSTREAM
+                and peer.asn != outro.asn):
             for fam_a, a in _blocos(peer):
                 for fam_b, b in _blocos(outro):
                     if fam_a == fam_b and _sobrepoe(a, b):

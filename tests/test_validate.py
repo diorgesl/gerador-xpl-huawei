@@ -221,6 +221,32 @@ def test_bloco_de_cliente_sobreposto_e_erro():
     assert "prefixos" in campos(validate.validar(um_peer(), [outro]))
 
 
+def test_dois_links_do_mesmo_cliente_podem_ter_o_mesmo_bloco():
+    """Link principal e backup do mesmo cliente anunciam os mesmos prefixos.
+
+    O caso ao lado, que e o que a regra existe para pegar, usa ASNs
+    diferentes: dois clientes reivindicando o mesmo espaco. Com o mesmo ASN
+    e o mesmo cliente, o bloco repetido e o desenho normal de multihoming.
+    Sem a distincao, o segundo link do cliente nao tinha como ser
+    cadastrado, e nao ha trava no ASN que o impedisse por outro caminho.
+    """
+    principal = um_peer(id=1, asn=270620, nome="NETMAC")
+    backup = um_peer(id=12, asn=270620, apelido="NETMAC-2", nome="NETMAC-2",
+                     sessoes={"v4": {"local": "198.51.100.9",
+                                     "remoto": "198.51.100.10"}, "v6": {}})
+    assert "prefixos" not in campos(validate.validar(backup, [principal]))
+
+
+def test_cliente_diferente_com_o_mesmo_bloco_continua_erro():
+    """A dispensa pelo mesmo ASN nao pode afrouxar a regra do caso oposto.
+
+    Dois clientes, dois ASNs, o mesmo bloco: e conflito ou erro de
+    cadastro, e o que a sobreposicao existe para acusar.
+    """
+    outro = um_peer(id=2, asn=9999, prefixos={"v4": ["45.169.232.0/22"], "v6": []})
+    assert "prefixos" in campos(validate.validar(um_peer(), [outro]))
+
+
 def test_bloco_de_cliente_adjacente_nao_sobrepoe():
     outro = um_peer(id=2, asn=9999,
                     prefixos={"v4": ["45.169.236.0/22"], "v6": []})
