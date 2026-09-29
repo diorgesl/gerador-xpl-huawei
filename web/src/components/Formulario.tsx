@@ -26,6 +26,16 @@ type Props<T extends FieldValues> = {
   cascataCampos: string[]
   plano: Plano
   grupos: Opcao[]
+  // as origens candidatas do reaproveitamento, montadas pela tela: o
+  // formulario so as repassa ao campo que as declarou (`origens: true`)
+  origens?: Opcao[]
+  // a nota do reaproveitamento vai no topo da secao de politica, e nao no
+  // campo: os campos de politica continuam a vista, e a nota e sobre todos
+  notaDaPolitica?: string
+  // quem cede politica carrega o token que nomeia os filtros que o outro
+  // chama: a renomeacao acontece no formulario da ORIGEM, e e la que o aviso
+  // aparece
+  avisoDoToken?: string
   erros: Record<string, string>
   avisos: Aviso[]
   deGrupo?: boolean
@@ -37,8 +47,8 @@ type Props<T extends FieldValues> = {
 }
 
 export function Formulario<T extends FieldValues>({
-  form, campos, secoes, camposPorTipo, cascataCampos, plano, grupos, erros, avisos,
-  deGrupo = false, aoIrPara, acaoDaSecao,
+  form, campos, secoes, camposPorTipo, cascataCampos, plano, grupos, origens, notaDaPolitica,
+  avisoDoToken, erros, avisos, deGrupo = false, aoIrPara, acaoDaSecao,
 }: Props<T>) {
   // o retrato deste render: a cascata le o formulario daqui, e o `visivel` sai
   // do mesmo lugar. O `as` e porque o useWatch devolve o formulario inteiro
@@ -46,7 +56,8 @@ export function Formulario<T extends FieldValues>({
   const valores = useWatch({ control: form.control }) as unknown as Valores
   const tipo = String(valores.tipo ?? "cliente")
   const contagem = secoesComErro(erros, tipo, deGrupo, secoes)
-  const ctx: Contexto = { plano, tipo, grupos }
+  // o grupo nao tem reaproveitamento: sem lista a prop pode faltar
+  const ctx: Contexto = { plano, tipo, grupos, origens: origens ?? [] }
 
   // A mesma lista serve o indice e os fieldsets, e a secao sem campo visivel
   // sai das duas: quem decide se ela existe na tela e o campo dentro dela
@@ -109,6 +120,9 @@ export function Formulario<T extends FieldValues>({
           <legend className="px-1 text-[11px] uppercase tracking-wide text-muted-foreground">
             {secao.rotulo}
           </legend>
+          {secao.id === "politica" && notaDaPolitica && (
+            <p className="px-2 pb-1 text-xs text-muted-foreground">{notaDaPolitica}</p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {visiveis.map((campo) => (
               <CampoRender
@@ -118,9 +132,11 @@ export function Formulario<T extends FieldValues>({
                 bruto={valores[campo.nome]}
                 erro={erroDoCampo(campo.nome, erros, tipo, deGrupo)}
                 avisos={avisos.filter((a) => a.campo === campo.nome).map((a) => a.mensagem)}
-                nota={pertenceAoTipo(campo.nome, camposPorTipo, tipo)
-                  ? undefined
-                  : `o bloco de ${tipo} não usa este campo`}
+                nota={campo.nome === "apelido" && avisoDoToken
+                  ? avisoDoToken
+                  : pertenceAoTipo(campo.nome, camposPorTipo, tipo)
+                    ? undefined
+                    : `o bloco de ${tipo} não usa este campo`}
                 aoMudar={por}
                 aoTrocarTipo={aoTrocarTipo}
                 aoTrocarClasse={aoTrocarClasse}
@@ -195,7 +211,7 @@ function CampoRender({ campo, ctx, bruto, erro, avisos, nota, aoMudar, aoTrocarT
   aoTrocarClasse: (classe: string) => void
 }) {
   const id = campo.nome
-  const base = campo.opcoes?.(ctx) ?? []
+  const base = campo.origens ? ctx.origens : (campo.opcoes?.(ctx) ?? [])
   // Um valor guardado que nao esta na lista (origem fora da tabela do tipo, LP
   // digitado a mao) entra como opcao dele mesmo: sem isso o select abriria no
   // vazio e o operador salvaria por cima sem ver o que havia

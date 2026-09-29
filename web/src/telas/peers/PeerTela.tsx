@@ -12,7 +12,7 @@ import { AvisoNaoSalvo } from "@/components/AvisoNaoSalvo"
 import { Falha } from "@/components/Falha"
 import { PainelSaida, type AbaSaida } from "@/components/PainelSaida"
 import { NaoEncontrado } from "@/telas/NaoEncontrado"
-import { chaves, lerRecusa, recusaComMarca, temRecusa, useGrupos, usePlano, type PeerForm } from "@/api/consultas"
+import { chaves, lerRecusa, recusaComMarca, temRecusa, useGrupos, usePeers, usePlano, type PeerForm } from "@/api/consultas"
 import { camposDoErro } from "@/lib/campos"
 import { avisarFalhaDeRede, escrever, falhaDoServidor } from "@/lib/aviso"
 // o `consultas.ts` nao reexporta o cliente: ele e o dono do cliente e o importa
@@ -85,6 +85,10 @@ export function PeerTela() {
 
   const plano = usePlano()
   const grupos = useGrupos()
+  // A mesma lista da barra lateral: o reaproveitamento sai dos peers ja
+  // cadastrados, e a chave da consulta e a mesma, entao isto e um acerto no
+  // cache e nao um pedido a mais
+  const peers = usePeers()
   // Sem o `ligado` a consulta sairia com o ident nulo e traria o formulario em
   // branco de /peers/novo: e um pedido que a tela nem usa, para um endereco que
   // nao aponta para registro nenhum
@@ -431,6 +435,7 @@ export function PeerTela() {
               form={form}
               plano={plano.data}
               grupos={(grupos.data ?? []).map((g) => ({ valor: String(g.id), rotulo: `${g.nome} (${g.tipo})` }))}
+              peers={peers.data ?? []}
               erros={erros}
               avisos={avisos}
               erroIrr={erroIrr}

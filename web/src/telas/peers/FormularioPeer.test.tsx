@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { useForm } from "react-hook-form"
 import { describe, expect, it, vi } from "vitest"
 import { Provedores } from "@/app/provedores"
-import type { PeerForm, Plano } from "@/api/consultas"
+import type { PeerForm, PeerResumo, Plano } from "@/api/consultas"
 import { FormularioPeer } from "./FormularioPeer"
 
 const PLANO = {
@@ -49,7 +49,7 @@ const PLANO = {
 } satisfies Plano
 
 const BRANCO: PeerForm = {
-  id: "7", apelido: "", nome: "Cliente ACME", tipo: "cliente", grupo_id: "",
+  id: "7", apelido: "", nome: "Cliente ACME", tipo: "cliente", grupo_id: "", politica_de: "",
   asn: "268127", descricao: "", classe: "residencial", lp_base: "300", origem: "1110",
   pop: "2001", aprendizado: "", ix_id: "", route_limit: "50", prepend_base: "0",
   timer_keepalive: "", timer_hold: "", bfd: true, graceful_restart: true,
@@ -60,16 +60,30 @@ const BRANCO: PeerForm = {
   sessao_v6_local: "", sessao_v6_remoto: "",
 }
 
-function Montar({ iniciais = {}, erros = {}, avisos = [], plano = PLANO }: {
+// O ACME-BKP existe para provar que quem reaproveita nao se oferece como
+// origem, e o OUTRO e o Upstream para provar os filtros de tipo e de ASN
+const PEERS: PeerResumo[] = [
+  { id: 1, token: "268127", tipo: "cliente", asn: 268127, apelido: "ACME",
+    nome: "Cliente ACME", grupo_id: null, politica_de: null },
+  { id: 2, token: "268128", tipo: "cliente", asn: 268128, apelido: "OUTRO",
+    nome: "Cliente OUTRO", grupo_id: null, politica_de: null },
+  { id: 3, token: "14840", tipo: "upstream", asn: 14840, apelido: "",
+    nome: "Upstream", grupo_id: null, politica_de: null },
+  { id: 4, token: "ACME-BKP", tipo: "cliente", asn: 268127, apelido: "ACME-BKP",
+    nome: "Cliente ACME BKP", grupo_id: null, politica_de: 1 },
+]
+
+function Montar({ iniciais = {}, erros = {}, avisos = [], plano = PLANO, peers = PEERS }: {
   iniciais?: Partial<PeerForm>
   erros?: Record<string, string>
   avisos?: { campo: string; mensagem: string }[]
   plano?: Plano
+  peers?: PeerResumo[]
 }) {
   const form = useForm<PeerForm>({ defaultValues: { ...BRANCO, ...iniciais } })
   return (
     <Provedores>
-      <FormularioPeer form={form} plano={plano} grupos={[]} erros={erros} avisos={avisos} aoIrPara={vi.fn()} />
+      <FormularioPeer form={form} plano={plano} grupos={[]} peers={peers} erros={erros} avisos={avisos} aoIrPara={vi.fn()} />
     </Provedores>
   )
 }
@@ -216,5 +230,33 @@ describe("o formulario do peer", () => {
     expect(screen.getByLabelText("LP base")).toHaveValue("300")
     expect(screen.getByLabelText(/route-limit/)).toHaveValue("50")
     expect(screen.getByLabelText("keepalive")).toHaveValue("")
+  })
+
+  it("a lista de origem so traz peer do mesmo tipo e ASN, e dono da politica", async () => {
+    render(<Montar iniciais={{ tipo: "cliente", asn: "268127" }} />)
+    // a lista do listbox so existe aberta: o gatilho abre, e a opcao entra no
+    // clique dela
+    await userEvent.click(screen.getByLabelText(/reaproveitar/i))
+    const opcoes = await screen.findAllByRole("option", { name: /ACME/ })
+    // o OUTRO e de outro ASN, o Upstream e de outro tipo, e o ACME-BKP ja
+    // reaproveita de alguem
+    expect(opcoes.map((o) => o.textContent)).toEqual(["ACME"])
+  })
+
+  it("escolher a origem deixa a nota, e nao esconde campo", async () => {
+    // a decisao da spec: o operador nao perde de vista o que esta cadastrado
+    render(<Montar iniciais={{ tipo: "cliente", asn: "268127" }} />)
+    await userEvent.click(screen.getByLabelText(/reaproveitar/i))
+    await userEvent.click(await screen.findByRole("option", { name: "ACME" }))
+    expect(screen.getByText(/a política vem do peer/i)).toBeInTheDocument()
+    expect(screen.getByLabelText("LP base")).toBeInTheDocument()
+    expect(screen.getByLabelText(/Origem da rota/)).toBeInTheDocument()
+  })
+
+  it("o peer que cede politica avisa que renomear mexe no bloco do outro", async () => {
+    // o aviso mora no formulario da origem, que e onde a renomeacao acontece
+    render(<Montar iniciais={{ id: "1", tipo: "cliente", asn: "268127" }} />)
+    expect(await screen.findByText(/um peer reaproveita a política deste/i))
+      .toBeInTheDocument()
   })
 })

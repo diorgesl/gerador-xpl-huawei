@@ -10,7 +10,15 @@ export type TipoCampo = "texto" | "select" | "combo" | "area" | "caixa"
 // A forma de um campo: o que ele e, como se desenha e de que secao faz parte.
 // Os quatro tipos moram aqui, e nao no lib/campos.ts, porque dependem do Plano
 // da API: este arquivo nasce depois dele, e o campos.ts nasce antes.
-export type Contexto = { plano: Plano; tipo: string; grupos: Opcao[] }
+export type Contexto = {
+  plano: Plano
+  tipo: string
+  grupos: Opcao[]
+  // as origens possiveis do reaproveitamento. Sai da lista de peers e nao do
+  // /api/plano: o filtro depende do tipo e do ASN que o formulario tem agora,
+  // e quem tem os dois e a tela
+  origens: Opcao[]
+}
 
 export type Campo = {
   nome: string
@@ -25,6 +33,10 @@ export type Campo = {
   // quando o /api/plano chega
   placeholder?: string | ((ctx: Contexto) => string)
   opcoes?: (ctx: Contexto) => Opcao[]
+  // a lista de origens candidatas sai dos peers ja cadastrados, e nao do
+  // /api/plano: o filtro depende do tipo e do ASN que o formulario tem
+  // agora, e so a tela tem a lista
+  origens?: boolean
   // sufixo da opcao que representa um valor guardado fora da lista do tipo, o
   // que a tela antiga escrevia na origem: "1900 - fora da tabela do tipo"
   rotuloForaDaLista?: string
@@ -56,6 +68,9 @@ export const CAMPOS_PEER: Campo[] = [
   { nome: "asn", rotulo: "ASN", tipo: "texto", secao: "identificacao", mono: true },
   { nome: "descricao", rotulo: "Descrição", tipo: "texto", secao: "identificacao", largo: true },
 
+  { nome: "politica_de", rotulo: "Reaproveitar a política de", tipo: "select", secao: "identificacao",
+    origens: true,
+    ajuda: "o segundo link de um cliente usa a política do primeiro: nenhum filtro é gerado de novo" },
   { nome: "classe", rotulo: "Classe", tipo: "select", secao: "politica",
     opcoes: (ctx) => [
       { valor: "", rotulo: "—" },
@@ -130,7 +145,7 @@ export const CAMPOS_PEER: Campo[] = [
 
 /** O formulario vazio, com os defaults que a API tambem usa. */
 export const CAMPO_BRANCO: PeerForm = {
-  id: "", apelido: "", nome: "", tipo: "cliente", grupo_id: "", asn: "", descricao: "",
+  id: "", apelido: "", nome: "", tipo: "cliente", grupo_id: "", politica_de: "", asn: "", descricao: "",
   classe: "", lp_base: "300", origem: "1100", pop: "", aprendizado: "", ix_id: "",
   route_limit: "50", prepend_base: "0", timer_keepalive: "", timer_hold: "",
   bfd: true, graceful_restart: true, default_route: false, bh_upstream: "",
