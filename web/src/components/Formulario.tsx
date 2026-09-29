@@ -36,6 +36,11 @@ type Props<T extends FieldValues> = {
   // chama: a renomeacao acontece no formulario da ORIGEM, e e la que o aviso
   // aparece
   avisoDoToken?: string
+  // A tela reage a edicao de um campo que o formulario so repassa (o
+  // reaproveitamento limpa a origem escolhida quando o tipo ou o ASN muda). O
+  // formulario nao sabe de campo nenhum: ele conta que o campo mudou, e quem
+  // decide o que fazer e quem tem a lista
+  aoEditarCampo?: (campo: string, valor: unknown) => void
   erros: Record<string, string>
   avisos: Aviso[]
   deGrupo?: boolean
@@ -48,7 +53,7 @@ type Props<T extends FieldValues> = {
 
 export function Formulario<T extends FieldValues>({
   form, campos, secoes, camposPorTipo, cascataCampos, plano, grupos, origens, notaDaPolitica,
-  avisoDoToken, erros, avisos, deGrupo = false, aoIrPara, acaoDaSecao,
+  avisoDoToken, aoEditarCampo, erros, avisos, deGrupo = false, aoIrPara, acaoDaSecao,
 }: Props<T>) {
   // o retrato deste render: a cascata le o formulario daqui, e o `visivel` sai
   // do mesmo lugar. O `as` e porque o useWatch devolve o formulario inteiro
@@ -70,8 +75,25 @@ export function Formulario<T extends FieldValues>({
     }))
     .filter((s) => s.visiveis.length > 0)
 
-  const por = (nome: string, valor: unknown) =>
+  // o `por` e o caminho da edicao do operador, e so ele: o reset do registro
+  // salvo e a consulta ao IRR escrevem no formulario por fora daqui, e uma
+  // regra presa a edicao nao pode disparar neles
+  const por = (nome: string, valor: unknown) => {
     form.setValue(nome as Path<T>, valor as never, { shouldDirty: true })
+    aoEditarCampo?.(nome, valor)
+  }
+
+  // A cascata devolve o formulario inteiro, com os campos que a troca tocou ja
+  // com o valor novo. Escrever tudo de volta reescreveria tambem os campos que
+  // a cascata NAO tocou, com o retrato de antes da edicao - e a escolha de
+  // origem que a troca de tipo acabou de limpar voltaria com ele. So o que a
+  // cascata mudou sobe: o que nao mudou ja esta no formulario.
+  function aplicarCascata(novos: Valores, pular: string[]) {
+    for (const [nome, valor] of Object.entries(novos)) {
+      if (pular.includes(nome) || valor === valores[nome]) continue
+      por(nome, valor)
+    }
+  }
 
   // A cascata roda aqui: o select do tipo nao sabe o que fazer com o resto do
   // modelo, e o campo que ainda esta no default do tipo anterior e o unico que
@@ -79,9 +101,7 @@ export function Formulario<T extends FieldValues>({
   function aoTrocarTipo(novo: string) {
     const novos = cascata(tipo, novo, valores, plano.padroes, cascataCampos, String(valores.classe ?? ""))
     por("tipo", novo)
-    for (const [nome, valor] of Object.entries(novos)) {
-      if (nome !== "tipo" && nome !== "classe") por(nome, valor)
-    }
+    aplicarCascata(novos, ["tipo", "classe"])
   }
 
   function aoTrocarClasse(nova: string) {
@@ -92,9 +112,7 @@ export function Formulario<T extends FieldValues>({
     // do downstream ficaria presa na comunidade da classe anterior
     const classeAntes = String(valores.classe ?? "")
     const novos = cascata(tipo, tipo, { ...valores, classe: nova }, plano.padroes, [], classeAntes)
-    for (const [nome, valor] of Object.entries(novos)) {
-      if (nome !== "classe" && nome !== "tipo") por(nome, valor)
-    }
+    aplicarCascata(novos, ["classe", "tipo"])
   }
 
   return (

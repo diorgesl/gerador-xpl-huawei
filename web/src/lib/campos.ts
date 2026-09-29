@@ -76,7 +76,7 @@ export type Secao = { id: string; rotulo: string; campos: string[] }
 export type Opcao = { valor: string; rotulo: string }
 
 export const SECOES_PEER: Secao[] = [
-  { id: "identificacao", rotulo: "Identificação", campos: ["id", "apelido", "nome", "tipo", "grupo_id", "asn", "descricao"] },
+  { id: "identificacao", rotulo: "Identificação", campos: ["id", "apelido", "nome", "tipo", "grupo_id", "asn", "descricao", "politica_de"] },
   { id: "politica", rotulo: "Política", campos: ["classe", "lp_base", "origem", "pop", "aprendizado", "ix_id"] },
   { id: "limites", rotulo: "Limites e timers", campos: ["route_limit", "prepend_base", "timer_keepalive", "timer_hold", "bfd", "graceful_restart", "default_route", "bh_upstream"] },
   { id: "prefixos", rotulo: "Prefixos anunciados", campos: ["prefixos_v4", "prefixos_v6"] },

@@ -44,26 +44,59 @@ export function FormularioPeer({ form, plano, grupos, peers, erros, avisos, erro
   // formulario tem AGORA, e quem os tem e o formulario
   const valores = useWatch({ control: form.control }) as unknown as PeerForm
 
-  // Quem cede politica e dono dela: nao pode reaproveitar de outro nem estar
-  // num grupo, porque nos dois casos o bloco dele nao define os filtros que
-  // quem reaproveita iria chamar.
-  const origens = peers
-    .filter((p) => p.id !== Number(valores.id)
-      && p.tipo === valores.tipo
-      && p.asn === Number(valores.asn)
-      && p.politica_de == null
-      && p.grupo_id == null)
-    .map((p) => ({ valor: String(p.id), rotulo: p.apelido || p.nome || p.token }))
+  // Number("") e 0, e o id 0 e um id como os outros: sem esta guarda o
+  // formulario novo (id vazio) se veria como o peer de id 0, o esconderia da
+  // lista de origens e acharia que ele reaproveita deste formulario
+  const id = String(valores.id ?? "")
 
-  const escolhida = origens.find((o) => o.valor === String(valores.politica_de))
+  // As origens que o par tipo/ASN aceita, com a opcao vazia no topo. Quem cede
+  // politica e dono dela: nao pode reaproveitar de outro nem estar num grupo,
+  // porque nos dois casos o bloco dele nao define os filtros que quem
+  // reaproveita iria chamar. A opcao vazia e o estado de quem carrega a
+  // propria politica, como o "— sem grupo —" do grupo_id: sem ela o
+  // reaproveitamento seria porta de mao unica na tela, e voltar atras so
+  // sairia pela API
+  const origensDoPar = (tipo: string, asn: string): Opcao[] => [
+    { valor: "", rotulo: "— carrega a própria política —" },
+    ...peers
+      .filter((p) => (id === "" || p.id !== Number(id))
+        && p.tipo === tipo
+        && p.asn === Number(asn)
+        && p.politica_de == null
+        && p.grupo_id == null)
+      .map((p) => ({ valor: String(p.id), rotulo: p.apelido || p.nome || p.token })),
+  ]
+
+  const origens = origensDoPar(String(valores.tipo ?? ""), String(valores.asn ?? ""))
+
+  // o vazio nao e uma origem: sem a guarda a nota diria "a politica vem do
+  // peer — carrega a propria politica —"
+  const escolhida = origens.find((o) => o.valor !== "" && o.valor === String(valores.politica_de))
   const notaDaPolitica = escolhida
     ? `A política vem do peer ${escolhida.rotulo}. Editar estes campos não muda o que é gerado.`
     : undefined
 
+  /**
+   * A escolha de origem vale no par tipo/ASN, e trocar o par a limpa: a lista
+   * e outra, e o id velho ficaria como uma opcao fora da lista (um numero solto
+   * no gatilho) ate o salvar recusar. Quem chama e a edicao do operador, pelo
+   * `por` do Formulario: o reset do registro salvo e a copia escrevem no
+   * formulario por fora dele, e nao podem apagar a escolha que veio gravada.
+   */
+  function aoEditarCampo(campo: string, valor: unknown) {
+    if (campo !== "tipo" && campo !== "asn") return
+    const atual = String(valores.politica_de ?? "")
+    if (atual === "") return
+    const tipo = campo === "tipo" ? String(valor ?? "") : String(valores.tipo ?? "")
+    const asn = campo === "asn" ? String(valor ?? "") : String(valores.asn ?? "")
+    if (origensDoPar(tipo, asn).some((o) => o.valor === atual)) return
+    form.setValue("politica_de", "", { shouldDirty: true })
+  }
+
   // quem cede politica carrega o token que nomeia os filtros que o outro
   // chama: renomear o apelido daqui muda o nome dos objetos do bloco de la,
   // que fica desatualizado ate ser gerado de novo
-  const dependentes = peers.filter((p) => p.politica_de === Number(valores.id))
+  const dependentes = peers.filter((p) => id !== "" && p.politica_de === Number(id))
   const avisoDoToken = dependentes.length === 0
     ? undefined
     : `${dependentes.length === 1
@@ -82,6 +115,7 @@ export function FormularioPeer({ form, plano, grupos, peers, erros, avisos, erro
       origens={origens}
       notaDaPolitica={notaDaPolitica}
       avisoDoToken={avisoDoToken}
+      aoEditarCampo={aoEditarCampo}
       erros={erros}
       avisos={avisos}
       aoIrPara={aoIrPara}

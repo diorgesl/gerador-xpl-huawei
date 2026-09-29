@@ -839,4 +839,26 @@ describe("a tela do peer", () => {
     // a ancora evita o "IPv4 local" das sessoes, que e outro campo
     await waitFor(() => expect(screen.getByLabelText(/^IPv4 \(/)).toHaveValue("45.169.244.0/22"))
   })
+
+  it("abrir quem reaproveita mantem a escolha gravada", async () => {
+    // A limpeza da escolha vale na EDICAO do par tipo/ASN, e nao na leitura: o
+    // reset do registro salvo e a lista de peers chegando escrevem no
+    // formulario por fora do `por`, e uma regra presa ao dado (em vez da
+    // edicao) apagaria aqui a escolha do registro aberto, antes de a lista
+    // responder
+    mockFetch({
+      ...BASE,
+      "GET /api/peers/7": {
+        corpo: { id: 7, token: "268127-BKP", formulario: { ...FORMULARIO, apelido: "ACME-BKP", politica_de: "1" } },
+      },
+      "GET /api/peers": {
+        corpo: [
+          { id: 1, token: "268127", tipo: "cliente", asn: 268127, apelido: "ACME", nome: "Cliente ACME", grupo_id: null, politica_de: null },
+          { id: 7, token: "268127-BKP", tipo: "cliente", asn: 268127, apelido: "ACME-BKP", nome: "Cliente ACME BKP", grupo_id: null, politica_de: 1 },
+        ],
+      },
+    })
+    montarRota(rotas, "/peers/7")
+    expect(await screen.findByText(/a política vem do peer ACME\./i)).toBeInTheDocument()
+  })
 })

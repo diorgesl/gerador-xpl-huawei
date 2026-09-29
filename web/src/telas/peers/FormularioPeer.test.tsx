@@ -259,4 +259,64 @@ describe("o formulario do peer", () => {
     expect(await screen.findByText(/um peer reaproveita a política deste/i))
       .toBeInTheDocument()
   })
+
+  it("a origem escolhida volta a ser nenhuma pela opcao vazia", async () => {
+    // sem ela o reaproveitamento seria porta de mao unica na tela: voltar
+    // atras so pela API, que e o caminho que esta tela existe para fechar
+    render(<Montar iniciais={{ tipo: "cliente", asn: "268127", politica_de: "1" }} />)
+    expect(screen.getByText(/a política vem do peer/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText(/reaproveitar/i))
+    await userEvent.click(await screen.findByRole("option", { name: /carrega a própria política/ }))
+    expect(screen.queryByText(/a política vem do peer/i)).not.toBeInTheDocument()
+    // o gatilho mostra a opcao vazia, e nao um numero solto: o valor do
+    // formulario voltou para o vazio
+    expect(screen.getByLabelText(/reaproveitar/i)).toHaveTextContent("— carrega a própria política —")
+  })
+
+  it("trocar o tipo limpa a origem que nao vale no par novo", async () => {
+    // o id velho ficaria como opcao fora da lista - um numero solto no gatilho,
+    // sem nota - e o operador so saberia no salvar
+    render(<Montar iniciais={{ tipo: "cliente", asn: "268127", politica_de: "1" }} />)
+    await userEvent.click(screen.getByLabelText("Tipo"))
+    await userEvent.click(await screen.findByRole("option", { name: "upstream" }))
+    expect(screen.getByLabelText(/reaproveitar/i)).toHaveTextContent("— carrega a própria política —")
+  })
+
+  it("trocar o ASN limpa a origem escolhida", async () => {
+    render(<Montar iniciais={{ tipo: "cliente", asn: "268127", politica_de: "1" }} />)
+    const campo = screen.getByLabelText("ASN")
+    await userEvent.clear(campo)
+    await userEvent.type(campo, "268128")
+    // o par novo e outro (o OUTRO e do ASN novo, e nao o escolhido), entao a
+    // escolha antiga saiu
+    expect(screen.getByLabelText(/reaproveitar/i)).toHaveTextContent("— carrega a própria política —")
+  })
+
+  it("o erro do reaproveitamento conta na secao e aparece no campo", () => {
+    // a chave da API e o nome do campo sao o mesmo, mas sem a entrada na
+    // tabela de secoes nem o badge do indice nem o painel de saida viam a
+    // recusa: o painel ficava mudo, porque a previa volta 200 e sem bloco
+    render(<Montar erros={{ politica_de: "peer de origem nao encontrado" }} />)
+    expect(screen.getByRole("link", { name: /Identificação \(1\)/ })).toBeInTheDocument()
+    expect(document.querySelector('[data-campo="politica_de"]'))
+      .toHaveTextContent("peer de origem nao encontrado")
+  })
+
+  it("o peer de id 0 e origem como as outras, e nao o formulario novo", async () => {
+    // Number("") e 0, e o id 0 existe: sem a guarda do id vazio o formulario
+    // novo se veria como o peer de id 0, o esconderia da lista e acharia que
+    // ele reaproveita deste formulario
+    const peers: PeerResumo[] = [
+      { id: 0, token: "ZERO", tipo: "cliente", asn: 268127, apelido: "ZERO",
+        nome: "Cliente ZERO", grupo_id: null, politica_de: null },
+      { id: 5, token: "ZERO-BKP", tipo: "cliente", asn: 268127, apelido: "ZERO-BKP",
+        nome: "Cliente ZERO BKP", grupo_id: null, politica_de: 0 },
+    ]
+    render(<Montar iniciais={{ id: "", tipo: "cliente", asn: "268127" }} peers={peers} />)
+    await userEvent.click(screen.getByLabelText(/reaproveitar/i))
+    const opcoes = await screen.findAllByRole("option", { name: /ZERO/ })
+    // o ZERO-BKP ja reaproveita, entao so o ZERO se oferece
+    expect(opcoes.map((o) => o.textContent)).toEqual(["ZERO"])
+    expect(document.querySelector('[data-campo="apelido"]')).not.toHaveTextContent(/reaproveita/)
+  })
 })
