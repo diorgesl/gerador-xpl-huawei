@@ -109,3 +109,38 @@ def test_peer_apontando_para_grupo_que_saiu_recusa_a_config(api, tmp_path):
     r = api.get("/api/config")
     assert r.status_code == 422
     assert r.json()["erros"]["grupo_id"] == "o grupo 7 do peer Cliente ACME nao existe"
+
+
+def test_o_peer_que_reaproveita_sai_na_config_com_os_filtros_da_origem(api):
+    """A secao dele e o bloco dele: os filtros da origem, e objeto nenhum.
+
+    E o mesmo render do /saida, e por isso a config tambem precisa da origem
+    resolvida: sem ela o bloco de quem reaproveita estourava dentro do
+    template, e a config inteira ia junto.
+    """
+    origem = _criar(api, "/api/peers", CLIENTE)
+    backup = _criar(api, "/api/peers", dict(
+        CLIENTE, apelido="ACME-BKP", id="", politica_de=str(origem),
+        sessao_v4_local="198.51.100.9", sessao_v4_remoto="198.51.100.10"))
+
+    secao = _secoes(api)["peer-%d" % backup]
+
+    assert "xpl " not in secao["texto"]
+    assert "route-filter CUST-268127-IMPORT-V4 import" in secao["texto"]
+
+
+def test_origem_de_quem_reaproveita_que_saiu_recusa_a_config(api, tmp_path):
+    """O irmao do grupo que saiu, para a referencia que aponta para o vazio.
+
+    O arquivo do tenant editado a mao deixa o `politica_de` num id que nao
+    existe mais, e o template roda com StrictUndefined: sem a recusa aqui, o
+    que voltava era o estouro do render, sem dizer o campo.
+    """
+    _criar(api, "/api/peers", CLIENTE)
+    yaml = caminho_tenant(tmp_path)
+    yaml.write_text(yaml.read_text(encoding="ascii").replace(
+        "politica_de: null", "politica_de: 7"), encoding="ascii")
+    r = api.get("/api/config")
+    assert r.status_code == 422
+    assert r.json()["erros"]["politica_de"] == (
+        "peer de origem nao encontrado no cadastro")

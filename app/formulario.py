@@ -14,7 +14,7 @@ from app.peers import Bloco, Grupo, Peer
 
 CAMPOS_INT = ("asn", "id", "lp_base", "origem", "pop", "aprendizado",
               "ix_id", "prepend_base", "route_limit",
-              "timer_keepalive", "timer_hold", "grupo_id")
+              "timer_keepalive", "timer_hold", "grupo_id", "politica_de")
 
 
 CAMPOS_INT_GRUPO = ("id", "asn", "lp_base", "origem", "pop", "aprendizado",
@@ -393,6 +393,11 @@ def peer_do_formulario(dados, peers, anterior=None, grupos=()):
         # upstream com grupo escolhido na tela salvar grupo_id nulo, sem erro
         # nenhum, com o grupo ficando vazio.
         grupo_id=valores.get("grupo_id"),
+        # o id do peer de quem este reaproveita a politica, ou None para quem
+        # carrega a propria. Quem confere se a origem existe e serve para
+        # isto e o validate; aqui ele e so mais um campo inteiro do
+        # formulario, com o "valor numerico invalido" dos outros.
+        politica_de=valores.get("politica_de"),
     )
     return peer, erros
 

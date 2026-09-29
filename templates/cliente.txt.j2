@@ -5,7 +5,11 @@
 {% import "_macros.j2" as m %}
 {{ m.cabecalho(peer) }}
 
-{% if peer.politica_de %}
+{# `is not none`, e nao a verdade do valor: o id 0 e uma origem legitima -
+   e o primeiro peer de um tenant novo -, e no `if peer.politica_de` ele
+   seria lido como "sem origem" e o bloco sairia com a politica escrita
+   inteira no proprio peer, que e o defeito que o recurso corrige. #}
+{% if peer.politica_de is not none %}
 {{ m.bloco_reaproveita(peer, origem) }}
 {% elif grupo %}
 {% if peer.tem_filtro_proprio() %}

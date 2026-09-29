@@ -61,6 +61,7 @@ def modelo_do_peer(peer):
     campos = dict(
         id=_texto(peer.id), apelido=peer.apelido, nome=peer.nome,
         tipo=peer.tipo, grupo_id=_texto(peer.grupo_id),
+        politica_de=_texto(peer.politica_de),
         # o peer novo nasce com asn 0, e o que a tela mostra e o campo vazio
         asn=_texto(peer.asn or None),
         descricao=peer.descricao, classe=peer.classe or "",
@@ -293,7 +294,8 @@ def _registro_peer(peer):
 @roteador.get("/peers", response_model=list[PeerResumo])
 def listar_peers(t: tenants_mod.Tenant = Depends(tenant)):
     return [PeerResumo(id=p.id, token=p.token, tipo=p.tipo, asn=p.asn,
-                       apelido=p.apelido, nome=p.nome, grupo_id=p.grupo_id)
+                       apelido=p.apelido, nome=p.nome, grupo_id=p.grupo_id,
+                       politica_de=p.politica_de)
             for p in _peers(t)]
 
 
@@ -344,6 +346,28 @@ def _grupo_do_peer(peer, grupos):
     return peers_mod.achar_grupo_id(grupos, peer.grupo_id)
 
 
+def _origem_do_peer(peer, peers):
+    """O peer de quem este reaproveita a politica, ou None.
+
+    Quem chama trata o None quando `politica_de` esta setado: um arquivo
+    editado a mao pode deixar a referencia apontando para um id que nao
+    existe, e o template roda com StrictUndefined, entao uma origem nula
+    estoura la dentro com um erro que nao diz nada ao operador. A validacao
+    recusa esse cadastro, e aqui e a segunda barreira.
+    """
+    if peer.politica_de is None:
+        return None
+    return peers_mod.achar_id(peers, peer.politica_de)
+
+
+def _sem_origem(peer, peers):
+    """O 422 de quem reaproveita de um peer que nao esta no cadastro."""
+    if peer.politica_de is None or _origem_do_peer(peer, peers) is not None:
+        return None
+    return _falha(422, [validate.Erro(
+        "politica_de", "peer de origem nao encontrado no cadastro")])
+
+
 def _salvar_peer(t, formulario, peers, anterior):
     grupos, rede = _grupos(t), _rede(t)
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior)
@@ -361,7 +385,9 @@ def _salvar_peer(t, formulario, peers, anterior):
             anterior.arquivo(t.saida).unlink(missing_ok=True)
     peers_mod.gravar(peers, t.caminho)
     destino = render.escrever_peer(peer, grupo=_grupo_do_peer(peer, grupos),
-                                   rede=rede, saida=t.saida)
+                                   rede=rede,
+                                   origem=_origem_do_peer(peer, peers),
+                                   saida=t.saida)
     return PeerSalvo(registro=_registro_peer(peer), arquivo=destino.name,
                      avisos=_avisos(avisos))
 
@@ -393,6 +419,16 @@ def excluir_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
     peer = peers_mod.achar_id(peers, ident)
     if peer is None:
         return _nao_encontrado("peer")
+    dependentes = [p for p in peers if p.politica_de == ident]
+    if dependentes:
+        return _falha(422, [validate.Erro(
+            "_",
+            "o peer %s reaproveita a politica deste: %s"
+            % (dependentes[0].nome,
+               "troque a origem dele antes de excluir"
+               if len(dependentes) == 1
+               else "%d peers reaproveitam a politica deste"
+               % len(dependentes)))])
     peer.arquivo(t.saida).unlink(missing_ok=True)
     peers.remove(peer)
     peers_mod.gravar(peers, t.caminho)
@@ -411,9 +447,13 @@ def _ler(caminho):
 
 
 def _criar_lista_do_peer(peer, rede):
-    # o par CL-PEER-<T> / APPLY-PEER-<T> e de cliente, parceiro e upstream;
-    # nos outros tipos o quadro nao tem o que criar
-    if peer.tipo not in plan.TIPOS_COM_APPLY_PEER:
+    # o par CL-PEER-<T> / APPLY-PEER-<T> e de cliente, parceiro e upstream, e
+    # de quem carrega a propria politica: quem reaproveita nao cria objeto
+    # nenhum, o par e da origem. Quem decide os dois casos e o
+    # plan.quadro_ao_criar, que e o mesmo criterio do _criar_lista_do_grupo.
+    # Null, e nao a string vazia de antes: o contrato da resposta so conhece
+    # string ou nulo, e o template de quem reaproveita nao tem o que dizer.
+    if not plan.quadro_ao_criar(peer, de_grupo=False):
         return None
     return render.render_criar_lista(peer, rede=rede)
 
@@ -432,6 +472,12 @@ def previa_peer(formulario: PeerForm,
     peers, grupos, rede = _peers(t), _grupos(t), _rede(t)
     anterior = peers_mod.achar_id(peers, ident) if ident is not None else None
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior)
+    # a guarda vem antes do `erros`: a previa devolve 200 com o erro de
+    # campo, e a origem que nao existe tem que voltar como recusa, com o
+    # nome do campo, e nao virar um bloco montado com ela nula
+    sem_origem = _sem_origem(peer, peers)
+    if sem_origem is not None:
+        return sem_origem
     avisos = _avisos(validate.avisos(peer, peers, rede=rede))
     salvo = _ler(anterior.arquivo(t.saida)) if anterior is not None else None
     if erros:
@@ -439,14 +485,16 @@ def previa_peer(formulario: PeerForm,
                       salvo=salvo)
     return Previa(
         bloco=render.render_peer(peer, grupo=_grupo_do_peer(peer, grupos),
-                                 rede=rede),
+                                 rede=rede,
+                                 origem=_origem_do_peer(peer, peers)),
         criar_lista=_criar_lista_do_peer(peer, rede),
         arquivo=peer.arquivo(t.saida).name, salvo=salvo, avisos=avisos)
 
 
 @roteador.get("/peers/{ident}/saida", response_model=Saida)
 def saida_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
-    peer = peers_mod.achar_id(_peers(t), ident)
+    peers = _peers(t)
+    peer = peers_mod.achar_id(peers, ident)
     if peer is None:
         return _nao_encontrado("peer")
     grupo = _grupo_do_peer(peer, _grupos(t))
@@ -455,8 +503,15 @@ def saida_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
         # metade): sem ele o membro perde o que herdava, e a rota recusa com
         # 422 no lugar da Saida
         return _falha(422, [validate.Erro("grupo_id", "grupo nao encontrado")])
+    # a mesma barreira do grupo, para a origem que o `politica_de` perdeu: o
+    # bloco de quem reaproveita e feito dos filtros dela, e sem ela o que
+    # sairia era o estouro do render, sem dizer o campo
+    sem_origem = _sem_origem(peer, peers)
+    if sem_origem is not None:
+        return sem_origem
     rede = _rede(t)
-    return Saida(bloco=render.render_peer(peer, grupo=grupo, rede=rede),
+    return Saida(bloco=render.render_peer(peer, grupo=grupo, rede=rede,
+                                          origem=_origem_do_peer(peer, peers)),
                  remover=render.render_remove(peer, grupo=grupo, rede=rede),
                  criar_lista=_criar_lista_do_peer(peer, rede),
                  arquivo=peer.arquivo(t.saida).name)
@@ -761,14 +816,16 @@ def _secao_grupo(grupo, rede, saida):
                        arquivo=destino.name, salvo=destino.exists())
 
 
-def _secao_peer(peer, grupo, rede, saida):
+def _secao_peer(peer, grupo, rede, saida, origem=None):
     """O bloco do peer mais o quadro "ao criar", na ordem das abas da tela.
 
     O texto e a juncao dos dois porque quem cola no equipamento cola a secao
     inteira; o quadro so existe nos tipos com APPLY-PEER, e e o proprio
-    _criar_lista_do_peer que decide isso.
+    _criar_lista_do_peer que decide isso. A `origem` e o peer de quem este
+    reaproveita a politica, como no /saida: e o mesmo render.
     """
-    partes = [render.render_peer(peer, grupo=grupo, rede=rede)]
+    partes = [render.render_peer(peer, grupo=grupo, rede=rede,
+                                 origem=origem)]
     criar = _criar_lista_do_peer(peer, rede)
     if criar is not None:
         partes.append(criar)
@@ -803,7 +860,13 @@ def ler_config(t: tenants_mod.Tenant = Depends(tenant)):
             return _falha(422, [validate.Erro(
                 "grupo_id", "o grupo %s do peer %s nao existe"
                             % (peer.grupo_id, _nome_do_peer(peer)))])
-        secoes.append(_secao_peer(peer, grupo, rede, t.saida))
+        # o mesmo caso, para a origem de quem reaproveita, e pela mesma
+        # razao: o bloco dele sai da politica da origem
+        sem_origem = _sem_origem(peer, peers)
+        if sem_origem is not None:
+            return sem_origem
+        secoes.append(_secao_peer(peer, grupo, rede, t.saida,
+                                  _origem_do_peer(peer, peers)))
     originacao = _secao_originacao(peers_mod.carregar_blocos(t.caminho), rede,
                                    t.saida)
     if originacao is not None:

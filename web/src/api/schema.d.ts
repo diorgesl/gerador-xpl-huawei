@@ -948,6 +948,11 @@ export interface components {
              */
             grupo_id: string;
             /**
+             * Politica De
+             * @default
+             */
+            politica_de: string;
+            /**
              * Asn
              * @default
              */
@@ -1125,6 +1130,8 @@ export interface components {
             nome: string;
             /** Grupo Id */
             grupo_id: number | null;
+            /** Politica De */
+            politica_de?: number | null;
         };
         /** PeerSalvo */
         PeerSalvo: {

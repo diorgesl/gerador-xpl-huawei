@@ -20,9 +20,11 @@ def test_a_lista_resume_cada_peer(api, tmp_path):
     _grava(tmp_path, peer_cliente(), peer_ix())
     assert api.get("/api/peers").json() == [
         {"id": 1, "token": "268127", "tipo": "cliente", "asn": 268127,
-         "apelido": "", "nome": "Cliente ACME", "grupo_id": None},
+         "apelido": "", "nome": "Cliente ACME", "grupo_id": None,
+         "politica_de": None},
         {"id": 10, "token": "IX-SP", "tipo": "ix", "asn": 26162,
-         "apelido": "IX-SP", "nome": "IX.br Sao Paulo", "grupo_id": None},
+         "apelido": "IX-SP", "nome": "IX.br Sao Paulo", "grupo_id": None,
+         "politica_de": None},
     ]
 
 
@@ -444,3 +446,79 @@ def test_o_bloco_de_outro_cliente_continua_recusado(api):
     r = api.post("/api/peers", json=outro)
     assert r.status_code == 422
     assert "sobrepoe" in r.json()["erros"]["prefixos"]
+
+
+def test_criar_o_segundo_link_reaproveitando_o_primeiro(api, tmp_path):
+    """O caminho de ponta a ponta do recurso, pela API.
+
+    O bloco do segundo link nao define objeto nenhum e chama os filtros do
+    primeiro, que continuam saindo no bloco dele.
+    """
+    assert api.post("/api/peers", json=CLIENTE).status_code == 201
+    backup = dict(CLIENTE, apelido="ACME-BKP", id="", politica_de="0",
+                  sessao_v4_local="198.51.100.9", sessao_v4_remoto="198.51.100.10")
+    r = api.post("/api/peers", json=backup)
+    assert r.status_code == 201, r.text
+
+    texto = (tmp_path / "out" / str(ASN_DE_TESTE) / "ACME-BKP-cliente.txt").read_text("ascii")
+    assert "xpl " not in texto
+    assert "route-filter CUST-268127-IMPORT-V4 import" in texto
+
+
+def test_excluir_a_origem_e_recusado_enquanto_alguem_a_reaproveita(api, tmp_path):
+    # apagar a origem deixaria o bloco do outro apontando para filtros que
+    # nao existem mais no equipamento
+    api.post("/api/peers", json=CLIENTE)
+    api.post("/api/peers", json=dict(CLIENTE, apelido="ACME-BKP", id="",
+                                     politica_de="0",
+                                     sessao_v4_local="198.51.100.9",
+                                     sessao_v4_remoto="198.51.100.10"))
+    r = api.delete("/api/peers/0")
+    assert r.status_code == 422
+    assert "reaproveita" in r.json()["erros"]["_"]
+    # e o bloco do segundo continua onde estava
+    assert (tmp_path / "out" / str(ASN_DE_TESTE) / "ACME-BKP-cliente.txt").exists()
+
+
+def test_a_previa_de_quem_reaproveita_tambem_nao_tem_objeto(api):
+    api.post("/api/peers", json=CLIENTE)
+    # o segundo link tem os enderecos dele: o da origem ja esta em uso, e o
+    # validate recusa a sessao repetida antes de qualquer render
+    r = api.post("/api/peers/previa",
+                 json=dict(CLIENTE, apelido="ACME-BKP", id="", politica_de="0",
+                           sessao_v4_local="198.51.100.9",
+                           sessao_v4_remoto="198.51.100.10"))
+    assert r.status_code == 200
+    assert "xpl " not in r.json()["bloco"]
+    # o quadro "ao criar" e da origem: null, e nao a string vazia que o
+    # render devolveria se a condicao do _criar_lista_do_peer so olhasse o
+    # tipo
+    assert r.json()["criar_lista"] is None
+
+
+def test_a_origem_apagada_a_mao_e_recusada_com_erro_claro(api, tmp_path):
+    """A segunda barreira, para o arquivo editado por fora.
+
+    O `politica_de` apontando para um id que nao existe e recusado pela
+    validacao, mas o arquivo do tenant pode chegar torto por edicao a mao.
+    O template roda com StrictUndefined: uma origem nula estoura ali dentro
+    com um erro que nao diz nada a quem le. O que a API faz e recusar antes,
+    com o nome do campo.
+    """
+    api.post("/api/peers", json=CLIENTE)
+    caminho = caminho_tenant(tmp_path)
+    texto = caminho.read_text("utf-8")
+    # o peer torto entra no arquivo direto, apontando para um id que nao existe
+    caminho.write_text(texto.replace(
+        "peers:", "peers:\n- id: 40\n  apelido: TORTO\n  nome: TORTO\n"
+        "  tipo: cliente\n  asn: 268127\n  politica_de: 99\n"
+        "  descricao: TORTO\n", 1), "utf-8")
+
+    r = api.get("/api/peers/40/saida")
+    assert r.status_code == 422
+    assert "politica_de" in r.json()["erros"]
+
+    r = api.post("/api/peers/previa",
+                 json=dict(CLIENTE, id="40", apelido="TORTO", politica_de="99"))
+    assert r.status_code == 422
+    assert "politica_de" in r.json()["erros"]

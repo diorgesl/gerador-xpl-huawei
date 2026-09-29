@@ -1,7 +1,8 @@
 {% import "_macros.j2" as m %}
 {{ m.cabecalho(peer) }}
 
-{% if peer.politica_de %}
+{# `is not none` por causa do id 0: ver o cliente.txt.j2. #}
+{% if peer.politica_de is not none %}
 {{ m.bloco_reaproveita(peer, origem) }}
 {% elif grupo %}
 {# membro de grupo de PNI: ver o comentario longo do cliente.txt.j2. #}

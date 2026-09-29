@@ -22,6 +22,7 @@ class PeerForm(Modelo):
     nome: str = ""
     tipo: str = "cliente"
     grupo_id: str = ""
+    politica_de: str = ""
     asn: str = ""
     descricao: str = ""
     classe: str = ""
@@ -201,6 +202,9 @@ class PeerResumo(BaseModel):
     apelido: str
     nome: str
     grupo_id: int | None
+    # quem reaproveita precisa que a tela saiba, para nao se oferecer como
+    # origem de ninguem: quem cede politica e dono dela
+    politica_de: int | None = None
 
 
 class PeerRegistro(BaseModel):
