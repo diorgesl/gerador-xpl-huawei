@@ -45,6 +45,17 @@ def test_default_route_atravessa_o_yaml(tmp_path):
     assert mod.carregar(caminho)[0].default_route is True
 
 
+def test_o_reaproveitamento_sobrevive_ao_gravar_e_carregar(tmp_path):
+    """O `para_dict` lista os campos um a um, entao um campo novo que ele
+    nao liste some na gravacao sem erro nenhum: o operador escolhe a origem,
+    salva, e o vinculo nao esta mais la. O teste cobre o caminho inteiro, que
+    e o unico que pega um campo esquecido na lista."""
+    caminho = tmp_path / "peers.yaml"
+    mod.gravar([mod.Peer(id=1, tipo="cliente", asn=270620, politica_de=1)],
+               caminho)
+    assert mod.carregar(caminho)[0].politica_de == 1
+
+
 def test_default_route_ausente_no_yaml_antigo_e_false():
     # o campo nasceu depois: quem ja tinha peers.yaml fica sem a default
     assert mod.Peer.de_dict({"id": 0, "nome": "x", "asn": 1}).default_route is False

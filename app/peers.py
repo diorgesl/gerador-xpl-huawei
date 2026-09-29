@@ -106,6 +106,13 @@ class Peer:
     # mensagem propria.
     grupo_id: int | None = None
 
+    # o peer cuja politica este vale. A referencia e por id e nao por token:
+    # o token muda quando o apelido muda, e a referencia nao pode se
+    # desfazer por causa de uma renomeacao. O efeito colateral - o bloco de
+    # quem reaproveita fica apontando para nomes velhos ate ser gerado de
+    # novo - esta tratado no aviso do formulario da origem.
+    politica_de: int | None = None
+
     @property
     def token(self):
         """O nome curto do peer: o ASN, ou o apelido quando o ASN nao serve.
@@ -184,6 +191,7 @@ class Peer:
             "prepend_base": self.prepend_base, "route_limit": self.route_limit,
             "sessoes": self.sessoes, "bh_upstream": self.bh_upstream,
             "default_route": self.default_route, "grupo_id": self.grupo_id,
+            "politica_de": self.politica_de,
         }
 
     @classmethod

@@ -524,6 +524,17 @@ def validar_grupo(grupo, grupos, peers, anterior=None):
     return _sem_duplicata(erros)
 
 
+def dono_da_politica(peer):
+    """O peer carrega a propria politica no proprio bloco?
+
+    Nao carrega quando esta num grupo (os filtros sao do grupo e o bloco do
+    membro so referencia o group) nem quando reaproveita de outro (o bloco
+    dele nao define objeto nenhum). E o predicado que a validacao usa para
+    saber quem pode ser origem.
+    """
+    return peer.grupo_id is None and peer.politica_de is None
+
+
 def validar(peer, peers, anterior=None, grupos=None):
     """Os erros que impedem gerar. `anterior` e a entrada que este POST
     substitui, ou None quando ele cria uma nova."""
@@ -551,6 +562,43 @@ def validar(peer, peers, anterior=None, grupos=None):
         erros.append(Erro("apelido", "apelido: A-Z, 0-9 e hifen no meio, ate 12 caracteres"))
 
     _valida_ascii(peer, erros)
+
+    # --- reaproveitamento de politica ---------------------------------
+    if peer.politica_de is not None:
+        origem = next((o for o in peers if o.id == peer.politica_de), None)
+        if origem is None:
+            erros.append(Erro("politica_de", "peer de origem nao encontrado"))
+        elif origem is anterior or origem is peer:
+            # a origem e o registro que este save substitui (ou o proprio
+            # peer, quando os dois sao o mesmo objeto). A identidade so com o
+            # `peer` deixava a regra inerte no caminho da API: o `peer` e
+            # construido do formulario, entao o id do formulario casa com o
+            # `anterior`, e `origem is peer` nunca era verdade.
+            erros.append(Erro("politica_de", "o peer nao pode reaproveitar de si mesmo"))
+        elif origem.tipo != peer.tipo:
+            erros.append(Erro(
+                "politica_de",
+                "o peer %s e de %s, e este e de %s" % (origem.nome, origem.tipo, peer.tipo)))
+        elif origem.asn != peer.asn:
+            # %s e nao %d por causa do asn da origem: o de_dict nao converte
+            # nada, entao um registro carregado a mao com o asn em branco
+            # chega aqui como None, e o %d transformaria o 422 em 500
+            erros.append(Erro(
+                "politica_de",
+                "o peer %s e do ASN %s, e este e do ASN %d"
+                % (origem.nome, origem.asn, peer.asn)))
+        elif not dono_da_politica(origem):
+            erros.append(Erro(
+                "politica_de",
+                "o peer %s nao tem politica propria para ceder: ele %s"
+                % (origem.nome,
+                   "esta num grupo" if origem.grupo_id is not None
+                   else "reaproveita de outro")))
+        if peer.grupo_id is not None:
+            erros.append(Erro(
+                "politica_de",
+                "um membro de grupo ja herda a politica do grupo: escolha um "
+                "caminho so"))
 
     if not (0 <= peer.lp_base <= 65535):
         erros.append(Erro("lp_base", "local preference entre 0 e 65535"))

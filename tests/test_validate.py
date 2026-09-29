@@ -1172,3 +1172,84 @@ def test_a_colisao_de_token_aponta_o_campo_onde_o_token_nasce():
     assert [(e.campo, e.mensagem) for e in erros if e.campo == "apelido"] == [
         ("apelido",
          "o ASN 53062 ja e o token do peer UP A: de um apelido a este peer")]
+
+
+def test_politica_de_apontando_para_peer_inexistente_e_erro():
+    p = um_peer(politica_de=99)
+    assert "politica_de" in campos(validate.validar(p, []))
+
+
+def test_politica_de_exige_o_mesmo_tipo():
+    outro = um_peer(id=2, tipo="upstream", asn=268127, classe=None,
+                    aprendizado=3100, prefixos={"v4": [], "v6": []})
+    p = um_peer(politica_de=2)
+    assert "politica_de" in campos(validate.validar(p, [outro]))
+
+
+def test_politica_de_exige_o_mesmo_asn():
+    outro = um_peer(id=2, asn=9999)
+    p = um_peer(politica_de=2)
+    assert "politica_de" in campos(validate.validar(p, [outro]))
+
+
+def test_a_origem_tem_que_ser_dona_da_propria_politica():
+    # corrente: a origem nao pode reaproveitar de ninguem. Sem isto o nome
+    # do objeto vira uma cadeia para resolver, e o render teria que seguir
+    # o ponteiro ate o fim
+    meio = um_peer(id=2, politica_de=3)
+    fim = um_peer(id=3)
+    p = um_peer(politica_de=2)
+    assert "politica_de" in campos(validate.validar(p, [meio, fim]))
+
+
+def test_a_origem_nao_pode_ser_membro_de_grupo():
+    # membro de grupo nao tem os filtros no proprio bloco: eles sao do
+    # grupo, e o bloco do membro so referencia o group
+    grupo = Grupo(id=1, nome="CLIENTES", tipo="cliente", asn=268127,
+                  classe="residencial", origem=1110, pop=2001)
+    origem = um_peer(id=2, grupo_id=1, prefixos={"v4": [], "v6": []})
+    p = um_peer(politica_de=2)
+    assert "politica_de" in campos(validate.validar(p, [origem], grupos=[grupo]))
+
+
+def test_o_peer_nao_pode_reaproveitar_de_si_mesmo():
+    p = um_peer(id=2, politica_de=2)
+    assert "politica_de" in campos(validate.validar(p, [p]))
+
+
+def test_a_autoreferencia_e_recusada_no_caminho_da_api():
+    """A API manda dois objetos: `anterior` e o registro da lista, e `peer`
+    e o novo, construido do formulario. Comparar por identidade so com o
+    `peer` deixava a regra inerte: o id do formulario casa com o
+    `anterior`, e `origem is peer` nunca e verdade. O teste passa a forma
+    que o validar recebe de verdade, e nao o mesmo objeto duas vezes.
+    """
+    anterior = um_peer(id=2, nome="NETMAC")
+    peer = um_peer(id=2, nome="NETMAC", politica_de=2)
+    assert "politica_de" in campos(validate.validar(peer, [anterior],
+                                                    anterior=anterior))
+
+
+def test_a_origem_com_asn_em_branco_da_erro_e_nao_estoura():
+    # o de_dict nao converte nada, entao um registro editado a mao com o asn
+    # em branco chega aqui como None: com o "%d" na mensagem, o None saia como
+    # TypeError no lugar do 422
+    origem = um_peer(id=2, asn=None)
+    p = um_peer(politica_de=2)
+    assert "politica_de" in campos(validate.validar(p, [origem]))
+
+
+def test_nao_pode_reaproveitar_e_estar_em_grupo_ao_mesmo_tempo():
+    grupo = Grupo(id=1, nome="CLIENTES", tipo="cliente", asn=268127,
+                  classe="residencial", origem=1110, pop=2001)
+    p = um_peer(id=2, grupo_id=1, politica_de=3)
+    origem = um_peer(id=3)
+    assert "politica_de" in campos(validate.validar(p, [origem], grupos=[grupo]))
+
+
+def test_o_caso_bom_nao_acusa_nada():
+    origem = um_peer(id=1, nome="NETMAC")
+    backup = um_peer(id=2, nome="NETMAC-BKP", politica_de=1,
+                     sessoes={"v4": {"local": "198.51.100.9",
+                                     "remoto": "198.51.100.10"}, "v6": {}})
+    assert "politica_de" not in campos(validate.validar(backup, [origem]))
