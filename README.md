@@ -51,11 +51,14 @@ no `.gitignore`.
   do alias em standard sai do cadastro da rede, com o ID e o ASN de cada fonte,
   porque o cliente não tem como descobrir esse número. Quem entra é o upstream
   sem grupo e o **grupo** de upstream: o membro de um grupo não tem `CL-5PPA`
-  nenhum no bloco dele, então o ID do membro não é publicado. IX e PNI ficam de
-  fora pelo mesmo motivo: o filtro do IX não tem ramo de alias (o route server
-  repassa o mesmo AS-path a todos os membros) e o do PNI ainda não implementa.
-  Publicar ID que o equipamento não consome ensina o cliente a mandar community
-  que morre no filtro.
+  nenhum no bloco dele, então o ID do membro não é publicado. O upstream que
+  reaproveita a política de outro peer fica de fora pela mesma razão: o bloco
+  dele chama os filtros da origem, e o `CL-5PPA` que existe é o dela, com o ID
+  dela — publicar os dois daria dois identificadores para o mesmo ASN, e um
+  deles morto. IX e PNI ficam de fora pelo mesmo motivo: o filtro do IX não tem
+  ramo de alias (o route server repassa o mesmo AS-path a todos os membros) e o
+  do PNI ainda não implementa. Publicar ID que o equipamento não consome ensina
+  o cliente a mandar community que morre no filtro.
 - **Não regenera o bloco de quem reaproveita a política de outro peer.** Trocar
   o apelido da origem muda o token dela, e com ele o nome dos filtros chamados
   no bloco do outro. O app avisa e deixa a reaplicação para o operador, porque

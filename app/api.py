@@ -361,11 +361,37 @@ def _origem_do_peer(peer, peers):
 
 
 def _sem_origem(peer, peers):
-    """O 422 de quem reaproveita de um peer que nao esta no cadastro."""
-    if peer.politica_de is None or _origem_do_peer(peer, peers) is not None:
+    """O 422 de quem reaproveita de uma origem que o cadastro nao sustenta.
+
+    Duas formas do mesmo defeito, e as duas so chegam aqui por edicao a mao
+    do arquivo do tenant: a referencia que aponta para um id que nao existe,
+    e a que aponta para um peer de outro tipo ou de outro ASN. A validacao
+    recusa as duas no salvar, e as duas renderizariam uma sessao apontando
+    para filtros que nao existem - o nome deles sai do token da origem, e a
+    politica dela e por tipo e por ASN. No eBGP de um cliente a sessao sem
+    filtro tambem e a sessao sem restricao nenhuma no import, o que e pior
+    do que a recusa que o app ja da para o id que nao existe.
+
+    A origem que nao e dona da propria politica - um membro de grupo, ou
+    quem reaproveita de outro - fica de fora desta guarda: o tipo e o ASN
+    batem, e o que o bloco dela cede sao os filtros de uma terceira origem.
+    As duas o validate recusa no salvar; a edicao a mao que chegar aqui
+    ainda passa.
+    """
+    if peer.politica_de is None:
         return None
-    return _falha(422, [validate.Erro(
-        "politica_de", "peer de origem nao encontrado no cadastro")])
+    origem = _origem_do_peer(peer, peers)
+    if origem is None:
+        return _falha(422, [validate.Erro(
+            "politica_de", "peer de origem nao encontrado no cadastro")])
+    if origem.tipo != peer.tipo or origem.asn != peer.asn:
+        # %s nos dois ASN, e nao %d no da origem: o registro carregado a mao
+        # pode chegar sem o campo, e o %d transformaria o 422 em 500
+        return _falha(422, [validate.Erro(
+            "politica_de",
+            "o peer de origem e %s do ASN %s, e este e %s do ASN %s"
+            % (origem.tipo, origem.asn, peer.tipo, peer.asn))])
+    return None
 
 
 def _salvar_peer(t, formulario, peers, anterior):

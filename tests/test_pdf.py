@@ -156,6 +156,37 @@ def test_o_pdf_publica_o_id_do_grupo_e_nao_o_do_membro(api):
     assert plan.c5ppa(membro_id, 1, "64512").encode("ascii") not in corpo
 
 
+def test_o_pdf_publica_o_id_da_origem_e_nao_o_de_quem_reaproveita(api):
+    """O irmao do caso do grupo, para o outro upstream que nao emite 5PPA.
+
+    Quem reaproveita a politica de outro nao tem CL-5PPA nenhum: o bloco dele
+    so chama os filtros da origem, e a unica lista de alias que existe e a
+    dela, com o id dela. Publicar o id de quem reaproveita daria dois
+    identificadores para o mesmo ASN, e o cliente que escolhesse o segundo
+    mandaria uma community que nao casa com ramo nenhum: ela cai no ramo
+    default do 6CA, e o prepend pedido some sem aviso.
+    """
+    r = api.post("/api/peers", json=UPSTREAM)
+    assert r.status_code == 201
+    origem_id = r.json()["registro"]["id"]
+    # o segundo link tem os enderecos dele: o da origem ja esta em uso, e o
+    # validate recusa a sessao repetida antes de qualquer render
+    backup = dict(UPSTREAM, apelido="OP-BKP", id="",
+                  politica_de=str(origem_id), sessao_v4_local="203.0.113.4",
+                  sessao_v4_remoto="203.0.113.3")
+    r = api.post("/api/peers", json=backup)
+    assert r.status_code == 201, r.text
+    backup_id = r.json()["registro"]["id"]
+    # os dois IDs saem da mesma faixa de 0 a 99, e o proximo_id nao repete
+    # nenhum: se repetissem, este caso passaria por acidente
+    assert origem_id != backup_id
+
+    corpo = api.get("/politica-cliente.pdf").content
+
+    assert plan.c5ppa(origem_id, 1, "64512").encode("ascii") in corpo
+    assert plan.c5ppa(backup_id, 1, "64512").encode("ascii") not in corpo
+
+
 def test_o_pdf_nao_publica_identificador_de_ix(api):
     """O IX tem ID no cadastro, mas nao tem ramo de alias no filtro.
 

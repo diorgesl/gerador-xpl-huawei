@@ -2452,6 +2452,19 @@ def test_o_bloco_de_quem_reaproveita_traz_a_sessao_dele():
     assert "peer 198.51.100.10 advertise-community" in texto
 
 
+def test_golden_de_quem_reaproveita():
+    """O caso cliente inteiro, arquivo a arquivo.
+
+    O bloco de quem reaproveita e curto, e o que ele tem e o que ele nao tem
+    sao a mesma coisa vista de dois lados: a sessao deste link, com os
+    valores dele, e os filtros da origem chamados pelo token dela. O golden
+    prende as duas coisas de uma vez, inclusive o branco entre elas.
+    """
+    origem, backup = par_de_reaproveitamento()
+    assert render.render_peer(backup, origem=origem) == (
+        GOLDEN / "cliente-reaproveita.txt").read_text(encoding="ascii")
+
+
 def test_o_filtro_sai_com_o_prefixo_do_tipo():
     # o prefixo do nome do filtro e do tipo, e nao do token: um upstream que
     # reaproveita chama UP-, e nao CUST-
@@ -2516,3 +2529,38 @@ def test_o_id_zero_de_origem_e_uma_origem(monta):
     assert "-ORIGEM-IMPORT-V4" in bloco
     assert "xpl " not in bloco
     assert "undo xpl" not in remocao
+
+
+@pytest.mark.parametrize("monta", QUEM_MONTA_PEER)
+def test_a_sessao_de_quem_reaproveita_sai_inteira_em_todo_tipo(monta):
+    """A outra metade do bloco, tipo a tipo.
+
+    A politica e da origem, mas a sessao e deste link, e ela sai inteira nos
+    cinco tipos: aqui nao ha group do VRP carregando nada, entao timer, bfd
+    e graceful-restart que faltassem sairiam com o default do equipamento.
+
+    O caso que muda por tipo e o do IX: sem o `undo ... check-first-as` o
+    route server nao insere o proprio ASN no path, e o check de default
+    descarta a rota antes de ela alcancar filtro nenhum. O bloco de quem
+    reaproveita nao tem os objetos do tipo, mas ele tem a sessao - e a
+    sessao do IX e a unica que carrega essa linha.
+    """
+    origem = monta(id=0, apelido="ORIGEM", nome="ORIGEM", descricao="ORIGEM")
+    alvo = monta(id=7, apelido="BKP", nome="BKP", descricao="BKP",
+                 politica_de=0, timer_keepalive=30, timer_hold=90, bfd=True,
+                 graceful_restart=True)
+
+    texto = render.render_peer(alvo, origem=origem)
+    remoto = alvo.sessoes["v4"]["remoto"]
+
+    assert "peer %s as-number %s" % (remoto, alvo.asn) in texto
+    assert "peer %s description %s" % (remoto, alvo.descricao) in texto
+    assert "peer %s route-limit %d %s" % (remoto, alvo.route_limit,
+                                          plan.ACAO_LIMITE) in texto
+    assert "peer %s %s" % (remoto, plan.AS_ONLY) in texto
+    assert "peer %s timer keepalive 30 hold 90" % remoto in texto
+    assert "peer %s capability-advertise graceful-restart" % remoto in texto
+    assert "peer %s bfd enable" % remoto in texto
+
+    assert ("undo peer %s check-first-as enable" % remoto in texto) == (
+        alvo.tipo == "ix")

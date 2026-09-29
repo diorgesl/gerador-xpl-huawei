@@ -1,0 +1,19 @@
+# gerado por bgpgen - nao editar a mao
+# peer 2 - cliente - AS270620 - token NETMAC-BKP
+# pressupoe o bloco base ja aplicado neste equipamento
+
+bgp 64512
+ peer 198.51.100.10 as-number 270620
+ peer 198.51.100.10 description NETMAC-BKP
+ peer 198.51.100.10 route-limit 50 alert-only
+ peer 198.51.100.10 public-as-only force
+ peer 198.51.100.10 capability-advertise graceful-restart
+ peer 198.51.100.10 bfd enable
+
+ ipv4-family unicast
+  peer 198.51.100.10 enable
+  peer 198.51.100.10 route-filter CUST-NETMAC-IMPORT-V4 import
+  peer 198.51.100.10 route-filter CUST-NETMAC-EXPORT-V4 export
+  peer 198.51.100.10 advertise-community
+  peer 198.51.100.10 advertise-large-community
+

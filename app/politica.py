@@ -181,6 +181,14 @@ def fontes_5ppa(peers, grupos):
     membros dele nao entram um a um - o equipamento nao tem onde consumir o
     ID deles, e a tabela mostraria destinos que nao existem.
 
+    O upstream que reaproveita a politica de outro cai na mesma regra, por
+    fora do grupo: o bloco dele chama os filtros da origem, e o unico
+    CL-5PPA que existe e o dela, com o id dela. O id de quem reaproveita
+    nao tem ramo nenhum no filtro, entao publicar os dois daria dois
+    identificadores para o mesmo ASN e mandaria o cliente usar o que morre
+    no filtro. A origem entra por si: o `politica_de` dela e nulo, e o
+    bloco que carrega a lista e o dela.
+
     O ASN do grupo vence o do membro quando o grupo declara um; sem ele, o
     grupo herda dos membros. Os ASNs saem em lista, e nao num texto so,
     porque os dois consumidores os querem de formas diferentes: a tabela do
@@ -192,6 +200,10 @@ def fontes_5ppa(peers, grupos):
     fontes = {}
     for p in peers:
         if p.tipo != "upstream":
+            continue
+        # quem reaproveita nao emite 5PPA: o bloco dele e so a sessao, e o
+        # CL-5PPA que ele alcanca e o da origem, com o id da origem
+        if p.politica_de is not None:
             continue
         g = por_id.get(p.grupo_id) if p.grupo_id is not None else None
         # um grupo que nao seja de upstream nao tem ramo de 5PPA: o numero

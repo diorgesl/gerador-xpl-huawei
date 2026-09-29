@@ -16,10 +16,11 @@ REDE = plan.Rede(64512)
 REDE_32 = plan.Rede(264130, 65532)
 
 
-def upstream(ident, asn, grupo=None):
+def upstream(ident, asn, grupo=None, politica_de=None):
     from app import peers
 
-    return peers.Peer(id=ident, tipo="upstream", asn=asn, grupo_id=grupo)
+    return peers.Peer(id=ident, tipo="upstream", asn=asn, grupo_id=grupo,
+                      politica_de=politica_de)
 
 
 def valores(catalogo, qual):
@@ -84,6 +85,17 @@ def test_o_upstream_agrupado_oferece_o_do_grupo():
     valores_std = valores(catalogo, "communities")
     assert plan.c5ppa(2, 0, REDE.ns) in valores_std
     assert plan.c5ppa(3, 0, REDE.ns) not in valores_std
+
+
+def test_o_upstream_que_reaproveita_nao_oferece_o_identificador_dele():
+    # a mesma regra da tabela do PDF, pelo mesmo `fontes_5ppa`: quem
+    # reaproveita nao tem CL-5PPA propria, entao o botao do identificador
+    # dele poria no campo uma community que o filtro da origem nao le
+    catalogo = formulario.sugestoes(
+        REDE, peers=[upstream(5, 14840), upstream(6, 14840, politica_de=5)])
+    valores_std = valores(catalogo, "communities")
+    assert plan.c5ppa(5, 0, REDE.ns) in valores_std
+    assert plan.c5ppa(6, 0, REDE.ns) not in valores_std
 
 
 def test_nenhuma_sugestao_sai_com_marcador_para_preencher():

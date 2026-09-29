@@ -496,6 +496,45 @@ def test_a_previa_de_quem_reaproveita_tambem_nao_tem_objeto(api):
     assert r.json()["criar_lista"] is None
 
 
+def test_a_origem_de_outro_tipo_ou_asn_editada_a_mao_e_recusada(api, tmp_path):
+    """A irma da origem apagada, para a referencia que resolve torto.
+
+    O arquivo do tenant editado a mao pode apontar o `politica_de` para um
+    peer de outro tipo ou de outro ASN. O par tipo/ASN e a politica: o nome
+    dos filtros sai do token da origem, e a lista de prefixos, o AP-CUST e
+    as large por ASN sao por tipo e por ASN. O bloco sairia com a sessao
+    apontando para filtros que nao existem, e num cliente a sessao sem
+    filtro tambem e a sessao sem restricao nenhuma no import - pior do que
+    a recusa que a rota ja da para a origem que nao existe.
+
+    Os dois peers tortos entram direto no arquivo, cada um com o seu erro: o
+    primeiro troca o tipo, o segundo o ASN. O validate recusa os dois no
+    salvar, e a leitura que renderiza sem validar e o /saida, que devolve o
+    422 pela segunda barreira.
+    """
+    api.post("/api/peers", json=CLIENTE)
+    caminho = caminho_tenant(tmp_path)
+    texto = caminho.read_text("utf-8")
+    caminho.write_text(texto.replace(
+        "peers:", "peers:\n- id: 40\n  apelido: TORTO\n  nome: TORTO\n"
+        "  tipo: upstream\n  asn: 268127\n  politica_de: 0\n"
+        "  descricao: TORTO\n- id: 41\n  apelido: OUTRO-ASN\n"
+        "  nome: OUTRO-ASN\n  tipo: cliente\n  asn: 268128\n"
+        "  politica_de: 0\n  descricao: OUTRO-ASN\n", 1), "utf-8")
+
+    r = api.get("/api/peers/40/saida")
+    assert r.status_code == 422
+    assert r.json()["erros"]["politica_de"] == (
+        "o peer de origem e cliente do ASN 268127, e este e upstream do ASN "
+        "268127")
+
+    r = api.get("/api/peers/41/saida")
+    assert r.status_code == 422
+    assert r.json()["erros"]["politica_de"] == (
+        "o peer de origem e cliente do ASN 268127, e este e cliente do ASN "
+        "268128")
+
+
 def test_a_origem_apagada_a_mao_e_recusada_com_erro_claro(api, tmp_path):
     """A segunda barreira, para o arquivo editado por fora.
 
