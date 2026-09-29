@@ -47,19 +47,23 @@ def render_base(rede=None):
 TEMPLATE_POR_TIPO = {"parceiro": "cliente.txt.j2"}
 
 
-def render_peer(peer, grupo=None, rede=None):
+def render_peer(peer, grupo=None, rede=None, origem=None):
+    """O bloco do peer. O `origem` so importa para quem reaproveita: e dela
+    que sai o token que nomeia os filtros chamados no bloco."""
     nome = TEMPLATE_POR_TIPO.get(peer.tipo, "%s.txt.j2" % peer.tipo)
-    return ambiente(rede).get_template(nome).render(peer=peer, grupo=grupo)
+    return ambiente(rede).get_template(nome).render(
+        peer=peer, grupo=grupo, origem=origem)
 
 
 # o `saida` e so por palavra-chave e sem default: a chamada de antes desta
 # etapa, `escrever_peer(peer, grupo=..., rede=...)`, tem que reprovar com
 # TypeError ate alguem dizer de que tenant e o bloco, em vez de escrever na
 # raiz do out/, que e o nome que a etapa dos tenants elimina
-def escrever_peer(peer, grupo=None, rede=None, *, saida):
+def escrever_peer(peer, grupo=None, rede=None, origem=None, *, saida):
     saida.mkdir(parents=True, exist_ok=True)
     destino = peer.arquivo(saida)
-    destino.write_text(render_peer(peer, grupo=grupo, rede=rede),
+    destino.write_text(render_peer(peer, grupo=grupo, rede=rede,
+                                   origem=origem),
                        encoding="ascii")
     return destino
 

@@ -1,7 +1,9 @@
 {% import "_macros.j2" as m %}
 {{ m.cabecalho(peer) }}
 
-{% if grupo %}
+{% if peer.politica_de %}
+{{ m.bloco_reaproveita(peer, origem) }}
+{% elif grupo %}
 {# membro de grupo: quem carrega a politica e o arquivo do grupo. Este ramo
    nao chama sessao_do_peer/familia_bgp: essas macros sao do peer avulso e
    reemitiriam AS_ONLY/timers/graceful-restart/bfd/advertise-community por

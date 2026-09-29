@@ -5,7 +5,9 @@
 {% import "_macros.j2" as m %}
 {{ m.cabecalho(peer) }}
 
-{% if grupo %}
+{% if peer.politica_de %}
+{{ m.bloco_reaproveita(peer, origem) }}
+{% elif grupo %}
 {% if peer.tem_filtro_proprio() %}
 {% for fam in peer.familias() %}
 {{ m.prefix_lists_downstream(peer, fam) -}}

@@ -632,3 +632,25 @@ xpl large-community-list LC-NOADV-{{ alvo.token }}
  {{ plan.c_large(0, alvo.asn) }}
  end-list
 {%- endmacro %}
+
+{# O peer que reaproveita a politica de outro: so a sessao, apontando para
+   os filtros da origem. Nenhum objeto xpl - e essa a diferenca para o peer
+   avulso, que define o par inteiro com o proprio token no nome.
+
+   A sessao sai inteira e com os valores deste peer, e nao os da origem:
+   aqui nao ha grupo do VRP carregando timers, bfd e advertise-community,
+   entao o bloco de quem reaproveita tem que trazer o que o peer avulso
+   traz. O que muda de dono e so a politica. #}
+{% macro bloco_reaproveita(alvo, origem) -%}
+bgp {{ plan.ASN }}
+{% for fam in alvo.familias() %}
+{{ sessao_do_peer(alvo, fam) }}{{ "\n" if not loop.last -}}
+{% endfor %}
+{% for fam in alvo.familias() %}
+{% set U = fam|upper %}
+{% set P = plan.PREFIXO_DO_TIPO[alvo.tipo] %}
+{{ familia_bgp(alvo, fam,
+     P ~ "-" ~ origem.token ~ "-IMPORT-" ~ U,
+     P ~ "-" ~ origem.token ~ "-EXPORT-" ~ U) }}
+{% endfor %}
+{%- endmacro %}

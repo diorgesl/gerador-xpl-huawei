@@ -1,7 +1,9 @@
 {% import "_macros.j2" as m %}
 {{ m.cabecalho(peer) }}
 
-{% if grupo %}
+{% if peer.politica_de %}
+{{ m.bloco_reaproveita(peer, origem) }}
+{% elif grupo %}
 {# membro de grupo de PNI: ver o comentario longo do cliente.txt.j2. #}
 {% if peer.tem_filtro_proprio() %}
 {% for fam in peer.familias() %}

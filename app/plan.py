@@ -22,6 +22,13 @@ import ipaddress
 TIPOS = ("cliente", "parceiro", "upstream", "ix", "pni")
 FAMILIAS = ("v4", "v6")
 
+# O prefixo do nome dos filtros de cada tipo. Sai daqui e nao do template
+# porque quem monta o nome num terceiro lugar - o peer que reaproveita a
+# politica de outro - precisa do mesmo valor, e duas copias divergem na
+# primeira vez que alguem renomear um filtro.
+PREFIXO_DO_TIPO = {"cliente": "CUST", "parceiro": "CUST", "upstream": "UP",
+                   "ix": "IX", "pni": "PNI"}
+
 # O AS de fabrica, que e o de todo peers.yaml que nao declara nada. O
 # ASN e o namespace em texto: e assim que ele entra no nome, "64512:%d", e
 # a grafia estava repetida em cada funcao que monta community e no

@@ -2397,3 +2397,86 @@ def test_so_o_upstream_ganha_a_preferencia_do_bloco_do_peer():
     for monta in (peer_cliente, peer_parceiro, peer_ix, peer_pni):
         texto = render.render_peer(monta())
         assert "AP-OWN" not in texto, monta.__name__
+
+
+# --- o peer que reaproveita a politica de outro ------------------------
+
+
+def par_de_reaproveitamento(**kw):
+    """O par principal/backup: o segundo reaproveita a politica do primeiro."""
+    # o apelido da origem e o que da o token dela, e e com esse token que o
+    # bloco de quem reaproveita nomeia os filtros que chama: sem ele o token
+    # seria o ASN, e o par de nomes que o teste procura nao existiria
+    origem = peer_cliente(id=1, asn=270620, apelido="NETMAC", nome="NETMAC",
+                          descricao="NETMAC")
+    backup = peer_cliente(
+        id=2, asn=270620, apelido="NETMAC-BKP", nome="NETMAC-BKP",
+        descricao="NETMAC-BKP", politica_de=1,
+        sessoes={"v4": {"local": "198.51.100.9", "remoto": "198.51.100.10"},
+                 "v6": {}},
+        **kw)
+    return origem, backup
+
+
+def test_o_bloco_de_quem_reaproveita_nao_define_objeto_nenhum():
+    # a razao de existir do recurso: dois links do mesmo cliente sem a
+    # politica escrita duas vezes
+    origem, backup = par_de_reaproveitamento()
+    texto = render.render_peer(backup, origem=origem)
+    assert "xpl " not in texto
+
+
+def test_o_bloco_de_quem_reaproveita_chama_os_filtros_da_origem():
+    origem, backup = par_de_reaproveitamento()
+    texto = render.render_peer(backup, origem=origem)
+    assert ("peer 198.51.100.10 route-filter CUST-NETMAC-IMPORT-V4 import"
+            in texto)
+    assert ("peer 198.51.100.10 route-filter CUST-NETMAC-EXPORT-V4 export"
+            in texto)
+    # o token de quem reaproveita aparece no comentario de cabecalho, que e o
+    # nome do registro; o que nao pode e ele nomear filtro nenhum
+    assert "CUST-NETMAC-BKP" not in texto
+
+
+def test_o_bloco_de_quem_reaproveita_traz_a_sessao_dele():
+    # nao ha grupo do VRP carregando a sessao: timers, bfd, route-limit e
+    # advertise-community sao deste link, com os valores dele
+    _, backup = par_de_reaproveitamento(
+        route_limit=99, timer_keepalive=30, timer_hold=90, bfd=True)
+    texto = render.render_peer(backup, origem=par_de_reaproveitamento()[0])
+    assert "peer 198.51.100.10 route-limit 99 alert-only" in texto
+    assert "peer 198.51.100.10 timer keepalive 30 hold 90" in texto
+    assert "peer 198.51.100.10 bfd enable" in texto
+    assert "peer 198.51.100.10 advertise-community" in texto
+
+
+def test_o_filtro_sai_com_o_prefixo_do_tipo():
+    # o prefixo do nome do filtro e do tipo, e nao do token: um upstream que
+    # reaproveita chama UP-, e nao CUST-
+    origem = peer_upstream(id=1, asn=14840, apelido="OP", descricao="OP")
+    outro = peer_upstream(id=2, asn=14840, apelido="OP-BKP", nome="OP-BKP",
+                          descricao="OP-BKP", politica_de=1)
+    texto = render.render_peer(outro, origem=origem)
+    assert "route-filter UP-OP-IMPORT-V4 import" in texto
+    assert "CUST-" not in texto
+
+
+def test_o_campo_de_politica_de_quem_reaproveita_e_ignorado():
+    # a tela mostra os campos e o operador pode digitar neles. O que vale e
+    # a origem, e o render nao pode consultar nenhum deles
+    origem, backup = par_de_reaproveitamento(
+        lp_base=999, origem=1999, pop=2222, prepend_base=3, bh_upstream="1:666",
+        communities=["64512:1900"], ap_block=["65000"])
+    texto = render.render_peer(backup, origem=origem)
+    assert "999" not in texto
+    assert "64512:1900" not in texto
+    assert "65000" not in texto
+    assert "xpl " not in texto
+
+
+def test_gerar_quem_reaproveita_nao_muda_a_saida_da_origem():
+    # o requisito de sempre: gerar um nao mexe na saida do outro
+    origem, backup = par_de_reaproveitamento()
+    antes = render.render_peer(origem)
+    render.render_peer(backup, origem=origem)
+    assert render.render_peer(origem) == antes
