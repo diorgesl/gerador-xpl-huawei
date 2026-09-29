@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app import auth
 from app import formulario as form
+from app import organizada
 from app import peers as peers_mod
 from app import plan, prefixes, render, validate
 from app import tenants as tenants_mod
@@ -862,13 +863,14 @@ def _secao_peer(peer, grupo, rede, saida, *, origem):
                        arquivo=destino.name, salvo=destino.exists())
 
 
-@roteador.get("/config", response_model=Config)
-def ler_config(t: tenants_mod.Tenant = Depends(tenant)):
-    """A config inteira numa resposta so, montada na hora pelo render.
+def _secoes_da_config(t):
+    """As secoes da config inteira, na ordem em que os blocos se apoiam, e a
+    rede do tenant; ou a recusa que impede monta-la.
 
     Quem cola no equipamento le daqui: e a mesma saida das telas de cada
-    registro, na ordem em que os blocos se apoiam, e sem nada gravado na
-    pasta do tenant no caminho.
+    registro, e sem nada gravado na pasta do tenant no caminho. As duas rotas
+    que servem a config inteira passam por aqui, e e por isso que as recusas
+    valem nas duas.
     """
     peers, grupos, rede = _peers(t), _grupos(t), _rede(t)
     # a ordem e a do "Ordem de colagem no F1A" do README: o base primeiro, o
@@ -882,21 +884,48 @@ def ler_config(t: tenants_mod.Tenant = Depends(tenant)):
             # o membro herda do grupo; sem ele o bloco sai errado, e a tela
             # do peer ja recusa por isso. Aqui a recusa e da config inteira,
             # nomeando quem aponta para o vazio
-            return _falha(422, [validate.Erro(
+            return None, rede, _falha(422, [validate.Erro(
                 "grupo_id", "o grupo %s do peer %s nao existe"
                             % (peer.grupo_id, _nome_do_peer(peer)))])
         # o mesmo caso, para a origem de quem reaproveita, e pela mesma
         # razao: o bloco dele sai da politica da origem
         sem_origem = _sem_origem(peer, peers)
         if sem_origem is not None:
-            return sem_origem
+            return None, rede, sem_origem
         secoes.append(_secao_peer(peer, grupo, rede, t.saida,
                                   origem=_origem_do_peer(peer, peers)))
     originacao = _secao_originacao(peers_mod.carregar_blocos(t.caminho), rede,
                                    t.saida)
     if originacao is not None:
         secoes.append(originacao)
+    return secoes, rede, None
+
+
+@roteador.get("/config", response_model=Config)
+def ler_config(t: tenants_mod.Tenant = Depends(tenant)):
+    """A config inteira numa resposta so, montada na hora pelo render.
+
+    E a leitura por registro, na ordem de colagem: cada secao e o bloco de um
+    peer, de um grupo ou dos prefixos proprios, inteiro e colavel sozinho.
+    """
+    secoes, _, recusa = _secoes_da_config(t)
+    if recusa is not None:
+        return recusa
     return Config(secoes=secoes)
+
+
+@roteador.get("/config/organizada", response_model=Config)
+def ler_config_organizada(t: tenants_mod.Tenant = Depends(tenant)):
+    """A config inteira por tipo de objeto, para o arquivo do "baixar tudo".
+
+    E a mesma montagem do /config, reagrupada: os sets, os route-filters, as
+    estaticas e um `bgp` so com todas as sessoes. A tela continua lendo o
+    /config - o que sai daqui e o arquivo que se cola de uma vez.
+    """
+    secoes, rede, recusa = _secoes_da_config(t)
+    if recusa is not None:
+        return recusa
+    return Config(secoes=organizada.organizar(secoes, rede.ASN))
 
 
 @publico.post("/login", response_model=SessaoResposta)

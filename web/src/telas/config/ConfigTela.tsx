@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react"
+import { useMutation } from "@tanstack/react-query"
 import { ChevronDown, Download } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CodigoXpl } from "@/components/CodigoXpl"
 import { Falha } from "@/components/Falha"
+import { cliente } from "@/api/cliente"
 import { useConfig, type SecaoConfig } from "@/api/consultas"
+import { avisarFalhaDeRede } from "@/lib/aviso"
 import { plural } from "@/lib/diff"
 import { baixar, copiarComAviso } from "@/lib/copiar"
 import { cn } from "@/lib/utils"
+import { useAsn } from "@/app/tenant"
 import { LINHA_DE_LEITURA, secaoNaLinha } from "./leitura"
 
 /**
@@ -71,7 +75,35 @@ function useSecaoNaTela(chaves: string[]) {
 }
 
 export function ConfigTela() {
+  const asn = useAsn()
   const config = useConfig()
+
+  /**
+   * O arquivo do "baixar tudo": a config inteira agrupada por tipo de objeto,
+   * e nao as secoes na ordem da tela. Ela vem do /config/organizada, buscada
+   * no clique - e a mesma montagem do /config, reagrupada no servidor, que e
+   * quem tem o texto renderizado para cortar.
+   *
+   * O nome leva o ASN porque o operador baixa a config de mais de uma rede: o
+   * navegador renomeia o segundo `config.txt` para "config (1).txt" na pasta
+   * de downloads, e o arquivo deixa de dizer de que rede ele e.
+   */
+  const baixarTudo = useMutation({
+    mutationFn: () => cliente.GET("/api/config/organizada", {
+      params: { query: { asn: Number(asn) } },
+    }),
+    onSuccess: (r) => {
+      // o 422 da config inteira nao chega aqui com a tela montada: sem secoes
+      // nao ha botao que baixe. O que sobra e a falha de rede, e ela tem
+      // caminho de volta
+      if (r.error || !r.data) {
+        avisarFalhaDeRede(() => baixarTudo.mutate())
+        return
+      }
+      baixar(textoInteiro(r.data.secoes), `config-${asn}.txt`)
+    },
+    onError: () => avisarFalhaDeRede(() => baixarTudo.mutate()),
+  })
   // o `?? []` e um array novo a cada render: sem o memo ele mudaria a
   // identidade de `secoes` toda vez, e o efeito do observador seria desfeito e
   // refeito a toa, com as secoes ja na tela
@@ -127,7 +159,8 @@ export function ConfigTela() {
             <Button size="sm" onClick={() => void copiarComAviso(texto)}>
               copiar tudo
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => baixar(texto, "config.txt")}>
+            <Button size="sm" variant="ghost" disabled={baixarTudo.isPending}
+                    onClick={() => baixarTudo.mutate()}>
               <Download className="size-4" /> baixar tudo
             </Button>
             <span className="ml-auto text-xs text-muted-foreground">

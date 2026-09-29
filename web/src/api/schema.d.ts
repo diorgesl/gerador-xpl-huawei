@@ -486,11 +486,34 @@ export interface paths {
          * Ler Config
          * @description A config inteira numa resposta so, montada na hora pelo render.
          *
-         *     Quem cola no equipamento le daqui: e a mesma saida das telas de cada
-         *     registro, na ordem em que os blocos se apoiam, e sem nada gravado na
-         *     pasta do tenant no caminho.
+         *     E a leitura por registro, na ordem de colagem: cada secao e o bloco de um
+         *     peer, de um grupo ou dos prefixos proprios, inteiro e colavel sozinho.
          */
         get: operations["ler_config_api_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/config/organizada": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ler Config Organizada
+         * @description A config inteira por tipo de objeto, para o arquivo do "baixar tudo".
+         *
+         *     E a mesma montagem do /config, reagrupada: os sets, os route-filters, as
+         *     estaticas e um `bgp` so com todas as sessoes. A tela continua lendo o
+         *     /config - o que sai daqui e o arquivo que se cola de uma vez.
+         */
+        get: operations["ler_config_organizada_api_config_organizada_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2879,6 +2902,55 @@ export interface operations {
         };
     };
     ler_config_api_config_get: {
+        parameters: {
+            query: {
+                asn: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Config"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroResposta"];
+                };
+            };
+        };
+    };
+    ler_config_organizada_api_config_organizada_get: {
         parameters: {
             query: {
                 asn: number;

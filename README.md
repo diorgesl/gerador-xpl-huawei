@@ -231,6 +231,15 @@ que ainda não está em `out/<ASN>/`, que é a parte que provavelmente não subi
    ordem em que se cola. O bloco de remoção sai na tela, ao lado do de
    originação.
 
+O botão "baixar tudo" leva a mesma config agrupada por tipo de objeto, em
+`config-<ASN>.txt`: os sets, todos os `xpl route-filter`, as estáticas e um
+`bgp <ASN>` só, com todas as sessões dentro. Cada grupo abre com um comentário
+`# ==== ... ====`, e as linhas `network` dos prefixos próprios entram na
+família do `bgp`, no lugar do `# --- dentro de ... ---` do `blocos.txt`, que é
+a forma de colar tudo de uma vez. O "copiar tudo", a tela e os arquivos de
+`out/<ASN>/` continuam na ordem por registro, que é a de conferir e a de colar
+bloco a bloco.
+
 ## O que confirmar no equipamento antes do primeiro peer
 
 Perguntas que ficaram em aberto no `PLANO.md`:

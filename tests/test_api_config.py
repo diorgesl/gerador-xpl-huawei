@@ -1,7 +1,7 @@
 """A config inteira numa resposta so: base, originacao, grupos e peers."""
 
 from dados_api import (ASN_DE_TESTE, BLOCOS, CLIENTE, GRUPO_PARCEIROS, arvore,
-                       caminho_tenant)
+                       caminho_tenant, membro_de)
 
 
 def _chaves(api):
@@ -10,6 +10,10 @@ def _chaves(api):
 
 def _secoes(api):
     return {s["chave"]: s for s in api.get("/api/config").json()["secoes"]}
+
+
+def _organizada(api):
+    return {s["chave"]: s for s in api.get("/api/config/organizada").json()["secoes"]}
 
 
 def _criar(api, rota, formulario):
@@ -127,6 +131,50 @@ def test_o_peer_que_reaproveita_sai_na_config_com_os_filtros_da_origem(api):
 
     assert "xpl " not in secao["texto"]
     assert "route-filter CUST-268127-IMPORT-V4 import" in secao["texto"]
+
+
+def test_a_config_organizada_junta_tudo_por_tipo(api):
+    """O arquivo do "baixar tudo": os sets, os filtros, as estaticas e um `bgp`
+    so, na ordem em que o equipamento le - e nao na ordem dos registros."""
+    api.put("/api/blocos", json=BLOCOS)
+    grupo = _criar(api, "/api/grupos", GRUPO_PARCEIROS)
+    membro = _criar(api, "/api/peers", membro_de(grupo))
+
+    secoes = _organizada(api)
+
+    assert list(secoes) == ["sets", "filtros", "estaticas", "bgp"]
+    assert secoes["bgp"]["titulo"] == "bgp %d" % ASN_DE_TESTE
+    assert "xpl ip-prefix-list PL-BOGONS-V4" in secoes["sets"]["texto"]
+    assert "xpl route-filter IMPORT-SANITY-V4" in secoes["filtros"]["texto"]
+    assert "ip route-static 38.252.64.0" in secoes["estaticas"]["texto"]
+
+    bgp = secoes["bgp"]["texto"]
+    assert bgp.splitlines().count("bgp %d" % ASN_DE_TESTE) == 1
+    assert bgp.splitlines().count(" ipv4-family unicast") == 1
+    # o membro nao tem filtro proprio, entao o bloco dele chega ao corte com o
+    # cabecalho colado no `bgp`: e ele que diz de quem sao as sessoes la embaixo
+    assert "# peer %d - parceiro - AS268127" % membro in bgp
+    # e o grupo vem antes de quem herda dele, como na ordem de colagem: sem
+    # isso o `peer ... group` do membro referencia um grupo que ainda nao existe
+    assert bgp.index("group PARCEIROS_CDN external") < bgp.index(
+        "peer 198.51.100.2 group PARCEIROS_CDN")
+
+
+def test_a_config_organizada_exige_sessao(api_anonimo):
+    assert api_anonimo.get("/api/config/organizada").status_code == 401
+
+
+def test_a_config_organizada_recusa_o_grupo_que_saiu(api, tmp_path):
+    """E a mesma montagem do /config, com as mesmas recusas: o arquivo
+    organizado nao pode ser a porta por onde passa uma config que a tela
+    recusou."""
+    _criar(api, "/api/peers", CLIENTE)
+    yaml = caminho_tenant(tmp_path)
+    yaml.write_text(yaml.read_text(encoding="ascii").replace(
+        "grupo_id: null", "grupo_id: 7"), encoding="ascii")
+    r = api.get("/api/config/organizada")
+    assert r.status_code == 422
+    assert r.json()["erros"]["grupo_id"] == "o grupo 7 do peer Cliente ACME nao existe"
 
 
 def test_origem_de_quem_reaproveita_que_saiu_recusa_a_config(api, tmp_path):

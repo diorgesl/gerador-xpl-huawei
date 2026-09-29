@@ -18,9 +18,22 @@ const CONFIG = {
   ],
 }
 
+// O arquivo do "baixar tudo": os mesmos objetos, agrupados por tipo. Ele nao
+// tem arquivo em out/ nem `salvo` - o grupo nao e um registro
+const ORGANIZADA = {
+  secoes: [
+    { chave: "sets", titulo: "Sets e listas", texto: "SETS-XPL", arquivo: null, salvo: null },
+    { chave: "filtros", titulo: "Route-filters", texto: "FILTROS-XPL", arquivo: null, salvo: null },
+    { chave: "bgp", titulo: "bgp 64512", texto: "BGP-XPL", arquivo: null, salvo: null },
+  ],
+}
+
 const rotas = [{ path: "/config-completa", element: <ConfigTela /> }]
 
-const MAPA: Record<string, Resposta> = { "GET /api/config": { corpo: CONFIG } }
+const MAPA: Record<string, Resposta> = {
+  "GET /api/config": { corpo: CONFIG },
+  "GET /api/config/organizada": { corpo: ORGANIZADA },
+}
 
 function secao(nome: string) {
   return screen.getByRole("region", { name: nome })
@@ -107,6 +120,34 @@ describe("a tela da config completa", () => {
         "BASE-XPL", "GRUPO-XPL", "PEER-XPL", "ORIGEM-XPL",
       ].join("\n\n")),
     )
+  })
+
+  it("baixar tudo leva o arquivo por tipo, e nao a ordem da tela", async () => {
+    // o download nao e o `copiar tudo` num arquivo: quem baixa leva a config
+    // agrupada por tipo, que vem do /config/organizada, buscada no clique
+    const cliques: HTMLAnchorElement[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      cliques.push(this)
+    })
+    let baixado: Blob | undefined
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn((b: Blob) => {
+        baixado = b
+        return "blob:x"
+      }),
+      revokeObjectURL: vi.fn(),
+    })
+    mockFetch(MAPA)
+    montarRota(rotas, "/config-completa")
+
+    await userEvent.click(await screen.findByRole("button", { name: /baixar tudo/i }))
+
+    await waitFor(() => expect(cliques).toHaveLength(1))
+    // o ASN no nome: o mesmo operador baixa a config de mais de uma rede, e o
+    // navegador renomeia o segundo `config.txt` para "config (1).txt"
+    expect(cliques[0].download).toBe("config-64512.txt")
+    expect(await baixado!.text()).toBe("SETS-XPL\n\nFILTROS-XPL\n\nBGP-XPL")
   })
 
   it("diz que nao deu para falar com a API, e o tentar de novo traz o dado", async () => {
