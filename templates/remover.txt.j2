@@ -7,6 +7,10 @@
 undo peer {{ s.remoto }}
 {% endfor %}
 
+{#- quem reaproveita nao criou objeto nenhum, entao nao tem o que derrubar
+    alem da propria sessao. Quem carrega os filtros e o bloco da origem, e
+    tirar os dele apagaria a politica dos dois links. #}
+{% if not peer.politica_de %}
 {#- o que tem eixo de familia sai do laco; o que nao tem sai depois dele,
     uma vez so. E a mesma divisao dos blocos de peer: dentro do laco, um
     objeto sem a familia no nome seria derrubado duas vezes num peer
@@ -74,8 +78,9 @@ undo xpl as-path-list AP-{{ peer.token }}-ALLOWED
 undo xpl community-list CL-NOADV-{{ peer.token }}
 undo xpl large-community-list LC-NOADV-{{ peer.token }}
 {% endif %}
+{% endif %}
 
-{% if peer.tipo in plan.TIPOS_COM_APPLY_PEER %}
+{% if peer.tipo in plan.TIPOS_COM_APPLY_PEER and not peer.politica_de %}
 !- ATENCAO: CL-PEER-{{ peer.token }} tem o conteudo no cadastro do peer,
 !- entao da para recriar pelo quadro "ao criar o peer". O undo segue
 !- comentado porque derrubar a sessao nao exige apagar a lista, e um

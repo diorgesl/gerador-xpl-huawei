@@ -1,6 +1,7 @@
 import pytest
 
 from app import plan
+from test_render import peer_cliente
 
 # nomes locais so para as assercoes ficarem legiveis na horizontal
 C200, C201, C202, C203, C204 = ("64512:%d" % v for v in (200, 201, 202, 203, 204))
@@ -355,3 +356,12 @@ def test_o_rede_responde_pelos_nomes_novos():
     assert plan.Rede().nome_origem("38.252.64.0/22") == "ORIGEM-38-252-64-0_22"
     assert plan.Rede(asn=264130, politica=65532).nome_origem(
         "38.252.64.0/22") == "ORIGEM-38-252-64-0_22"
+
+
+# --- o quadro "ao criar" e da origem ------------------------------------
+
+
+def test_o_quadro_ao_criar_nao_existe_para_quem_reaproveita():
+    # o par CL-PEER/APPLY-PEER e da origem: criar um aqui daria dois
+    # objetos para o mesmo papel
+    assert not plan.quadro_ao_criar(peer_cliente(politica_de=1), False)

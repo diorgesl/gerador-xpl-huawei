@@ -2480,3 +2480,13 @@ def test_gerar_quem_reaproveita_nao_muda_a_saida_da_origem():
     antes = render.render_peer(origem)
     render.render_peer(backup, origem=origem)
     assert render.render_peer(origem) == antes
+
+
+def test_a_remocao_de_quem_reaproveita_nao_derruba_objeto_da_origem():
+    # derrubar o filtro da origem apagaria a politica dos dois links. A
+    # remocao nao precisa da origem: o bloco de quem reaproveita nao nomeia
+    # filtro nenhum
+    _, backup = par_de_reaproveitamento()
+    texto = render.render_remove(backup)
+    assert "undo xpl" not in texto
+    assert "undo peer 198.51.100.10" in texto

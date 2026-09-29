@@ -192,6 +192,12 @@ def quadro_ao_criar(alvo, de_grupo):
     cliente e de parceiro sairia com o quadro que a secao C tirou de la. Sem
     default o erro e na hora da chamada, e nao no arquivo gerado.
     """
+    # quem reaproveita a politica de outro nao tem CL-PEER propria: o par
+    # CL-PEER/APPLY-PEER e da origem, e criar um aqui daria dois objetos
+    # para o mesmo papel
+    if getattr(alvo, "politica_de", None) is not None:
+        return False
+
     if de_grupo:
         return alvo.tipo == "upstream"
     return alvo.tipo in TIPOS_COM_APPLY_PEER
