@@ -358,6 +358,47 @@ criaria uma `CL-PEER-<G>` e um `APPLY-PEER-<G>` que nenhum filtro do grupo
 chama; e nos grupos de `ix` e de `pni` não há esse par, porque o egress dos dois
 não aplica community de sessão nenhuma.
 
+## Reaproveitamento de política entre peers
+
+Dois links do mesmo cliente, um principal e um backup, têm a mesma política e
+o mesmo ASN. Escrever o par de filtros duas vezes faz a política dos dois
+divergir na primeira edição feita num só, e o grupo resolve isso criando um
+`peer group` no equipamento, que é um objeto a mais e faz os membros
+compartilharem também o que é de sessão.
+
+O campo `politica_de` no cadastro do peer resolve o mesmo problema sem grupo:
+o segundo link não define objeto nenhum e chama os filtros do primeiro pelo
+nome dele.
+
+```scss
+bgp 64512
+ peer 198.51.100.10 as-number 270620
+ peer 198.51.100.10 description NETMAC-BKP
+ peer 198.51.100.10 route-limit 50 alert-only
+ peer 198.51.100.10 public-as-only force
+ ipv4-family unicast
+  peer 198.51.100.10 enable
+  peer 198.51.100.10 route-filter CUST-NETMAC-IMPORT-V4 import
+  peer 198.51.100.10 route-filter CUST-NETMAC-EXPORT-V4 export
+  peer 198.51.100.10 advertise-community
+  peer 198.51.100.10 advertise-large-community
+```
+
+O que o peer que reaproveita guarda de próprio é a sessão inteira: IPs,
+`route-limit`, `public-as-only force`, timers, `bfd`, graceful-restart,
+`advertise-community` e `advertise-large-community`. O que vem da origem é a
+política, incluindo o LP, que mora dentro do filtro de import. Os dois links
+ficam com a mesma preferência, e a diferença entre eles vem do que o cliente
+anuncia em cada um.
+
+A origem tem que ser dona da própria política: não pode reaproveitar de
+outro nem estar num grupo. E ninguém apaga uma origem enquanto alguém a
+reaproveita.
+
+Renomear o apelido da origem troca o token dela e com ele o nome dos objetos
+que quem reaproveita chama: o bloco do segundo link fica apontando para nomes
+que o equipamento não tem mais, até ser gerado de novo.
+
 ## Referência de sintaxe XPL
 
 O XPL é mais expressivo que `route-policy`, mas tem armadilhas de parsing que não estão evidentes na documentação. Esta seção registra o que foi verificado no F1A, por `?` contextual e por simulação com `xpl simulate` — o método está na seção de validação, no fim do documento.

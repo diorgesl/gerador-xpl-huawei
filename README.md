@@ -56,6 +56,11 @@ no `.gitignore`.
   repassa o mesmo AS-path a todos os membros) e o do PNI ainda não implementa.
   Publicar ID que o equipamento não consome ensina o cliente a mandar community
   que morre no filtro.
+- **Não regenera o bloco de quem reaproveita a política de outro peer.** Trocar
+  o apelido da origem muda o token dela, e com ele o nome dos filtros chamados
+  no bloco do outro. O app avisa e deixa a reaplicação para o operador, porque
+  regenerar sozinho o bloco de outro peer quebraria a regra de que gerar um não
+  mexe na saída do outro.
 - **Não tem gestão de usuários.** É um admin só, criado no boot, e sem papéis.
   Trocar a senha é apagar o `usuarios.yaml` e reiniciar; não há tela para isso.
 
@@ -203,7 +208,12 @@ que ainda não está em `out/<ASN>/`, que é a parte que provavelmente não subi
    deixa a referência pendurada.
 3. **O bloco de cada peer**, na ordem que quiser:
    `out/<ASN>/<token>-cliente.txt`, `out/<ASN>/<token>-upstream.txt`,
-   `out/<ASN>/<token>-ix.txt`, `out/<ASN>/<token>-pni.txt`.
+   `out/<ASN>/<token>-ix.txt`, `out/<ASN>/<token>-pni.txt`. A ordem só deixa
+   de ser livre quando o peer reaproveita a política de outro, pelo campo
+   "Reaproveitar a política de": o bloco dele não define filtro nenhum e chama
+   os da origem pelo nome, então o bloco da origem precisa estar no
+   equipamento antes. Colar quem reaproveita primeiro deixa a referência
+   pendurada, como no caso do membro de grupo.
 4. **A `CL-PEER-<T>` do quadro "ao criar o peer"**, na primeira vez que aquela
    sessão subir, e de novo sempre que a lista mudar. Vale para cliente e
    upstream: são os dois tipos que ganham community própria de sessão. O IX não
