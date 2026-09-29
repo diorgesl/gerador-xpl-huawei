@@ -504,6 +504,11 @@ def test_a_origem_apagada_a_mao_e_recusada_com_erro_claro(api, tmp_path):
     O template roda com StrictUndefined: uma origem nula estoura ali dentro
     com um erro que nao diz nada a quem le. O que a API faz e recusar antes,
     com o nome do campo.
+
+    A leitura que renderiza sem validar e o /saida, e e ele que devolve o
+    422. A previa passa pelo validate, que ja escreve no campo o erro de
+    origem que nao existe: a rota sai pelo caminho de sempre, 200 e sem
+    bloco, como faz com qualquer outro campo.
     """
     api.post("/api/peers", json=CLIENTE)
     caminho = caminho_tenant(tmp_path)
@@ -520,5 +525,6 @@ def test_a_origem_apagada_a_mao_e_recusada_com_erro_claro(api, tmp_path):
 
     r = api.post("/api/peers/previa",
                  json=dict(CLIENTE, id="40", apelido="TORTO", politica_de="99"))
-    assert r.status_code == 422
+    assert r.status_code == 200
     assert "politica_de" in r.json()["erros"]
+    assert r.json()["bloco"] is None

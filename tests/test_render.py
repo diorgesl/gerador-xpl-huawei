@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+import pytest
+
 from app import render
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -2490,3 +2492,27 @@ def test_a_remocao_de_quem_reaproveita_nao_derruba_objeto_da_origem():
     texto = render.render_remove(backup)
     assert "undo xpl" not in texto
     assert "undo peer 198.51.100.10" in texto
+
+
+# O id 0 e uma origem legitima: e o primeiro peer de um tenant novo. Os
+# templates decidiam pelo valor (`{% if peer.politica_de %}` no bloco, e o
+# `not` no da remocao), e 0 e falso em Jinja - quem reaproveitasse dele saia
+# com a politica escrita inteira no proprio bloco, em silencio, e a remocao
+# derrubava objetos que ele nem cria. O par de reaproveitamento do teste de
+# cima usa politica_de=1, entao este caso passa por fora dele.
+QUEM_MONTA_PEER = [peer_cliente, peer_parceiro, peer_upstream, peer_ix,
+                   peer_pni]
+
+
+@pytest.mark.parametrize("monta", QUEM_MONTA_PEER)
+def test_o_id_zero_de_origem_e_uma_origem(monta):
+    origem = monta(id=0, apelido="ORIGEM", nome="ORIGEM", descricao="ORIGEM")
+    alvo = monta(id=7, apelido="BKP", nome="BKP", descricao="BKP", politica_de=0)
+
+    bloco = render.render_peer(alvo, origem=origem)
+    remocao = render.render_remove(alvo)
+
+    # o ramo de quem reaproveita, e nao o do peer avulso
+    assert "-ORIGEM-IMPORT-V4" in bloco
+    assert "xpl " not in bloco
+    assert "undo xpl" not in remocao

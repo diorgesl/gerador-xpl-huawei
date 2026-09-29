@@ -472,17 +472,14 @@ def previa_peer(formulario: PeerForm,
     peers, grupos, rede = _peers(t), _grupos(t), _rede(t)
     anterior = peers_mod.achar_id(peers, ident) if ident is not None else None
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior)
-    # a guarda vem antes do `erros`: a previa devolve 200 com o erro de
-    # campo, e a origem que nao existe tem que voltar como recusa, com o
-    # nome do campo, e nao virar um bloco montado com ela nula
-    sem_origem = _sem_origem(peer, peers)
-    if sem_origem is not None:
-        return sem_origem
     avisos = _avisos(validate.avisos(peer, peers, rede=rede))
     salvo = _ler(anterior.arquivo(t.saida)) if anterior is not None else None
     if erros:
         return Previa(erros=validate.erros_para_dict(erros), avisos=avisos,
                       salvo=salvo)
+    # a origem nao precisa de guarda aqui: o validate ja poe o erro no campo
+    # dela, e a previa sai pelo `if erros` acima, em 200 e sem bloco. Quem
+    # le o yaml e renderiza sem validar e o /saida, e e la que a guarda mora.
     return Previa(
         bloco=render.render_peer(peer, grupo=_grupo_do_peer(peer, grupos),
                                  rede=rede,
@@ -816,13 +813,15 @@ def _secao_grupo(grupo, rede, saida):
                        arquivo=destino.name, salvo=destino.exists())
 
 
-def _secao_peer(peer, grupo, rede, saida, origem=None):
+def _secao_peer(peer, grupo, rede, saida, *, origem):
     """O bloco do peer mais o quadro "ao criar", na ordem das abas da tela.
 
     O texto e a juncao dos dois porque quem cola no equipamento cola a secao
     inteira; o quadro so existe nos tipos com APPLY-PEER, e e o proprio
     _criar_lista_do_peer que decide isso. A `origem` e o peer de quem este
-    reaproveita a politica, como no /saida: e o mesmo render.
+    reaproveita a politica, como no /saida: e o mesmo render, e por isso ela
+    nao tem default - uma secao montada sem ela estouraria no template de
+    quem reaproveita, e o erro tem que ser na chamada, e nao na config.
     """
     partes = [render.render_peer(peer, grupo=grupo, rede=rede,
                                  origem=origem)]
@@ -866,7 +865,7 @@ def ler_config(t: tenants_mod.Tenant = Depends(tenant)):
         if sem_origem is not None:
             return sem_origem
         secoes.append(_secao_peer(peer, grupo, rede, t.saida,
-                                  _origem_do_peer(peer, peers)))
+                                  origem=_origem_do_peer(peer, peers)))
     originacao = _secao_originacao(peers_mod.carregar_blocos(t.caminho), rede,
                                    t.saida)
     if originacao is not None:
