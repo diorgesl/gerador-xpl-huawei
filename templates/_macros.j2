@@ -78,7 +78,7 @@ end-filter
 {% macro prefix_lists_downstream(alvo, fam) -%}
 {% set U = fam|upper %}
 {% set kw = "ipv6-prefix-list" if fam == "v6" else "ip-prefix-list" %}
-{% set maxlen = 48 if fam == "v6" else 24 %}
+{% set maxlen = plan.TETO_PREFIXO[fam] %}
 {% set hostlen = 128 if fam == "v6" else 32 %}
 xpl {{ kw }} PL-CUST-{{ alvo.token }}-{{ U }}
 {% for cidr in alvo.cidrs(fam) %}
@@ -133,6 +133,7 @@ end-list
 {% macro filtro_downstream_import(alvo, fam, chamar_apply_peer, confinar_prefixo) -%}
 {% set U = fam|upper %}
 {% set nexthop = "100::" if fam == "v6" else "192.0.2.1" %}
+{% set tratamentos = alvo.tratamentos(fam) %}
 xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
  call route-filter IMPORT-SANITY-{{ U }}
 {% if confinar_prefixo %}
@@ -159,6 +160,24 @@ xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
 {% endif %}
 {% if chamar_apply_peer %}
  call route-filter APPLY-PEER-{{ alvo.token }}
+{% endif %}
+{#- o tratamento por prefixo do cadastro, do mais especifico para o menos. O
+    if/elseif e o que faz um /24 escrito dentro de um /22 vencer o /22, em vez
+    de os dois somarem. Depois do APPLY-PEER de proposito: o 1xx da linha
+    vence o da CL-PEER, porque a ultima escrita de local-preference vence. #}
+{% if tratamentos %}
+ !- tratamento por prefixo do cadastro, do mais especifico para o menos
+{% for prefixo, communities in tratamentos %}
+{% set std, lg = plan.separa_communities(communities) %}
+ {{ "if" if loop.first else "elseif" }} ip route-destination in {{ plan.conjunto_do_prefixo(prefixo, plan.TETO_PREFIXO[fam]) }} then
+{% if std %}
+  apply community {{ plan.conjunto_de(std) }} additive
+{% endif %}
+{% if lg %}
+  apply large-community {{ plan.conjunto_de(lg) }} additive
+{% endif %}
+{% endfor %}
+ endif
 {% endif %}
  finish
 end-filter
@@ -240,7 +259,7 @@ end-filter
 {% macro te_prefix_list(alvo, fam) -%}
 {% set U = fam|upper %}
 {% set kw = "ipv6-prefix-list" if fam == "v6" else "ip-prefix-list" %}
-{% set maxlen = 48 if fam == "v6" else 24 %}
+{% set maxlen = plan.TETO_PREFIXO[fam] %}
 {% if alvo.te_prefixos[fam] %}
 !- conteudo de EXEMPLO no PLANO: troque pelos prefixos reais antes de subir
 xpl {{ kw }} PL-TE-PREFER-{{ alvo.token }}-{{ U }}

@@ -429,6 +429,17 @@ def separa_communities(valores):
     return standard, large
 
 
+def conjunto_do_prefixo(cidr, teto):
+    """O conjunto inline de um prefixo: `{45.169.232.0 22 le 24}`.
+
+    O `le` cobre o proprio prefixo e os mais especificos ate o teto, que e o
+    alcance do confinamento. Sai pronto do Python porque em Jinja o `{{`
+    seguido de `{` fecha a expressao, e o mesmo motivo que levou o
+    `conjunto` a existir.
+    """
+    return "{%s le %d}" % (cidr_para_xpl(cidr), teto)
+
+
 def conjunto_de(lista):
     """O mesmo conjunto do `conjunto`, para uma lista que ja veio pronta.
 
