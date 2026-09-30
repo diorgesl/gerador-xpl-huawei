@@ -59,6 +59,18 @@ def avisos(peer, peers, rede=None):
     # um subscrito no mesmo tipo, e o tipo desconhecido virava KeyError: como
     # o avisos roda no ramo de erro do salvar, o 500 que o erro de tipo tira
     # do render voltava por aqui, sem a tela chegar a mostrar o erro.
+    # o teto do confinamento: a linha mais longa que ele nao casa rota
+    # nenhuma, porque o PL-CUST para no teto. Aviso e nao erro porque o
+    # peers.yaml de hoje aceita essa linha, e virar erro travaria o
+    # salvamento de um cadastro que sempre funcionou.
+    for fam in plan.FAMILIAS:
+        for bloco in peer.prefixos.get(fam) or []:
+            if plan.comprimento(bloco.prefixo) > plan.TETO_PREFIXO[fam]:
+                saida.append(Erro(
+                    "prefixos",
+                    "%s e mais longo que o teto /%d do confinamento: a linha "
+                    "nao alcanca rota nenhuma"
+                    % (bloco.prefixo, plan.TETO_PREFIXO[fam])))
     sugerido = plan.ROUTE_LIMIT.get(peer.tipo)
     if sugerido is not None and peer.route_limit != sugerido:
         saida.append(Erro(
@@ -161,14 +173,18 @@ DIGITOS_6CA_LIDOS = frozenset((1, 2, 3, 4, 9))
 DIGITOS_5PPA_LIDOS = frozenset(range(5))
 
 
-def _motivo_da_recusa(valor, rede):
-    """Por que a community nao serve num bloco proprio, ou None se serve.
+def _motivo_da_recusa(valor, rede, lido_no_import=False):
+    """Por que a community nao serve, ou None se serve.
 
     So opina sobre o namespace da rede: community de outro AS passa, porque
     o vocabulario do mundo nao da para conferir e o bloco existe justamente
     para carregar a tag da operadora. Dentro do namespace, a pergunta e uma
     so: algum filtro do gerado le este valor? O que nenhum le vira erro
     aqui, e nao um prefixo que anuncia e nao se comporta como pedido.
+
+    `lido_no_import=True` e o prefixo do downstream: ali a rota passa pelo
+    import da sessao e o APPLY-CUSTOMER-LP le o 1xx, que e justamente o
+    valor que o bloco proprio recusa por nao passar por import nenhum.
     """
     if not valor.startswith(rede.ns + ":"):
         return None
@@ -201,6 +217,8 @@ def _motivo_da_recusa(valor, rede):
         return None
 
     if 100 <= n <= 199:
+        if lido_no_import:
+            return None
         return ("o 1xx e lido pelo import de cliente, e a rota propria "
                 "nao passa por import nenhum: use o local-preference da "
                 "propria filtragem de originacao")
@@ -243,11 +261,25 @@ def _motivo_da_recusa_large(valor, rede):
     return "funcao %d sem ramo no egress" % n
 
 
-def _motivo_da_community(valor, rede):
+def _motivo_da_community(valor, rede, lido_no_import=False):
     """A forma da large tem tres campos, e a da standard tem dois."""
     if len(valor.split(":")) == 3:
         return _motivo_da_recusa_large(valor, rede)
-    return _motivo_da_recusa(valor, rede)
+    return _motivo_da_recusa(valor, rede, lido_no_import)
+
+
+def _valida_lista_de_communities(communities, campo, rede, lido_no_import,
+                                 erros):
+    """A tabela de recusa, para o bloco proprio e para o prefixo do peer."""
+    for valor in communities or []:
+        if not _forma_ok(valor):
+            erros.append(Erro(
+                campo, "community invalida: %s (esperado ASN:VALOR ou "
+                "ASN:V1:V2)" % valor))
+            continue
+        motivo = _motivo_da_community(valor, rede, lido_no_import)
+        if motivo:
+            erros.append(Erro(campo, "%s: %s" % (valor, motivo)))
 
 
 def _forma_ok(valor):
@@ -280,15 +312,8 @@ def validar_blocos(blocos, rede=None):
             if not _cidr_ok(bloco.prefixo):
                 erros.append(Erro(campo, "prefixo invalido: %s (esperado CIDR)"
                                   % bloco.prefixo))
-            for valor in bloco.communities or []:
-                if not _forma_ok(valor):
-                    erros.append(Erro(
-                        campo, "community invalida: %s (esperado ASN:VALOR ou "
-                        "ASN:V1:V2)" % valor))
-                    continue
-                motivo = _motivo_da_community(valor, rede)
-                if motivo:
-                    erros.append(Erro(campo, "%s: %s" % (valor, motivo)))
+            _valida_lista_de_communities(bloco.communities, campo, rede,
+                                         False, erros)
     return erros
 
 
@@ -357,7 +382,7 @@ def _cidr_ok(cidr):
     return True
 
 
-def _valida_prefixos(alvo, erros):
+def _valida_prefixos(alvo, erros, rede=None, tratado=False):
     # as duas listas vao para o plan.cidr_para_xpl: o cliente escreve
     # `prefixos`, o upstream escreve `te_prefixos`. A varredura e a mesma
     # para as duas; o campo do erro e que muda. Antes isto valia so no ramo
@@ -367,14 +392,38 @@ def _valida_prefixos(alvo, erros):
     # O Grupo herda a varredura pelo `prefixos` e nao tem TE: o getattr
     # deixa a mesma funcao servir os dois, com o campo do erro igual ao do
     # peer.
+    #
+    # `tratado=True` e o Peer: os itens do `prefixos` sao Bloco, com
+    # community e `!-`, e a lista passa pela tabela de recusa com o
+    # `lido_no_import`, porque a rota do downstream passa pelo import da
+    # sessao. O `te_prefixos` e CIDR em texto nos dois alvos, e continua so
+    # com a varredura de CIDR.
+    rede = rede if rede is not None else plan.Rede()
     for campo, listas in (("prefixos", alvo.prefixos),
                           ("te_prefixos", getattr(alvo, "te_prefixos", None) or {})):
         for fam in plan.FAMILIAS:
-            for item in listas.get(fam) or []:
-                # o prefixos do peer e Bloco e o do grupo e CIDR em texto
-                cidr = getattr(item, "prefixo", item)
-                if not _cidr_ok(cidr):
-                    erros.append(Erro(campo, "prefixo invalido: %s" % cidr))
+            itens = listas.get(fam) or []
+            if tratado and campo == "prefixos":
+                vistos = set()
+                for bloco in itens:
+                    if bloco.prefixo in vistos:
+                        erros.append(Erro(
+                            campo, "prefixo repetido: %s" % bloco.prefixo))
+                    vistos.add(bloco.prefixo)
+                    if not _cidr_ok(bloco.prefixo):
+                        erros.append(Erro(
+                            campo, "prefixo invalido: %s" % bloco.prefixo))
+                    _valida_lista_de_communities(bloco.communities, campo,
+                                                 rede, True, erros)
+                continue
+            for texto in itens:
+                if not tratado and campo == "prefixos" and len(texto.split()) > 1:
+                    erros.append(Erro(
+                        campo, "o grupo nao aceita community por prefixo: o "
+                        "tratamento por prefixo e do peer avulso"))
+                    continue
+                if not _cidr_ok(texto):
+                    erros.append(Erro(campo, "prefixo invalido: %s" % texto))
 
 
 def _valida_timer(peer, erros):
@@ -537,9 +586,13 @@ def dono_da_politica(peer):
     return peer.grupo_id is None and peer.politica_de is None
 
 
-def validar(peer, peers, anterior=None, grupos=None):
+def validar(peer, peers, anterior=None, grupos=None, rede=None):
     """Os erros que impedem gerar. `anterior` e a entrada que este POST
-    substitui, ou None quando ele cria uma nova."""
+    substitui, ou None quando ele cria uma nova.
+
+    O `rede` desce ate a tabela de recusa das communities, que compara com
+    o namespace da rede e nao com o de fabrica.
+    """
     erros = []
 
     # o tipo escolhe o template do render e as tabelas do plano. O formulario
@@ -609,7 +662,7 @@ def validar(peer, peers, anterior=None, grupos=None):
         erros.append(Erro("route_limit", "route-limit tem que ser maior que zero"))
 
     _valida_timer(peer, erros)
-    _valida_prefixos(peer, erros)
+    _valida_prefixos(peer, erros, rede, tratado=True)
     _valida_communities(peer, erros)
 
     # o parceiro entra aqui junto com o cliente: por baixo da marca de 2091

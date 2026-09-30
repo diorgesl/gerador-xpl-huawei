@@ -276,6 +276,11 @@ ONLY_NOT = {
     "pni": (210, 211, 213),
 }
 
+# o teto de mascara que o confinamento do downstream libera, por familia. E o
+# mesmo `le` das duas prefix-lists do cliente e da clausula por prefixo do
+# import, e por isso ele mora aqui: um numero, tres consumidores.
+TETO_PREFIXO = {"v4": 24, "v6": 48}
+
 # --- prepend por classe (6CA) -----------------------------------------
 
 # classe C do 64512:6CA. A tabela do PLANO da 3 a "IX privado e PNI" e 4

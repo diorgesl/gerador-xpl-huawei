@@ -330,15 +330,18 @@ def copiar_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
     return _registro_peer(replace(peer, id=peers_mod.proximo_id(peers, grupos)))
 
 
-def _peer_do_pedido(formulario, peers, grupos, anterior):
+def _peer_do_pedido(formulario, peers, grupos, anterior, rede):
     """(peer, erros) do formulario, pelo mesmo caminho do POST /api/peers.
 
     A propria entrada fica na lista: quem a dispensa e o validar, pelo
     registro `anterior`, que por isso tem que ser o objeto desta mesma lista.
+    O `rede` desce ate a validacao porque a tabela de recusa das
+    communities compara com o namespace da rede, e nao com o de fabrica.
     """
     peer, erros = form.peer_do_formulario(
         dados_do_formulario(formulario), peers, anterior, grupos=grupos)
-    erros = erros + validate.validar(peer, peers, anterior=anterior, grupos=grupos)
+    erros = erros + validate.validar(peer, peers, anterior=anterior,
+                                     grupos=grupos, rede=rede)
     return peer, erros
 
 
@@ -398,7 +401,7 @@ def _sem_origem(peer, peers):
 
 def _salvar_peer(t, formulario, peers, anterior):
     grupos, rede = _grupos(t), _rede(t)
-    peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior)
+    peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior, rede)
     avisos = validate.avisos(peer, peers, rede=rede)
     if erros:
         return _falha(422, erros, avisos)
@@ -499,7 +502,7 @@ def previa_peer(formulario: PeerForm,
     """
     peers, grupos, rede = _peers(t), _grupos(t), _rede(t)
     anterior = peers_mod.achar_id(peers, ident) if ident is not None else None
-    peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior)
+    peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior, rede)
     avisos = _avisos(validate.avisos(peer, peers, rede=rede))
     salvo = _ler(anterior.arquivo(t.saida)) if anterior is not None else None
     if erros:

@@ -1253,3 +1253,69 @@ def test_o_caso_bom_nao_acusa_nada():
                      sessoes={"v4": {"local": "198.51.100.9",
                                      "remoto": "198.51.100.10"}, "v6": {}})
     assert "politica_de" not in campos(validate.validar(backup, [origem]))
+
+
+# --- a community na linha do prefixo do peer ----------------------------
+
+
+def com_prefixo(*blocos):
+    return um_peer(prefixos={"v4": list(blocos), "v6": []})
+
+
+def erros_do_prefixo(communities):
+    return validar(
+        com_prefixo(Bloco(prefixo="45.169.232.0/22", communities=communities)),
+        [])
+
+
+def test_o_1xx_vale_no_prefixo_do_peer():
+    """O APPLY-CUSTOMER-LP le o 1xx no import da sessao, e e por isso que
+    ele entra aqui e nao no bloco proprio."""
+    assert erros_do_prefixo(["64512:104"]) == []
+
+
+def test_a_mesma_tabela_do_bloco_proprio_vale_no_prefixo_do_peer():
+    for valor in ("64512:673", "64512:4:14840", "64512:301", "64512:2000"):
+        erros = erros_do_prefixo([valor])
+        assert [e.campo for e in erros] == ["prefixos"], valor
+    assert erros_do_prefixo(["64512:200", "64512:211", "64512:5070",
+                             "64512:613"]) == []
+
+
+def test_o_prefixo_repetido_e_recusado():
+    peer = com_prefixo(
+        Bloco(prefixo="45.169.232.0/22", communities=[]),
+        Bloco(prefixo="45.169.232.0/22", communities=["64512:210"]))
+    (erro,) = validar(peer, [])
+    assert erro.campo == "prefixos"
+    assert "prefixo repetido" in erro.mensagem
+
+
+def test_o_prefixo_mais_longo_que_o_teto_avisa_sem_recusar():
+    peer = com_prefixo(Bloco(prefixo="45.169.232.0/25", communities=[]))
+    assert validar(peer, []) == []
+    (aviso,) = validate.avisos(peer, [])
+    assert aviso.campo == "prefixos"
+    assert "/25" in aviso.mensagem
+
+
+def test_o_prefixo_no_teto_nao_avisa():
+    peer = com_prefixo(Bloco(prefixo="45.169.232.0/24", communities=[]))
+    assert validate.avisos(peer, []) == []
+
+
+def test_o_grupo_recusa_a_linha_com_community():
+    grupo = um_grupo(prefixos={"v4": ["45.169.232.0/22 64512:210"], "v6": []})
+    (erro,) = validar_grupo(grupo, [grupo], [], anterior=grupo)
+    assert erro.campo == "prefixos"
+    assert "peer avulso" in erro.mensagem
+
+
+def test_o_prefixo_do_peer_usa_o_namespace_da_rede():
+    """Com asn_politica declarado, o que vale e 65532:673, e nao 64512:673."""
+    rede = plan.Rede(asn=264130, politica=65532)
+    peer = com_prefixo(Bloco(prefixo="45.169.232.0/22",
+                             communities=["65532:673"]))
+    (erro,) = validar(peer, [], rede=rede)
+    assert "classe 7" in erro.mensagem
+    assert validar(peer, [], rede=plan.Rede()) == []
