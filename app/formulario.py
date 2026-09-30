@@ -83,8 +83,31 @@ def _bloco_da_linha(linha):
     pedacos = corpo.split("!-")[0].split()
     if not pedacos:
         return None
-    return Bloco(prefixo=canoniza(pedacos[0]), communities=pedacos[1:],
-                 ativo=ativo)
+    prefixo, ate = _prefixo_e_intervalo(pedacos[0])
+    return Bloco(prefixo=prefixo, communities=pedacos[1:], ativo=ativo,
+                 ate=ate)
+
+
+def _prefixo_e_intervalo(token):
+    """O primeiro campo da linha: `cidr` ou `cidr-ate`.
+
+    O corte e no primeiro hifen, que so aparece no comprimento: o endereco
+    v6 nao tem hifen. O intervalo igual ao comprimento do prefixo e a forma
+    sem sufixo, para nao haver duas escritas do mesmo alcance; o intervalo
+    torto volta inteiro para o validate recusar nomeando o que o operador
+    escreveu.
+    """
+    cidr, _, bruto = token.partition("-")
+    prefixo = canoniza(cidr)
+    if not bruto:
+        return prefixo, None
+    try:
+        ate = int(bruto)
+    except ValueError:
+        return token, None
+    if ate == plan.comprimento(prefixo):
+        return prefixo, None
+    return prefixo, ate
 
 
 def _blocos_das_linhas(linhas):
@@ -118,7 +141,10 @@ def _blocos_do_formulario(dados):
 
 def _linha_do_bloco(bloco, marcado=False):
     """O texto de um bloco na textarea, com a marca do ausente quando houver."""
-    corpo = " ".join([bloco.prefixo] + list(bloco.communities))
+    prefixo = bloco.prefixo
+    if bloco.ate is not None:
+        prefixo = "%s-%d" % (prefixo, bloco.ate)
+    corpo = " ".join([prefixo] + list(bloco.communities))
     if not bloco.ativo:
         return "!- " + corpo
     return corpo + ("  !- nao veio na consulta ao IRR" if marcado else "")

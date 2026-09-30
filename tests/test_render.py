@@ -2581,7 +2581,7 @@ def test_o_tratamento_por_prefixo_vem_depois_do_apply_peer():
     assert corpo[-1] == "finish"
     assert corpo[-2] == "endif"
     assert corpo.index("call route-filter APPLY-PEER-268127") < corpo.index(
-        "if ip route-destination in {45.169.232.0 22 le 24} then")
+        "if ip route-destination in {45.169.232.0 22} then")
     assert "apply community {64512:210} additive" in corpo
 
 
@@ -2595,14 +2595,30 @@ def test_o_mais_especifico_vence_e_os_dois_nao_somam():
     # um `elseif` so, e o /24 na frente: e o if/elseif que impede as duas
     # linhas de somarem numa rota so
     assert sum(1 for l in corpo if l.startswith("elseif")) == 1
-    assert corpo.index("if ip route-destination in {45.169.232.0 24 le 24} then") \
-        < corpo.index("elseif ip route-destination in {45.169.232.0 22 le 24} then")
+    assert corpo.index("if ip route-destination in {45.169.232.0 24} then") \
+        < corpo.index("elseif ip route-destination in {45.169.232.0 22} then")
 
 
-def test_o_tratamento_em_v6_usa_o_teto_da_familia():
+def test_o_intervalo_estende_o_casamento_e_vem_depois_do_exato():
+    """O `-24` e o que faz a clausula alcancar os mais especificos, e no
+    mesmo prefixo o exato vence: a rota do proprio /22 fica com o
+    tratamento da linha sem sufixo."""
+    texto = render.render_peer(peer_cliente(prefixos={"v4": [
+        Bloco(prefixo="45.169.232.0/22", ate=24, communities=["64512:210"]),
+        Bloco(prefixo="45.169.232.0/22", communities=["64512:211"])], "v6": []}))
+    trecho = texto.split("xpl route-filter CUST-268127-IMPORT-V4")[1]
+    corpo = [l.strip() for l in trecho.split("end-filter")[0].splitlines()
+             if l.strip()]
+    assert corpo.index("if ip route-destination in {45.169.232.0 22} then") \
+        < corpo.index(
+            "elseif ip route-destination in {45.169.232.0 22 le 24} then")
+
+
+def test_o_intervalo_em_v6_usa_o_comprimento_da_linha():
     texto = render.render_peer(peer_cliente(
         prefixos={"v4": [], "v6": [
-            Bloco(prefixo="2804:3300::/32", communities=["64512:210"])]},
+            Bloco(prefixo="2804:3300::/32", ate=48,
+                  communities=["64512:210"])]},
         sessoes={"v4": {"local": "198.51.100.1", "remoto": "198.51.100.2"},
                  "v6": {"local": "2001:db8::1", "remoto": "2001:db8::2"}}))
     assert "if ip route-destination in {2804:3300:: 32 le 48} then" in texto
@@ -2614,7 +2630,7 @@ def test_o_parceiro_ganha_a_cadeia_depois_do_carimbo_do_tipo():
     trecho = texto.split("xpl route-filter CUST-64500-IMPORT-V4")[1]
     corpo = trecho.split("end-filter")[0]
     assert corpo.index("64512:2091") < corpo.index(
-        "if ip route-destination in {45.169.236.0 22 le 24} then")
+        "if ip route-destination in {45.169.236.0 22} then")
 
 
 def test_o_peer_sem_tratamento_nao_ganha_clausula():
@@ -2626,7 +2642,9 @@ def test_o_peer_sem_tratamento_nao_ganha_clausula():
 
 
 def test_golden_do_cliente_tratado():
+    # as duas formas na mesma cadeia: o /22 exato e o /23 que alcanca o /24
     texto = render.render_peer(peer_cliente(prefixos={"v4": [
         Bloco(prefixo="45.169.232.0/22", communities=["64512:210", "64512:5070"]),
-        Bloco(prefixo="45.169.236.0/23", communities=["64512:211"])], "v6": []}))
+        Bloco(prefixo="45.169.236.0/23", ate=24,
+              communities=["64512:211"])], "v6": []}))
     assert texto == (GOLDEN / "cliente-tratado.txt").read_text(encoding="ascii")

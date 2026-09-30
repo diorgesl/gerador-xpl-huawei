@@ -1066,6 +1066,16 @@ def test_community_de_outro_as_passa():
     assert erros_de(["15169:12100", "14840:9133"]) == []
 
 
+def test_o_intervalo_no_bloco_proprio_e_recusado():
+    """O `-24` e da clausula por prefixo do cliente, e o bloco proprio nao
+    tem clausula nenhuma: aceitar aqui seria guardar um alcance que nao sai
+    em configuracao."""
+    erros = validate.validar_blocos({"v4": [
+        Bloco(prefixo="38.252.64.0/22", ate=24)], "v6": []})
+    assert erros[0].campo == "blocos_v4"
+    assert "-24" in erros[0].mensagem
+
+
 def test_cada_familia_marca_o_proprio_campo():
     erros = validate.validar_blocos(
         {"v4": [], "v6": [bloco(prefixo="2804:36b4::/32",
@@ -1282,7 +1292,35 @@ def test_a_mesma_tabela_do_bloco_proprio_vale_no_prefixo_do_peer():
                              "64512:613"]) == []
 
 
-def test_o_prefixo_repetido_e_recusado():
+def test_o_intervalo_antes_do_prefixo_e_recusado():
+    """`138.97.60.0/22-21` nao alcanca nada: o intervalo comeca no proprio
+    prefixo."""
+    peer = com_prefixo(Bloco(prefixo="138.97.60.0/22", ate=21,
+                             communities=["64512:210"]))
+    (erro,) = validar(peer, [])
+    assert erro.campo == "prefixos"
+    assert "-21" in erro.mensagem
+
+
+def test_o_intervalo_acima_do_teto_avisa_sem_recusar():
+    peer = com_prefixo(Bloco(prefixo="138.97.60.0/22", ate=25,
+                             communities=["64512:210"]))
+    assert validar(peer, []) == []
+    (aviso,) = validate.avisos(peer, [])
+    assert aviso.campo == "prefixos"
+    assert "-25" in aviso.mensagem
+
+
+def test_o_mesmo_prefixo_com_intervalos_diferentes_nao_e_repetido():
+    """Exato e com intervalo sao dois alcances, e por isso dois
+    tratamentos."""
+    peer = com_prefixo(
+        Bloco(prefixo="138.97.60.0/22", communities=["64512:210"]),
+        Bloco(prefixo="138.97.60.0/22", ate=24, communities=["64512:211"]))
+    assert validar(peer, []) == []
+
+
+def test_o_prefixo_repetido_com_o_mesmo_intervalo_e_recusado():
     peer = com_prefixo(
         Bloco(prefixo="45.169.232.0/22", communities=[]),
         Bloco(prefixo="45.169.232.0/22", communities=["64512:210"]))

@@ -160,6 +160,31 @@ def test_a_marca_do_irr_no_fim_da_linha_e_ignorada():
     assert bloco.communities == ["64512:210"]
 
 
+def test_a_linha_com_intervalo_guarda_o_ate():
+    (bloco,) = formulario._blocos_das_linhas(["138.97.60.0/22-24 64512:210"])
+    assert bloco.prefixo == "138.97.60.0/22"
+    assert bloco.ate == 24
+    assert bloco.communities == ["64512:210"]
+
+
+def test_a_linha_sem_sufixo_fica_sem_ate():
+    (bloco,) = formulario._blocos_das_linhas(["138.97.60.0/22"])
+    assert bloco.ate is None
+
+
+def test_o_intervalo_igual_ao_comprimento_vira_a_forma_sem_sufixo():
+    """Duas escritas do mesmo alcance sao uma so: o `-22` de um /22 e o
+    proprio /22."""
+    (bloco,) = formulario._blocos_das_linhas(["138.97.60.0/22-22"])
+    assert bloco.ate is None
+
+
+def test_o_texto_da_linha_leva_o_intervalo():
+    assert formulario._linhas_de_blocos([
+        formulario.Bloco(prefixo="138.97.60.0/22", ate=24)]) == [
+        "138.97.60.0/22-24"]
+
+
 def test_o_texto_do_bloco_marca_o_ausente_e_o_fora_de_servico():
     ativos = [formulario.Bloco(prefixo="45.169.232.0/22",
                                communities=["64512:210"])]

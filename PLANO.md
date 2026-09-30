@@ -611,7 +611,9 @@ Um prefixo casado direto na condição leva endereço e comprimento separados, s
 
 `{45.169.232.0 22 le 24}` casa o `/22` e os mais específicos até `/24`. Sem o `le` o casamento é o prefixo exato, e o `ge`/`le` junto casa um comprimento fixo: `{0.0.0.0 0 ge 32 le 32}` é a rota de host. É a mesma forma da entrada de uma prefix-list nomeada, sem o objeto no meio.
 
-Quando mais de uma linha pode casar a mesma rota, quem decide é a ordem do `if`/`elseif`: do prefixo mais longo para o mais curto, para o `/24` vencer o `/22` em vez de os dois somarem.
+Quando mais de uma linha pode casar a mesma rota, quem decide é a ordem do `if`/`elseif`: do prefixo mais longo para o mais curto e, no mesmo prefixo, a linha exata antes da de intervalo, para o `/24` vencer o `/22` e o `/22` exato vencer o `/22-24` em vez de os dois somarem.
+
+A linha do cadastro escreve esse conjunto sem o `le` quando quer o prefixo exato, e com o `le` quando quer os mais específicos: `138.97.60.0/22` e `138.97.60.0/22-24` são o mesmo prefixo com alcances diferentes.
 
 **Ponto em aberto:** que a forma inline aceite `le` sem `ge`, e que ela valha no v6 com o mesmo `ip route-destination` que os exemplos usam nas duas famílias. O desenho do tratamento por prefixo assume as duas coisas.
 
@@ -1124,8 +1126,8 @@ xpl route-filter CUST-IMPORT-268127
 
  !- tratamento por prefixo do cadastro, do mais especifico para o menos:
  !- o /24 sai so para os upstreams e nao vai ao AS14840 (5010 do peer 01);
- !- o /22 sai so nos IXs
- if ip route-destination in {45.169.232.0 24 le 24} then
+ !- o /22 e os /23 e /24 dentro dele saem so nos IXs
+ if ip route-destination in {45.169.232.0 24} then
   apply community {64512:210, 64512:5010} additive
  elseif ip route-destination in {45.169.232.0 22 le 24} then
   apply community {64512:211} additive
@@ -1140,10 +1142,19 @@ As ações do cliente (`101`–`105`, `2xx`, `6CA`, `5PPA`, `666`/`667`) **sobre
 
 É exatamente para isso que serve a convenção "ação tem 3 dígitos, informativa tem 4": um recorte por número de dígitos separa as duas classes sem lista de exceções. `64512:5PPA` é a única action fora dela, e o primeiro dígito `5` a distingue de qualquer informativa sem ambiguidade.
 
-**Tratamento por prefixo.** A cadeia do fim do filtro é escrita pela operadora, no cadastro da sessão, uma linha por prefixo do cliente, e não pelo cliente: ela não muda o que ele pode anunciar, só o que a operadora faz com cada prefixo dele depois de aceitar. Cada linha é um `if`/`elseif` com o prefixo e as communities daquele prefixo, aplicadas em `additive` sobre o que a sessão já carimbou. Três consequências valem registro:
+**Tratamento por prefixo.** A cadeia do fim do filtro é escrita pela operadora, no cadastro da sessão, uma linha por prefixo do cliente, e não pelo cliente: ela não muda o que ele pode anunciar, só o que a operadora faz com cada prefixo dele depois de aceitar. A linha é `<cidr>[-<até>] [community ...]`, e o intervalo é o que decide o alcance:
 
-- **O mais específico vence.** A cadeia vai do prefixo mais longo para o mais curto, e o aninhamento é `if`/`elseif`: um `/24` dentro de um `/22` aplica só o que a linha dele pediu, em vez de os dois tratamentos somarem.
-- **O `le` é o teto do confinamento.** `{45.169.232.0 22 le 24}` casa o `/22` e os mais específicos até `/24`, que é até onde o `PL-CUST` deixa passar. A linha nunca alcança rota que o cliente não poderia anunciar.
+```
+138.97.60.0/22         ->  if ip route-destination in {138.97.60.0 22} then
+138.97.60.0/22-24      ->  if ip route-destination in {138.97.60.0 22 le 24} then
+```
+
+Sem o intervalo, a cláusula casa o prefixo exato e nada mais. Com ele, casa o prefixo e os mais específicos até o comprimento escrito, que é o que faz um cliente anunciar `/24` dentro de um `/22` recebendo o mesmo tratamento. O teto útil é o do confinamento (`PL-CUST`), `24` no v4 e `48` no v6, e um intervalo acima dele é avisado na tela, porque a cláusula casaria rota que a sessão nunca aceita.
+
+Três consequências valem registro:
+
+- **O mais específico vence.** A cadeia vai do prefixo mais longo para o mais curto e, no mesmo prefixo, da linha exata para a de intervalo, do mais estreito ao mais largo. O aninhamento é `if`/`elseif`: um `/24` escrito dentro de um `/22` aplica só o que a linha dele pediu, e o `/22` exato vence o `/22-24` na rota do próprio `/22`.
+- **O confinamento não segue o intervalo.** Quem decide o que o cliente pode anunciar continua sendo o `PL-CUST` com o `le` do teto; o intervalo mexe só na cláusula de tratamento. Um mais específico anunciado dentro de uma linha sem intervalo passa no import e sai sem community nenhuma.
 - **A cadeia roda depois do `APPLY-PEER`.** O `1xx` da linha vence o da `CL-PEER`, porque a última escrita de local preference vence. Escopos de `2xx` incompatíveis, um na `CL-PEER` e outro na linha, somam: a rota sai com as duas marcas e é recusada nos dois lados.
 
 ### Export

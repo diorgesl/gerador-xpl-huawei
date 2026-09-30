@@ -130,16 +130,21 @@ class Peer:
         return [b.prefixo for b in self.prefixos.get(fam) or [] if b.ativo]
 
     def tratamentos(self, fam):
-        """(prefixo, communities) de cada linha com tratamento, na ordem da cadeia.
+        """(prefixo, ate, communities) de cada linha com tratamento, na ordem da cadeia.
 
-        Do mais longo para o mais curto: a cadeia do filtro e if/elseif, e
-        um /24 escrito dentro de um /22 tem que vencer o /22. O empate fica
-        na ordem do cadastro, porque o sorted do Python e estavel.
+        Do mais longo para o mais curto, porque a cadeia do filtro e
+        if/elseif e um /24 escrito dentro de um /22 tem que vencer o /22. No
+        mesmo comprimento, a linha exata vem antes das com intervalo, e o
+        intervalo mais estreito antes do mais largo: o /22 exato vence o
+        /22-24 na rota do proprio /22, e o /22-23 vence o /22-24 na rota de
+        um /23. O empate final fica na ordem do cadastro, porque o sorted do
+        Python e estavel.
         """
         com_community = [b for b in self.prefixos.get(fam) or []
                          if b.ativo and b.communities]
-        return sorted(((b.prefixo, list(b.communities)) for b in com_community),
-                      key=lambda par: -comprimento(par[0]))
+        return sorted(((b.prefixo, b.ate, list(b.communities))
+                       for b in com_community),
+                      key=_chave_da_cadeia)
 
     @property
     def token(self):
@@ -499,9 +504,15 @@ class Bloco:
     # prefixo nao sai em configuracao nenhuma. E o que a linha comecada
     # por `!-` na tela quer dizer.
     ativo: bool = True
+    # o intervalo da linha do downstream: o comprimento maximo que a
+    # clausula por prefixo alcanca alem do proprio prefixo. Vazio e o
+    # prefixo exato, e a linha do bloco proprio nunca o escreve.
+    ate: int | None = None
 
     def para_dict(self):
         d = {"prefixo": self.prefixo, "communities": self.communities}
+        if self.ate is not None:
+            d["ate"] = self.ate
         if not self.ativo:
             d["ativo"] = False
         return d
@@ -569,11 +580,24 @@ def _prefixo_gravado(bloco):
 
     Um `peers.yaml` que nunca usou o tratamento continua com a lista de CIDR
     de sempre, e o primeiro salvamento de qualquer peer nao vira um diff de
-    forma em todos os outros.
+    forma em todos os outros. O intervalo nao cabe na string, entao ele
+    tambem forca o dicionario.
     """
-    if bloco.ativo and not bloco.communities:
+    if bloco.ativo and not bloco.communities and bloco.ate is None:
         return bloco.prefixo
     return bloco.para_dict()
+
+
+def _chave_da_cadeia(tratamento):
+    """A ordem da cadeia por prefixo: (prefixo, ate, communities) ordenado.
+
+    Comprimento do prefixo decrescente e, no empate, a linha exata antes
+    das com intervalo, do mais estreito para o mais largo.
+    """
+    prefixo, ate, _ = tratamento
+    comprimento_do_prefixo = comprimento(prefixo)
+    return (-comprimento_do_prefixo,
+            ate if ate is not None else comprimento_do_prefixo)
 
 
 def carregar_blocos(caminho=PEERS_YAML):
@@ -627,12 +651,18 @@ def mesclar_blocos(salvos, consultados):
     tambem separado em `ausentes`, para a tela marcar. A decisao de manter
     ou remover e do operador, e por isso o ausente continua na lista.
     """
-    por_prefixo = {b.prefixo: b for b in salvos}
+    por_prefixo = {}
+    for b in salvos:
+        por_prefixo.setdefault(b.prefixo, []).append(b)
     visiveis = []
     for cidr in consultados:
         chave = str(ipaddress.ip_network(cidr, strict=False))
-        antigo = por_prefixo.pop(chave, None)
-        visiveis.append(antigo if antigo is not None
-                        else Bloco(prefixo=chave, communities=[]))
-    ausentes = list(por_prefixo.values())
+        antigos = por_prefixo.pop(chave, None)
+        if antigos:
+            # o mesmo CIDR pode ter mais de uma linha (a exata e as com
+            # intervalo), e todas sao do prefixo que a consulta devolveu
+            visiveis.extend(antigos)
+        else:
+            visiveis.append(Bloco(prefixo=chave, communities=[]))
+    ausentes = [b for resto in por_prefixo.values() for b in resto]
     return visiveis + ausentes, ausentes

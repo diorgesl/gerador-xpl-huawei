@@ -55,9 +55,12 @@ peers:
     - prefixo: 45.163.212.0/22
       communities: [64512:210, 64512:5070]
     - prefixo: 45.163.212.0/23
+      ate: 24
     v6:
     - prefixo: 2804:3300::/32
 ```
+
+O `ate` é o intervalo da linha, e ele só aparece quando o operador escreve o sufixo: vazio é o prefixo exato. A string do yaml não o comporta, então uma linha com intervalo grava dicionário mesmo sem community.
 
 **Decisão.** A string carrega o CIDR e nada mais; o dicionário, quando houver tratamento, é lido como o bloco próprio, por `Bloco.de_dict`, com campo desconhecido ignorado. A leitura não separa espaço na string: o formato da tela vale na tela, e uma forma só na representação é o que impede um `peers.yaml` editado à mão de virar um segundo jeito de escrever a mesma coisa. É a mesma tolerância que o `Peer.de_dict` já tem com o `token` das versões antigas: o `peers.yaml` de hoje carrega sem migração.
 
@@ -82,11 +85,11 @@ Linha com `!-` continua contando para o `tem_filtro_proprio` do membro de grupo:
 
 ## A linha e a tela
 
-Mesmo formato da tela de prefixos próprios, uma textarea por família:
+Mesmo formato da tela de prefixos próprios, uma textarea por família, com o intervalo opcional depois do comprimento:
 
 ```
-45.163.212.0/22  64512:210 64512:5070
-45.163.212.0/23  64512:210 64512:5132
+138.97.60.0/22  64512:210 64512:5070
+138.97.60.0/23-24  64512:210 64512:5132
 ```
 
 A community vai na forma completa, como a CL-PEER e o bloco próprio. O `_forma_ok` do validate exige `ASN:VALOR` com o namespace, então a forma curta que a spec do bloco próprio usa no exemplo da tela (`613 621`), e que o próprio bloco próprio recusaria, não entra aqui.
@@ -109,7 +112,7 @@ xpl route-filter CUST-268127-IMPORT-V4
  !- tratamento por prefixo do cadastro, do mais especifico para o menos
  if ip route-destination in {45.163.212.0 23 le 24} then
   apply community {64512:210, 64512:5132} additive
- elseif ip route-destination in {45.163.212.0 22 le 24} then
+ elseif ip route-destination in {45.163.212.0 22} then
   apply community {64512:210, 64512:5070} additive
  endif
  finish
@@ -118,8 +121,9 @@ end-filter
 
 As regras da cadeia:
 
-- **Ordem.** Do prefixo mais longo para o mais curto, e o empate segue a ordem do cadastro. Dois tratamentos que se sobrepõem (um /22 e um /23 dentro dele) aplicam só o mais específico, porque o aninhamento é `if/elseif` e não uma sequência de cláusulas soltas. Sem isso, as duas linhas somariam, e dois escopos de `2xx` incompatíveis na mesma rota a deixariam recusada em todo egress, em silêncio.
-- **Alcance.** `le <teto>`, com o teto do `PL-CUST`: 24 no v4 e 48 no v6. A cláusula cobre o prefixo da linha e os mais específicos que a sessão já podia anunciar, e nunca alcança rota que o confinamento recusaria. O teto sai da macro para o `plan.py`, num `TETO_PREFIXO = {"v4": 24, "v6": 48}` que a macro e a validação leem, para não haver dois números.
+- **Ordem.** Do prefixo mais longo para o mais curto e, no mesmo prefixo, a linha exata antes das com intervalo, do mais estreito para o mais largo. Dois tratamentos que se sobrepõem (um /22 e um /23 dentro dele) aplicam só o mais específico, e o `/22` exato vence o `/22-24` na rota do próprio `/22`, porque o aninhamento é `if/elseif` e não uma sequência de cláusulas soltas. Sem isso, as duas linhas somariam, e dois escopos de `2xx` incompatíveis na mesma rota a deixariam recusada em todo egress, em silêncio.
+- **Alcance.** A linha carrega o próprio alcance: `138.97.60.0/22-24` vira `{138.97.60.0 22 le 24}` e a linha sem sufixo vira `{138.97.60.0 22}`, o prefixo exato. O intervalo é limitado pelo teto do `PL-CUST` (24 no v4, 48 no v6), que continua sendo o que define o que a sessão aceita; um intervalo acima dele é avisado na tela, e não é erro. O teto mora no `plan.py`, num `TETO_PREFIXO = {"v4": 24, "v6": 48}` que a macro do confinamento e a validação leem, para não haver dois números.
+- **O confinamento não segue o intervalo.** Quem decide o que o cliente pode anunciar continua sendo o `PL-CUST` com `le <teto>`; o intervalo mexe só na cláusula de tratamento. Um mais específico anunciado dentro de uma linha sem intervalo passa no import e sai sem community nenhuma, que é o preço aceito desta forma.
 - **Forma.** `{<endereco> <comprimento> le <teto>}`, montado por um `plan.conjunto_do_prefixo(cidr, teto)` novo, que devolve o literal pronto. Não falta helper de comprimento no `plan.py`: o `cidr_para_xpl` que as prefix-lists já usam entrega endereço e comprimento juntos, na forma `45.169.232.0 22`. A montagem fica no Python porque em Jinja o `{{` seguido de `{` fecha a expressão, que é o caso que a macro do blackhole contorna com uma string literal. O v6 usa o mesmo `ip route-destination` que a macro já escreve nas duas famílias.
 - **Posição.** Depois do `APPLY-PEER`, e não antes. O `1xx` da linha vence o da CL-PEER porque a última escrita de local-preference vence, que é a mesma regra que o export de upstream já documenta. A cadeia fica antes do `finish` que já fecha o filtro hoje, então nenhuma cláusula dela pode saltar o tratamento que a sessão recebeu.
 - **Forma dupla.** Standard e large saem em linhas separadas, com o `plan.separa_communities` e o `plan.conjunto_de` que o bloco próprio já usa. As duas aplicações são `additive`, porque o import do cliente tem que preservar o que a sessão já carimbou antes.
@@ -190,5 +194,5 @@ Na tela, o botão do IRR continua sendo o mesmo, e passa a mandar o que está no
 
 ## O que confirmar no equipamento
 
-1. Que `if ip route-destination in {45.163.212.0 22 le 24}` casa o prefixo da linha junto com os mais específicos, como a entrada equivalente de uma prefix-list nomeada. O desenho assume que sim.
+1. Que `if ip route-destination in {45.163.212.0 22 le 24}` casa o prefixo da linha junto com os mais específicos, como a entrada equivalente de uma prefix-list nomeada, e que a forma sem `le` (`{45.163.212.0 22}`) casa só o prefixo exato. O desenho assume as duas.
 2. Que a cláusula inline aceita `le` sem `ge`, como o `{0.0.0.0 0 ge 32 le 32}` do export já usa, e que ela vale no v6 com o mesmo `ip route-destination` que a macro escreve nas duas famílias hoje.

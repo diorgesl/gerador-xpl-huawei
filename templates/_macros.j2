@@ -167,9 +167,9 @@ xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
     vence o da CL-PEER, porque a ultima escrita de local-preference vence. #}
 {% if tratamentos %}
  !- tratamento por prefixo do cadastro, do mais especifico para o menos
-{% for prefixo, communities in tratamentos %}
+{% for prefixo, ate, communities in tratamentos %}
 {% set std, lg = plan.separa_communities(communities) %}
- {{ "if" if loop.first else "elseif" }} ip route-destination in {{ plan.conjunto_do_prefixo(prefixo, plan.TETO_PREFIXO[fam]) }} then
+ {{ "if" if loop.first else "elseif" }} ip route-destination in {{ plan.conjunto_do_prefixo(prefixo, ate) }} then
 {% if std %}
   apply community {{ plan.conjunto_de(std) }} additive
 {% endif %}

@@ -35,7 +35,7 @@ xpl route-filter CUST-268127-IMPORT-V4
  !- tratamento por prefixo do cadastro, do mais especifico para o menos
  if ip route-destination in {45.169.236.0 23 le 24} then
   apply community {64512:211} additive
- elseif ip route-destination in {45.169.232.0 22 le 24} then
+ elseif ip route-destination in {45.169.232.0 22} then
   apply community {64512:210, 64512:5070} additive
  endif
  finish

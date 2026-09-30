@@ -368,6 +368,9 @@ def test_o_quadro_ao_criar_nao_existe_para_quem_reaproveita():
 
 
 def test_o_conjunto_do_prefixo():
+    # sem intervalo, o casamento e o prefixo exato
+    assert plan.conjunto_do_prefixo("45.169.232.0/22", None) == (
+        "{45.169.232.0 22}")
     assert plan.conjunto_do_prefixo("45.169.232.0/22", 24) == (
         "{45.169.232.0 22 le 24}")
     assert plan.conjunto_do_prefixo("2804:36b4::/32", 48) == (

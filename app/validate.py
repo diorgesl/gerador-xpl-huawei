@@ -71,6 +71,12 @@ def avisos(peer, peers, rede=None):
                     "%s e mais longo que o teto /%d do confinamento: a linha "
                     "nao alcanca rota nenhuma"
                     % (bloco.prefixo, plan.TETO_PREFIXO[fam])))
+            elif bloco.ate is not None and bloco.ate > plan.TETO_PREFIXO[fam]:
+                saida.append(Erro(
+                    "prefixos",
+                    "%s passa do teto /%d do confinamento: a clausula nao "
+                    "alcanca rota nenhuma"
+                    % (_linha_do_prefixo(bloco), plan.TETO_PREFIXO[fam])))
     sugerido = plan.ROUTE_LIMIT.get(peer.tipo)
     if sugerido is not None and peer.route_limit != sugerido:
         saida.append(Erro(
@@ -312,6 +318,11 @@ def validar_blocos(blocos, rede=None):
             if not _cidr_ok(bloco.prefixo):
                 erros.append(Erro(campo, "prefixo invalido: %s (esperado CIDR)"
                                   % bloco.prefixo))
+            if bloco.ate is not None:
+                erros.append(Erro(
+                    campo, "%s-%d: o intervalo e do prefixo do cliente, e o "
+                    "bloco proprio origina o prefixo inteiro"
+                    % (bloco.prefixo, bloco.ate)))
             _valida_lista_de_communities(bloco.communities, campo, rede,
                                          False, erros)
     return erros
@@ -382,6 +393,17 @@ def _cidr_ok(cidr):
     return True
 
 
+def _linha_do_prefixo(bloco):
+    """O prefixo como o operador o escreve: `cidr` ou `cidr-ate`.
+
+    E so para as mensagens de erro: quem escreve a linha da tela e o
+    formulario, e quem monta a clausula e o plan.
+    """
+    if bloco.ate is None:
+        return bloco.prefixo
+    return "%s-%d" % (bloco.prefixo, bloco.ate)
+
+
 def _valida_prefixos(alvo, erros, rede=None, tratado=False):
     # as duas listas vao para o plan.cidr_para_xpl: o cliente escreve
     # `prefixos`, o upstream escreve `te_prefixos`. A varredura e a mesma
@@ -406,13 +428,21 @@ def _valida_prefixos(alvo, erros, rede=None, tratado=False):
             if tratado and campo == "prefixos":
                 vistos = set()
                 for bloco in itens:
-                    if bloco.prefixo in vistos:
-                        erros.append(Erro(
-                            campo, "prefixo repetido: %s" % bloco.prefixo))
-                    vistos.add(bloco.prefixo)
+                    # o alcance e parte da identidade da linha: o prefixo
+                    # exato e o com intervalo sao dois tratamentos
+                    chave = (bloco.prefixo, bloco.ate)
+                    if chave in vistos:
+                        erros.append(Erro(campo, "prefixo repetido: %s"
+                                          % _linha_do_prefixo(bloco)))
+                    vistos.add(chave)
                     if not _cidr_ok(bloco.prefixo):
                         erros.append(Erro(
                             campo, "prefixo invalido: %s" % bloco.prefixo))
+                    elif (bloco.ate is not None
+                          and bloco.ate < plan.comprimento(bloco.prefixo)):
+                        erros.append(Erro(
+                            campo, "intervalo antes do prefixo: %s"
+                            % _linha_do_prefixo(bloco)))
                     _valida_lista_de_communities(bloco.communities, campo,
                                                  rede, True, erros)
                 continue

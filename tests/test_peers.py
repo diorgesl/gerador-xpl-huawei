@@ -512,6 +512,17 @@ def test_mesclar_devolve_o_ausente_no_fim_e_marcado():
     assert ausentes == [salvo]
 
 
+def test_mesclar_guarda_as_duas_linhas_do_mesmo_prefixo():
+    """Exato e com intervalo sao dois tratamentos do mesmo CIDR: a consulta
+    que devolve o prefixo mantem os dois, e nenhum vira ausente."""
+    salvos = [mod.Bloco(prefixo="138.97.60.0/22", communities=["64512:211"]),
+              mod.Bloco(prefixo="138.97.60.0/22", ate=24,
+                        communities=["64512:210"])]
+    visiveis, ausentes = mod.mesclar_blocos(salvos, ["138.97.60.0/22"])
+    assert visiveis == salvos
+    assert ausentes == []
+
+
 # --- o prefixo do peer, com tratamento por linha ------------------------
 
 
@@ -592,7 +603,7 @@ def test_o_prefixo_fora_de_servico_sai_das_listas():
         mod.Bloco(prefixo="45.169.236.0/23", communities=["64512:211"],
                   ativo=False)], "v6": []})
     assert peer.cidrs("v4") == ["45.169.232.0/22"]
-    assert [p for p, _ in peer.tratamentos("v4")] == ["45.169.232.0/22"]
+    assert [p for p, _, _ in peer.tratamentos("v4")] == ["45.169.232.0/22"]
 
 
 def test_tratamentos_ordena_do_mais_longo_para_o_mais_curto():
@@ -600,8 +611,45 @@ def test_tratamentos_ordena_do_mais_longo_para_o_mais_curto():
         mod.Bloco(prefixo="45.169.232.0/22", communities=["64512:210"]),
         mod.Bloco(prefixo="45.169.232.0/24", communities=["64512:211"]),
         mod.Bloco(prefixo="45.169.236.0/24", communities=[])], "v6": []})
-    assert [p for p, _ in peer.tratamentos("v4")] == [
-        "45.169.232.0/24", "45.169.232.0/22"]
+    assert [(p, ate) for p, ate, _ in peer.tratamentos("v4")] == [
+        ("45.169.232.0/24", None), ("45.169.232.0/22", None)]
+
+
+def test_o_intervalo_atravessa_o_yaml(tmp_path):
+    caminho = tmp_path / "peers.yaml"
+    mod.gravar([mod.Peer(id=1, asn=268127, prefixos={"v4": [
+        mod.Bloco(prefixo="138.97.60.0/22", ate=24,
+                  communities=["64512:210"])], "v6": []})], caminho)
+    (peer,) = mod.carregar(caminho)
+    assert peer.prefixos["v4"][0].ate == 24
+    assert peer.prefixos["v4"][0].communities == ["64512:210"]
+
+
+def test_o_intervalo_sem_community_tambem_grava_o_dicionario(tmp_path):
+    """A string do yaml e o CIDR e nada mais: alcance sem tratamento nao
+    cabe nela."""
+    caminho = tmp_path / "peers.yaml"
+    mod.gravar([mod.Peer(id=1, asn=268127, prefixos={"v4": [
+        mod.Bloco(prefixo="138.97.60.0/22", ate=24)], "v6": []})], caminho)
+    texto = caminho.read_text(encoding="utf-8")
+    assert "ate: 24" in texto
+    assert "- 138.97.60.0/22\n" not in texto
+
+
+def test_tratamentos_poe_o_exato_antes_do_intervalo_e_o_estreito_primeiro():
+    """Na rota de um /22, a linha exata vence o `-24`; na de um /23, o
+    `-23` vence o `-24`."""
+    peer = mod.Peer(prefixos={"v4": [
+        mod.Bloco(prefixo="138.97.60.0/22", ate=24, communities=["64512:210"]),
+        mod.Bloco(prefixo="138.97.60.0/22", communities=["64512:211"]),
+        mod.Bloco(prefixo="138.97.60.0/22", ate=23, communities=["64512:212"]),
+        mod.Bloco(prefixo="138.97.60.0/24", communities=["64512:213"])],
+        "v6": []})
+    assert [(p, ate) for p, ate, _ in peer.tratamentos("v4")] == [
+        ("138.97.60.0/24", None),
+        ("138.97.60.0/22", None),
+        ("138.97.60.0/22", 23),
+        ("138.97.60.0/22", 24)]
 
 
 def test_o_grupo_nao_tem_tratamento_por_prefixo():
