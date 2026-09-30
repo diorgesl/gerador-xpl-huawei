@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from app.plan import FAMILIAS, Rede
+from app.plan import FAMILIAS, Rede, comprimento
 
 RAIZ = Path(__file__).resolve().parent.parent
 PEERS_YAML = RAIZ / "peers.yaml"
@@ -113,6 +113,34 @@ class Peer:
     # novo - esta tratado no aviso do formulario da origem.
     politica_de: int | None = None
 
+    def __post_init__(self):
+        """Todo item de `prefixos` e um Bloco, sem excecao.
+
+        A normalizacao mora aqui, e nao no `de_dict`, porque o Peer nasce em
+        tres caminhos: do yaml, do formulario e dos testes, que montam a
+        lista de CIDR em texto. Um lugar so cobre os tres, e a lista de
+        strings dos fixtures continua valendo.
+        """
+        self.prefixos = {
+            fam: [_bloco(i) for i in (self.prefixos or {}).get(fam) or []]
+            for fam in FAMILIAS}
+
+    def cidrs(self, fam):
+        """Os prefixos em servico da familia, para as duas prefix-lists."""
+        return [b.prefixo for b in self.prefixos.get(fam) or [] if b.ativo]
+
+    def tratamentos(self, fam):
+        """(prefixo, communities) de cada linha com tratamento, na ordem da cadeia.
+
+        Do mais longo para o mais curto: a cadeia do filtro e if/elseif, e
+        um /24 escrito dentro de um /22 tem que vencer o /22. O empate fica
+        na ordem do cadastro, porque o sorted do Python e estavel.
+        """
+        com_community = [b for b in self.prefixos.get(fam) or []
+                         if b.ativo and b.communities]
+        return sorted(((b.prefixo, list(b.communities)) for b in com_community),
+                      key=lambda par: -comprimento(par[0]))
+
     @property
     def token(self):
         """O nome curto do peer: o ASN, ou o apelido quando o ASN nao serve.
@@ -180,7 +208,10 @@ class Peer:
             "descricao": self.descricao, "lp_base": self.lp_base,
             "origem": self.origem, "pop": self.pop,
             "aprendizado": self.aprendizado, "ix_id": self.ix_id,
-            "prefixos": self.prefixos, "te_prefixos": self.te_prefixos,
+            "prefixos": {fam: [_prefixo_gravado(b)
+                               for b in self.prefixos.get(fam) or []]
+                         for fam in FAMILIAS},
+            "te_prefixos": self.te_prefixos,
             "ap_block": self.ap_block, "ap_te": self.ap_te,
             "ap_allowed": self.ap_allowed, "ap_prefer": self.ap_prefer,
             "communities": self.communities,
@@ -382,6 +413,19 @@ class Grupo:
     def token(self):
         return self.nome
 
+    def cidrs(self, fam):
+        """Os CIDR do grupo, que nao tem tratamento por prefixo.
+
+        O metodo existe porque as macros do import sao de alvo duplo: o
+        StrictUndefined do render estoura no teste quando o alvo nao tem o
+        que a macro pede.
+        """
+        return list(self.prefixos.get(fam) or [])
+
+    def tratamentos(self, fam):
+        """O grupo nao tem community por prefixo: a linha dele e CIDR puro."""
+        return []
+
     def arquivo(self, saida):
         """O caminho do bloco deste grupo na pasta de saida do tenant dele.
 
@@ -466,6 +510,56 @@ class Bloco:
     def de_dict(cls, d):
         conhecidos = set(cls.__dataclass_fields__)
         return cls(**{k: v for k, v in d.items() if k in conhecidos})
+
+
+def canoniza(cidr):
+    """O CIDR canonico, ou o texto como veio quando nao analisa.
+
+    O mesclar_blocos casa por prefixo canonico, e o formulario entrega o
+    que o operador digitou ou colou. Sem esta passagem, um v6 em caixa
+    alta nao casa com o que a consulta devolve em caixa baixa, o tratamento
+    se solta do prefixo e o bloco sai duplicado na configuracao.
+
+    A barra e exigida antes de analisar: o ip_network aceita um endereco
+    cru e devolve /32, e sem esta linha o validate nunca veria o texto
+    original e o prefixo sairia anunciado como host route. O que nao
+    analisa fica como veio, para o validate recusar e o operador ler a
+    mensagem.
+    """
+    if "/" not in cidr:
+        return cidr
+    try:
+        return str(ipaddress.ip_network(cidr, strict=False))
+    except ValueError:
+        return cidr
+
+
+def _bloco(item):
+    """Um item de `prefixos`: a string de hoje, o dicionario, ou o Bloco.
+
+    O dicionario passa pelo `Bloco.de_dict`, que e a mesma leitura da secao
+    `blocos` do arquivo: chave desconhecida e ignorada, e o prefixo que
+    vier torto fica como veio para o validate recusar.
+    """
+    if isinstance(item, Bloco):
+        return item
+    if isinstance(item, dict):
+        bloco = Bloco.de_dict(item)
+        bloco.prefixo = canoniza(bloco.prefixo)
+        return bloco
+    return Bloco(prefixo=canoniza(str(item)))
+
+
+def _prefixo_gravado(bloco):
+    """O item como ele vai para o yaml: string quando nao ha o que guardar.
+
+    Um `peers.yaml` que nunca usou o tratamento continua com a lista de CIDR
+    de sempre, e o primeiro salvamento de qualquer peer nao vira um diff de
+    forma em todos os outros.
+    """
+    if bloco.ativo and not bloco.communities:
+        return bloco.prefixo
+    return bloco.para_dict()
 
 
 def carregar_blocos(caminho=PEERS_YAML):

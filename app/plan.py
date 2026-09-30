@@ -396,6 +396,20 @@ def mascara(cidr):
     return str(rede.netmask) if rede.version == 4 else str(rede.prefixlen)
 
 
+def comprimento(cidr):
+    """O comprimento da mascara, ou 0 no que nao analisa.
+
+    O 0 nao esconde erro nenhum: CIDR torto ja e recusado pelo validate e
+    ja estoura no `cidr_para_xpl` do render. Ele so evita que a ordenacao
+    dos tratamentos e o aviso do teto sejam mais um lugar que morre no
+    mesmo dado.
+    """
+    try:
+        return _rede_do_cidr(cidr).prefixlen
+    except ValueError:
+        return 0
+
+
 def separa_communities(valores):
     """(standard, large) na ordem em que vieram.
 

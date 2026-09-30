@@ -340,8 +340,8 @@ def _sobrepoe(a, b):
 
 def _blocos(peer):
     for fam in plan.FAMILIAS:
-        for cidr in peer.prefixos.get(fam) or []:
-            yield fam, cidr
+        for bloco in peer.prefixos.get(fam) or []:
+            yield fam, bloco.prefixo
 
 
 def _cidr_ok(cidr):
@@ -370,7 +370,9 @@ def _valida_prefixos(alvo, erros):
     for campo, listas in (("prefixos", alvo.prefixos),
                           ("te_prefixos", getattr(alvo, "te_prefixos", None) or {})):
         for fam in plan.FAMILIAS:
-            for cidr in listas.get(fam) or []:
+            for item in listas.get(fam) or []:
+                # o prefixos do peer e Bloco e o do grupo e CIDR em texto
+                cidr = getattr(item, "prefixo", item)
                 if not _cidr_ok(cidr):
                     erros.append(Erro(campo, "prefixo invalido: %s" % cidr))
 

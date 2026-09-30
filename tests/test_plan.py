@@ -365,3 +365,11 @@ def test_o_quadro_ao_criar_nao_existe_para_quem_reaproveita():
     # o par CL-PEER/APPLY-PEER e da origem: criar um aqui daria dois
     # objetos para o mesmo papel
     assert not plan.quadro_ao_criar(peer_cliente(politica_de=1), False)
+
+
+def test_o_comprimento_do_cidr():
+    assert plan.comprimento("45.169.232.0/22") == 22
+    assert plan.comprimento("2804:36b4::/32") == 32
+    # o torto devolve 0 em vez de estourar: quem recusa e o validate, e a
+    # ordenacao nao pode ser mais um lugar que morre no mesmo dado
+    assert plan.comprimento("nao-e-cidr") == 0

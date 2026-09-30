@@ -70,7 +70,7 @@ end-filter
   peer {{ s.remoto }} advertise-large-community{{ linha_default }}
 {%- endmacro %}
 
-{# Sem guarda em alvo.prefixos[fam]: o header/end-list saem sempre, mesmo
+{# Sem guarda em alvo.cidrs(fam): o header/end-list saem sempre, mesmo
    com a lista de cidr vazia, porque e assim que o template original e o
    undo em remover.txt.j2 (sem guarda tambem) sempre se comportaram - um
    guard aqui tiraria da simetria criado/derrubado no peer dual-stack com
@@ -81,13 +81,13 @@ end-filter
 {% set maxlen = 48 if fam == "v6" else 24 %}
 {% set hostlen = 128 if fam == "v6" else 32 %}
 xpl {{ kw }} PL-CUST-{{ alvo.token }}-{{ U }}
-{% for cidr in alvo.prefixos[fam] %}
+{% for cidr in alvo.cidrs(fam) %}
  {{ plan.cidr_para_xpl(cidr) }} le {{ maxlen }}{{ "," if not loop.last }}
 {% endfor %}
 end-list
 
 xpl {{ kw }} PL-CUST-{{ alvo.token }}-BH-{{ U }}
-{% for cidr in alvo.prefixos[fam] %}
+{% for cidr in alvo.cidrs(fam) %}
  {{ plan.cidr_para_xpl(cidr) }} ge {{ hostlen }} le {{ hostlen }}{{ "," if not loop.last }}
 {% endfor %}
 end-list

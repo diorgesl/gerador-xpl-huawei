@@ -510,3 +510,102 @@ def test_mesclar_devolve_o_ausente_no_fim_e_marcado():
     visiveis, ausentes = mod.mesclar_blocos([salvo], ["38.252.64.0/22"])
     assert [b.prefixo for b in visiveis] == ["38.252.64.0/22", "38.252.66.0/24"]
     assert ausentes == [salvo]
+
+
+# --- o prefixo do peer, com tratamento por linha ------------------------
+
+
+def test_o_prefixo_do_yaml_antigo_carrega_como_bloco(tmp_path):
+    caminho = tmp_path / "peers.yaml"
+    caminho.write_text(
+        "peers:\n"
+        "- id: 1\n"
+        "  asn: 268127\n"
+        "  prefixos:\n"
+        "    v4:\n"
+        "    - 45.169.232.0/22\n",
+        encoding="utf-8")
+    (peer,) = mod.carregar(caminho)
+    assert [b.prefixo for b in peer.prefixos["v4"]] == ["45.169.232.0/22"]
+    assert peer.prefixos["v4"][0].communities == []
+
+
+def test_o_prefixo_do_peer_e_canonico_na_leitura(tmp_path):
+    caminho = tmp_path / "peers.yaml"
+    caminho.write_text(
+        "peers:\n"
+        "- id: 1\n"
+        "  asn: 268127\n"
+        "  prefixos:\n"
+        "    v4:\n"
+        "    - 45.169.232.9/22\n",
+        encoding="utf-8")
+    (peer,) = mod.carregar(caminho)
+    assert peer.prefixos["v4"][0].prefixo == "45.169.232.0/22"
+
+
+def test_o_prefixo_do_peer_carrega_o_tratamento_do_yaml(tmp_path):
+    caminho = tmp_path / "peers.yaml"
+    caminho.write_text(
+        "peers:\n"
+        "- id: 1\n"
+        "  asn: 268127\n"
+        "  prefixos:\n"
+        "    v4:\n"
+        "    - prefixo: 45.169.232.0/22\n"
+        "      communities: [64512:210, 64512:5070]\n"
+        "    - 45.169.236.0/23\n",
+        encoding="utf-8")
+    (peer,) = mod.carregar(caminho)
+    assert peer.prefixos["v4"][0].communities == ["64512:210", "64512:5070"]
+    assert peer.prefixos["v4"][1].communities == []
+
+
+def test_gravar_sem_tratamento_escreve_a_string_de_sempre(tmp_path):
+    """Quem nunca usou a tela nao pode ganhar um diff de forma no peers.yaml."""
+    caminho = tmp_path / "peers.yaml"
+    mod.gravar([mod.Peer(id=1, asn=268127,
+                         prefixos={"v4": ["45.169.232.0/22"], "v6": []})],
+               caminho)
+    texto = caminho.read_text(encoding="utf-8")
+    assert "- 45.169.232.0/22" in texto
+    assert "prefixo:" not in texto
+
+
+def test_gravar_com_tratamento_escreve_o_dicionario(tmp_path):
+    caminho = tmp_path / "peers.yaml"
+    mod.gravar([mod.Peer(
+        id=1, asn=268127,
+        prefixos={"v4": [mod.Bloco(prefixo="45.169.232.0/22",
+                                   communities=["64512:210"])], "v6": []})],
+        caminho)
+    texto = caminho.read_text(encoding="utf-8")
+    assert "- prefixo: 45.169.232.0/22" in texto
+    assert "communities:" in texto
+    (peer,) = mod.carregar(caminho)
+    assert peer.prefixos["v4"][0].communities == ["64512:210"]
+
+
+def test_o_prefixo_fora_de_servico_sai_das_listas():
+    peer = mod.Peer(prefixos={"v4": [
+        mod.Bloco(prefixo="45.169.232.0/22", communities=["64512:210"]),
+        mod.Bloco(prefixo="45.169.236.0/23", communities=["64512:211"],
+                  ativo=False)], "v6": []})
+    assert peer.cidrs("v4") == ["45.169.232.0/22"]
+    assert [p for p, _ in peer.tratamentos("v4")] == ["45.169.232.0/22"]
+
+
+def test_tratamentos_ordena_do_mais_longo_para_o_mais_curto():
+    peer = mod.Peer(prefixos={"v4": [
+        mod.Bloco(prefixo="45.169.232.0/22", communities=["64512:210"]),
+        mod.Bloco(prefixo="45.169.232.0/24", communities=["64512:211"]),
+        mod.Bloco(prefixo="45.169.236.0/24", communities=[])], "v6": []})
+    assert [p for p, _ in peer.tratamentos("v4")] == [
+        "45.169.232.0/24", "45.169.232.0/22"]
+
+
+def test_o_grupo_nao_tem_tratamento_por_prefixo():
+    grupo = mod.Grupo(nome="PARCEIROS", prefixos={"v4": ["45.169.232.0/22"],
+                                                  "v6": []})
+    assert grupo.cidrs("v4") == ["45.169.232.0/22"]
+    assert grupo.tratamentos("v4") == []

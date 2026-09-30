@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from app import render
+from app.peers import Bloco
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
 
@@ -1188,7 +1189,8 @@ def membro_com_override_do_tipo(tipo, grupo):
         "v6": {"local": "2001:db8:100::1", "remoto": "2001:db8:100::2"},
     }
     if tipo in ("cliente", "parceiro"):
-        p.prefixos = {"v4": ["198.51.100.0/24"], "v6": ["2001:db8:100::/48"]}
+        p.prefixos = {"v4": [Bloco(prefixo="198.51.100.0/24")],
+                  "v6": [Bloco(prefixo="2001:db8:100::/48")]}
         p.classe = "transito"
         p.origem = 1100
         p.pop = 2001
@@ -1740,7 +1742,7 @@ def peer_membro_sem_override(grupo_id=1):
 
 def peer_membro_com_override(grupo_id=1):
     p = peer_membro_sem_override(grupo_id)
-    p.prefixos = {"v4": ["198.51.100.0/24"], "v6": []}
+    p.prefixos = {"v4": [Bloco(prefixo="198.51.100.0/24")], "v6": []}
     p.classe = "transito"
     p.origem = 1100
     p.pop = 2001

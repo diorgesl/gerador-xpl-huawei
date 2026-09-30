@@ -5,11 +5,9 @@ importar o app.py, que e quem monta a API. O corpo das funcoes e o mesmo de
 quando moravam la.
 """
 
-import ipaddress
-
 from app import plan, politica, validate
 from app import peers as peers_mod
-from app.peers import Bloco, Grupo, Peer
+from app.peers import Bloco, Grupo, Peer, canoniza
 
 
 CAMPOS_INT = ("asn", "id", "lp_base", "origem", "pop", "aprendizado",
@@ -72,26 +70,27 @@ def _usados(registros, campo):
     return sorted(vistos)
 
 
-def _canoniza(cidr):
-    """O CIDR canonico, ou o texto como veio quando nao analisa.
+def _bloco_da_linha(linha):
+    """Uma linha de textarea em Bloco, com o `!-` das duas pontas.
 
-    O mesclar_blocos casa por prefixo canonico, e o formulario entrega o
-    que o operador digitou ou colou. Sem esta passagem, um v6 em caixa
-    alta nao casa com o que a consulta devolve em caixa baixa, o tratamento
-    se solta do prefixo e o bloco sai duplicado na configuracao.
-
-    A barra e exigida antes de analisar: o ip_network aceita um endereco
-    cru e devolve /32, e sem esta linha o validate nunca veria o texto
-    original e o prefixo sairia anunciado como host route. O que nao
-    analisa fica como veio, para o validate recusar e o operador ler a
-    mensagem.
+    Linha que comeca com `!-` e prefixo fora de servico: ele continua no
+    cadastro com o tratamento dele e nao sai em configuracao nenhuma. O
+    `!-` no fim da linha e a marca do que sumiu da consulta, e o que vem
+    depois dele nao e lido.
     """
-    if "/" not in cidr:
-        return cidr
-    try:
-        return str(ipaddress.ip_network(cidr, strict=False))
-    except ValueError:
-        return cidr
+    ativo = not linha.startswith("!-")
+    corpo = linha[2:] if not ativo else linha
+    pedacos = corpo.split("!-")[0].split()
+    if not pedacos:
+        return None
+    return Bloco(prefixo=canoniza(pedacos[0]), communities=pedacos[1:],
+                 ativo=ativo)
+
+
+def _blocos_das_linhas(linhas):
+    """As linhas de uma familia em lista de Bloco."""
+    return [b for b in (_bloco_da_linha(l) for l in linhas or [])
+            if b is not None]
 
 
 def _blocos_do_formulario(dados):
@@ -102,36 +101,29 @@ def _blocos_do_formulario(dados):
     tratamento dele e nao sai em configuracao nenhuma. O `!-` no fim da
     linha e a marca do que sumiu da consulta, e o salvamento ignora.
     """
-    blocos = {}
-    for fam in plan.FAMILIAS:
-        blocos[fam] = []
-        for linha in _linhas(dados, "blocos_%s" % fam):
-            ativo = not linha.startswith("!-")
-            corpo = linha[2:] if not ativo else linha
-            pedacos = corpo.split("!-")[0].split()
-            if not pedacos:
-                continue
-            blocos[fam].append(Bloco(prefixo=_canoniza(pedacos[0]),
-                                     communities=pedacos[1:],
-                                     ativo=ativo))
-    return blocos
+    return {fam: _blocos_das_linhas(_linhas(dados, "blocos_%s" % fam))
+            for fam in plan.FAMILIAS}
+
+
+def _linha_do_bloco(bloco, marcado=False):
+    """O texto de um bloco na textarea, com a marca do ausente quando houver."""
+    corpo = " ".join([bloco.prefixo] + list(bloco.communities))
+    if not bloco.ativo:
+        return "!- " + corpo
+    return corpo + ("  !- nao veio na consulta ao IRR" if marcado else "")
+
+
+def _linhas_de_blocos(blocos, ausentes=()):
+    """As linhas de um registro, uma por bloco, sem a marca do ausente."""
+    return [_linha_do_bloco(b) for b in blocos or []]
 
 
 def _texto_blocos(blocos, ausentes=()):
     """O texto das duas textareas, com a marca de quem sumiu da consulta."""
     marcados = {b.prefixo for b in ausentes}
-    saida = {}
-    for fam in plan.FAMILIAS:
-        linhas = []
-        for b in blocos.get(fam) or []:
-            corpo = " ".join([b.prefixo] + list(b.communities))
-            if not b.ativo:
-                corpo = "!- " + corpo
-            elif b.prefixo in marcados:
-                corpo += "  !- nao veio na consulta ao IRR"
-            linhas.append(corpo)
-        saida[fam] = "\n".join(linhas)
-    return saida
+    return {fam: "\n".join(_linha_do_bloco(b, b.prefixo in marcados)
+                           for b in blocos.get(fam) or [])
+            for fam in plan.FAMILIAS}
 
 
 def _aprendizado_padrao(tipo, peers, grupos):
@@ -368,7 +360,8 @@ def peer_do_formulario(dados, peers, anterior=None, grupos=()):
         pop=valores.get("pop"),
         aprendizado=valores.get("aprendizado"),
         ix_id=valores.get("ix_id"),
-        prefixos={f: _linhas(dados, "prefixos_%s" % f) for f in plan.FAMILIAS},
+        prefixos={f: _blocos_das_linhas(_linhas(dados, "prefixos_%s" % f))
+                  for f in plan.FAMILIAS},
         te_prefixos={f: _linhas(dados, "te_prefixos_%s" % f) for f in plan.FAMILIAS},
         ap_block=_linhas(dados, "ap_block"),
         ap_te=_linhas(dados, "ap_te"),

@@ -81,7 +81,8 @@ def modelo_do_peer(peer):
     )
     for fam in plan.FAMILIAS:
         sessao = peer.sessoes.get(fam) or {}
-        campos["prefixos_%s" % fam] = _lista(peer.prefixos.get(fam))
+        campos["prefixos_%s" % fam] = form._linhas_de_blocos(
+            peer.prefixos.get(fam))
         campos["te_prefixos_%s" % fam] = _lista(peer.te_prefixos.get(fam))
         campos["sessao_%s_local" % fam] = sessao.get("local", "")
         campos["sessao_%s_remoto" % fam] = sessao.get("remoto", "")

@@ -567,3 +567,23 @@ def test_a_origem_apagada_a_mao_e_recusada_com_erro_claro(api, tmp_path):
     assert r.status_code == 200
     assert "politica_de" in r.json()["erros"]
     assert r.json()["bloco"] is None
+
+
+def test_a_linha_tratada_atravessa_o_post_e_a_volta(api, tmp_path):
+    r = api.post("/api/peers", json=dict(
+        CLIENTE, prefixos_v4=["45.169.232.0/22 64512:210 64512:5070"]))
+    assert r.status_code == 201, r.text
+    peer = peers_mod.carregar(caminho_tenant(tmp_path))[0]
+    assert peer.prefixos["v4"][0].communities == ["64512:210", "64512:5070"]
+    assert r.json()["registro"]["formulario"]["prefixos_v4"] == [
+        "45.169.232.0/22 64512:210 64512:5070"]
+
+
+def test_o_fora_de_servico_volta_com_o_menos_na_frente(api, tmp_path):
+    r = api.post("/api/peers", json=dict(
+        CLIENTE, prefixos_v4=["!- 45.169.232.0/22 64512:210"]))
+    assert r.status_code == 201, r.text
+    assert r.json()["registro"]["formulario"]["prefixos_v4"] == [
+        "!- 45.169.232.0/22 64512:210"]
+    peer = peers_mod.carregar(caminho_tenant(tmp_path))[0]
+    assert peer.prefixos["v4"][0].ativo is False

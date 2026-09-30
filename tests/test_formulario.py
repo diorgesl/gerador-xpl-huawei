@@ -133,3 +133,43 @@ def test_o_bloco_da_cascata_e_a_tabela_do_plano():
             "timer_keepalive": plan.TIMER_PADRAO.get(tipo, (None, None))[0],
             "timer_hold": plan.TIMER_PADRAO.get(tipo, (None, None))[1],
         }, tipo
+
+
+# --- a linha do prefixo com tratamento ----------------------------------
+
+
+def test_a_linha_com_community_vira_bloco_com_ela():
+    (bloco,) = formulario._blocos_das_linhas(["45.169.232.0/22 64512:210"])
+    assert bloco.prefixo == "45.169.232.0/22"
+    assert bloco.communities == ["64512:210"]
+    assert bloco.ativo is True
+
+
+def test_a_linha_fora_de_servico_guarda_o_tratamento():
+    (bloco,) = formulario._blocos_das_linhas(["!- 45.169.232.0/22 64512:210"])
+    assert bloco.ativo is False
+    assert bloco.communities == ["64512:210"]
+
+
+def test_a_marca_do_irr_no_fim_da_linha_e_ignorada():
+    """As duas pontas do `!-` valendo na mesma linha: fora de servico, com o
+    tratamento guardado e a marca do ausente descartada."""
+    (bloco,) = formulario._blocos_das_linhas(
+        ["!- 45.169.232.0/22 64512:210  !- nao veio na consulta ao IRR"])
+    assert bloco.ativo is False
+    assert bloco.communities == ["64512:210"]
+
+
+def test_o_texto_do_bloco_marca_o_ausente_e_o_fora_de_servico():
+    ativos = [formulario.Bloco(prefixo="45.169.232.0/22",
+                               communities=["64512:210"])]
+    fora = formulario.Bloco(prefixo="45.169.236.0/23", communities=[],
+                            ativo=False)
+    ausente = formulario.Bloco(prefixo="45.169.240.0/24",
+                               communities=["64512:211"])
+    assert formulario._linhas_de_blocos(ativos + [fora]) == [
+        "45.169.232.0/22 64512:210", "!- 45.169.236.0/23"]
+    assert formulario._texto_blocos({"v4": ativos + [ausente], "v6": []},
+                                    ausentes=[ausente])["v4"] == (
+        "45.169.232.0/22 64512:210\n"
+        "45.169.240.0/24 64512:211  !- nao veio na consulta ao IRR")
