@@ -290,6 +290,8 @@ Esta tabela é a fonte única de verdade para o alias `64512:5PPA`, para a class
 
 O ID `01` é o do AS14840, upstream real já em produção e usado em todos os exemplos deste documento. Peer novo entra no primeiro ID livre da faixa `0x`.
 
+O ID também é o que endereça um prefixo a um peer específico no tratamento por prefixo do cliente (adiante): num par de upstreams do mesmo ASN, o `5PPA` do ID distingue os dois links, que a community por ASN não distingue.
+
 ### Geração por template
 
 Com 3 upstreams, 2 IXs e 2 PNIs, esta tabela produz cerca de 60 sets e 50 ramos de filtro. Escrever isso à mão é onde nasce o erro que derruba BGP na madrugada de sábado.
@@ -598,6 +600,20 @@ O parser recusa, e o achado é o que sustenta o desenho atual. Sem poder gravar 
 A regra continua valendo para todo `overwrite` que restar neste documento: nunca com `{}` dentro.
 
 Antes de qualquer `overwrite` de egress rodar, a rota já passou pelo `EXPORT-SANITY`. Essa ordem é obrigatória: a checagem precisa ver as communities de origem reais. Se o `overwrite` viesse antes, uma rota que chegasse ao export carregando só o valor que ele grava não casaria em `CL-ORIGEM-ANUNCIAVEL` e seria recusada por falta de origem, não por política.
+
+### Conjunto de prefixo inline
+
+Um prefixo casado direto na condição leva endereço e comprimento separados, sem barra, e o `le` é o que estende o casamento aos mais específicos:
+
+```scss
+ if ip route-destination in {45.169.232.0 22 le 24} then
+```
+
+`{45.169.232.0 22 le 24}` casa o `/22` e os mais específicos até `/24`. Sem o `le` o casamento é o prefixo exato, e o `ge`/`le` junto casa um comprimento fixo: `{0.0.0.0 0 ge 32 le 32}` é a rota de host. É a mesma forma da entrada de uma prefix-list nomeada, sem o objeto no meio.
+
+Quando mais de uma linha pode casar a mesma rota, quem decide é a ordem do `if`/`elseif`: do prefixo mais longo para o mais curto, para o `/24` vencer o `/22` em vez de os dois somarem.
+
+**Ponto em aberto:** que a forma inline aceite `le` sem `ge`, e que ela valha no v6 com o mesmo `ip route-destination` que os exemplos usam nas duas famílias. O desenho do tratamento por prefixo assume as duas coisas.
 
 ### Condição em uma linha
 
@@ -1105,6 +1121,15 @@ xpl route-filter CUST-IMPORT-268127
  !- ultima acao: o que a operadora envia ao upstream por causa
  !- deste bloco. Lista mantida a mao no equipamento.
  call route-filter APPLY-PEER-268127
+
+ !- tratamento por prefixo do cadastro, do mais especifico para o menos:
+ !- o /24 sai so para os upstreams e nao vai ao AS14840 (5010 do peer 01);
+ !- o /22 sai so nos IXs
+ if ip route-destination in {45.169.232.0 24 le 24} then
+  apply community {64512:210, 64512:5010} additive
+ elseif ip route-destination in {45.169.232.0 22 le 24} then
+  apply community {64512:211} additive
+ endif
  finish
  end-filter
 ```
@@ -1114,6 +1139,12 @@ A ordem importa em três pontos. O blackhole vem antes do teste de prefixo norma
 As ações do cliente (`101`–`105`, `2xx`, `6CA`, `5PPA`, `666`/`667`) **sobrevivem** ao ingress e isso é proposital. O prepend e o no-export só são consumidos no egress, então precisam atravessar a RIB. Elas também não desaparecem no egress: não há remoção seletiva em route-filter, e o `overwrite` de fecho que existia lá saiu do desenho. O que o cliente escreveu chega ao peer externo, e o `PL-CUST-268127-V4` é o que garante que chegue preso a prefixo do próprio cliente.
 
 É exatamente para isso que serve a convenção "ação tem 3 dígitos, informativa tem 4": um recorte por número de dígitos separa as duas classes sem lista de exceções. `64512:5PPA` é a única action fora dela, e o primeiro dígito `5` a distingue de qualquer informativa sem ambiguidade.
+
+**Tratamento por prefixo.** A cadeia do fim do filtro é escrita pela operadora, no cadastro da sessão, uma linha por prefixo do cliente, e não pelo cliente: ela não muda o que ele pode anunciar, só o que a operadora faz com cada prefixo dele depois de aceitar. Cada linha é um `if`/`elseif` com o prefixo e as communities daquele prefixo, aplicadas em `additive` sobre o que a sessão já carimbou. Três consequências valem registro:
+
+- **O mais específico vence.** A cadeia vai do prefixo mais longo para o mais curto, e o aninhamento é `if`/`elseif`: um `/24` dentro de um `/22` aplica só o que a linha dele pediu, em vez de os dois tratamentos somarem.
+- **O `le` é o teto do confinamento.** `{45.169.232.0 22 le 24}` casa o `/22` e os mais específicos até `/24`, que é até onde o `PL-CUST` deixa passar. A linha nunca alcança rota que o cliente não poderia anunciar.
+- **A cadeia roda depois do `APPLY-PEER`.** O `1xx` da linha vence o da `CL-PEER`, porque a última escrita de local preference vence. Escopos de `2xx` incompatíveis, um na `CL-PEER` e outro na linha, somam: a rota sai com as duas marcas e é recusada nos dois lados.
 
 ### Export
 

@@ -255,9 +255,11 @@ Uma seção nova na página principal, abaixo do formulário do peer. Dois botõ
 **Decisão.** O formulário é uma `textarea` por família, uma linha por prefixo, no formato `<cidr> [community ...]`:
 
 ```
-38.252.64.0/22  613 621 15169:12100
-38.252.64.0/24  211
+38.252.64.0/22  64512:613 64512:621 15169:12100
+38.252.64.0/24  64512:211
 ```
+
+A community vai na forma completa, com o namespace: o `_forma_ok` do validate exige `ASN:VALOR`, e a forma curta que esta spec mostrava antes seria recusada ao salvar. O `tests/golden/blocos.txt` e o `dados_api.BLOCOS` sempre escreveram assim, e é o documento que estava torto.
 
 É a mesma forma das listas que o app já usa, e o analisador de linha é trivial. Uma tabela com um par de campos por prefixo daria mais HTML e obrigaria um analisador novo para o mesmo resultado.
 
