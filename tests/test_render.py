@@ -238,8 +238,8 @@ def test_export_do_cliente_escada_de_prepend():
 
 def test_prefixo_sai_sem_barra():
     texto = render.render_peer(peer_cliente())
-    assert "45.169.232.0 22 le 24" in texto
-    assert "45.169.232.0/22 le" not in texto
+    assert "45.169.232.0 22" in texto
+    assert "45.169.232.0/22" not in texto
 
 
 def test_bloco_bgp_do_cliente():
@@ -2612,6 +2612,20 @@ def test_o_intervalo_estende_o_casamento_e_vem_depois_do_exato():
     assert corpo.index("if ip route-destination in {45.169.232.0 22} then") \
         < corpo.index(
             "elseif ip route-destination in {45.169.232.0 22 le 24} then")
+
+
+def test_a_lista_do_confinamento_segue_o_alcance_da_linha():
+    """A linha sem sufixo confina no prefixo exato e o `-24` e o que libera
+    os mais especificos: a lista e a clausula do import dizem a mesma coisa
+    sobre o mesmo prefixo."""
+    texto = render.render_peer(peer_cliente(prefixos={"v4": [
+        Bloco(prefixo="45.169.232.0/22", communities=["64512:210"]),
+        Bloco(prefixo="45.169.236.0/23", ate=24,
+              communities=["64512:211"])], "v6": []}))
+    lista = texto.split("xpl ip-prefix-list PL-CUST-268127-V4")[1].split(
+        "end-list")[0]
+    corpo = [l.strip() for l in lista.splitlines() if l.strip()]
+    assert corpo == ["45.169.232.0 22,", "45.169.236.0 23 le 24"]
 
 
 def test_o_intervalo_em_v6_usa_o_comprimento_da_linha():

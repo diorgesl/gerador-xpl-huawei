@@ -429,6 +429,19 @@ def separa_communities(valores):
     return standard, large
 
 
+def entrada_do_prefixo(cidr, ate=None):
+    """A entrada de uma prefix-list nomeada.
+
+    `45.169.232.0 22` casa o prefixo exato, que e o que a linha sem sufixo
+    pede; `45.169.232.0 22 le 24` alcanca os mais especificos ate o
+    intervalo escrito. A lista e a clausula do import usam a mesma forma,
+    para as duas dizerem a mesma coisa sobre o mesmo prefixo.
+    """
+    if ate is None:
+        return cidr_para_xpl(cidr)
+    return "%s le %d" % (cidr_para_xpl(cidr), ate)
+
+
 def conjunto_do_prefixo(cidr, ate=None):
     """O conjunto inline de um prefixo: `{45.169.232.0 22}` ou `{... 22 le 24}`.
 

@@ -3,7 +3,7 @@
 # pressupoe o bloco base ja aplicado neste equipamento
 
 xpl ip-prefix-list PL-CUST-64500-V4
- 45.169.236.0 22 le 24
+ 45.169.236.0 22
 end-list
 
 xpl ip-prefix-list PL-CUST-64500-BH-V4

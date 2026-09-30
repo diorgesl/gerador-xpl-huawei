@@ -367,6 +367,14 @@ def test_o_quadro_ao_criar_nao_existe_para_quem_reaproveita():
     assert not plan.quadro_ao_criar(peer_cliente(politica_de=1), False)
 
 
+def test_a_entrada_do_prefixo_na_lista():
+    # sem alcance a entrada e o prefixo exato; com ele, alcanca os mais
+    # especificos ate o comprimento escrito
+    assert plan.entrada_do_prefixo("45.169.232.0/22") == "45.169.232.0 22"
+    assert plan.entrada_do_prefixo("45.169.232.0/22", 24) == (
+        "45.169.232.0 22 le 24")
+
+
 def test_o_conjunto_do_prefixo():
     # sem intervalo, o casamento e o prefixo exato
     assert plan.conjunto_do_prefixo("45.169.232.0/22", None) == (

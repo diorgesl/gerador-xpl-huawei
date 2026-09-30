@@ -615,7 +615,9 @@ Quando mais de uma linha pode casar a mesma rota, quem decide é a ordem do `if`
 
 A linha do cadastro escreve esse conjunto sem o `le` quando quer o prefixo exato, e com o `le` quando quer os mais específicos: `138.97.60.0/22` e `138.97.60.0/22-24` são o mesmo prefixo com alcances diferentes.
 
-**Ponto em aberto:** que a forma inline aceite `le` sem `ge`, e que ela valha no v6 com o mesmo `ip route-destination` que os exemplos usam nas duas famílias. O desenho do tratamento por prefixo assume as duas coisas.
+A entrada de uma prefix-list nomeada segue a mesma convenção, e é a forma que o `PL-CUST` usa: `45.169.232.0 22` é o prefixo exato e `45.169.232.0 22 le 24` alcança os mais específicos até `/24`.
+
+**Ponto em aberto:** que a forma inline aceite `le` sem `ge`, e que ela valha no v6 com o mesmo `ip route-destination` que os exemplos usam nas duas famílias. O desenho do tratamento por prefixo assume as duas coisas, e a entrada exata da prefix-list (sem `ge`/`le`) assume a leitura clássica: casa aquele prefixo e nada mais.
 
 ### Condição em uma linha
 
@@ -901,17 +903,19 @@ A implementação dessas três checagens fica em aberto de propósito. O caminho
 
 ### Prefixos de cliente
 
-Cada cliente recebe **dois** sets: um para anúncio normal com `le 24`, outro só para blackhole com `ge 32 le 32`.
+Cada cliente recebe **dois** sets: um para anúncio normal, outro só para blackhole com `ge 32 le 32`. A entrada do set normal segue o alcance da linha do cadastro: sem sufixo ela é o prefixo exato, e com `-24` ela alcança os mais específicos até o teto.
 
 ```scss
 xpl ip-prefix-list PL-CUST-268127-V4
- 45.169.232.0 22 le 24
+ 45.169.232.0 22
  end-list
 
 xpl ip-prefix-list PL-CUST-268127-BH-V4
  45.169.232.0 22 ge 32 le 32
  end-list
 ```
+
+Para o cliente que anuncia os `/24` dentro do bloco, a linha do cadastro é `45.169.232.0/22-24` e a entrada sai `45.169.232.0 22 le 24`. A linha e a cláusula do import dizem a mesma coisa sobre o mesmo prefixo, e o alcance que a sessão aceita é o que o operador escreveu.
 
 O motivo da separação é duplo. Primeiro, `le 32` no anúncio normal deixa o cliente picar um `/22` em 1024 `/32`, inflando RIB e FIB sem que nada disso saia para o upstream. Segundo, e mais grave, com `le 32` genérico não há como distinguir um `/32` de blackhole de um anúncio comum, e a lógica de RTBH fica ambígua.
 
@@ -1124,7 +1128,8 @@ xpl route-filter CUST-IMPORT-268127
  !- deste bloco. Lista mantida a mao no equipamento.
  call route-filter APPLY-PEER-268127
 
- !- tratamento por prefixo do cadastro, do mais especifico para o menos:
+ !- tratamento por prefixo do cadastro, do mais especifico para o menos,
+ !- vindo das linhas 45.169.232.0/24 e 45.169.232.0/22-24:
  !- o /24 sai so para os upstreams e nao vai ao AS14840 (5010 do peer 01);
  !- o /22 e os /23 e /24 dentro dele saem so nos IXs
  if ip route-destination in {45.169.232.0 24} then
@@ -1154,7 +1159,7 @@ Sem o intervalo, a cláusula casa o prefixo exato e nada mais. Com ele, casa o p
 Três consequências valem registro:
 
 - **O mais específico vence.** A cadeia vai do prefixo mais longo para o mais curto e, no mesmo prefixo, da linha exata para a de intervalo, do mais estreito ao mais largo. O aninhamento é `if`/`elseif`: um `/24` escrito dentro de um `/22` aplica só o que a linha dele pediu, e o `/22` exato vence o `/22-24` na rota do próprio `/22`.
-- **O confinamento não segue o intervalo.** Quem decide o que o cliente pode anunciar continua sendo o `PL-CUST` com o `le` do teto; o intervalo mexe só na cláusula de tratamento. Um mais específico anunciado dentro de uma linha sem intervalo passa no import e sai sem community nenhuma.
+- **O confinamento segue o mesmo alcance.** O `PL-CUST` do import usa a mesma linha do cadastro: sem sufixo, a entrada é o prefixo exato, e um mais específico anunciado pelo cliente é recusado no import; com `-24`, os mais específicos entram e recebem o tratamento. Não há rota que passe no confinamento e saia sem cláusula, e é por isso que a linha sem sufixo pede cuidado em sessão que já está no ar.
 - **A cadeia roda depois do `APPLY-PEER`.** O `1xx` da linha vence o da `CL-PEER`, porque a última escrita de local preference vence. Escopos de `2xx` incompatíveis, um na `CL-PEER` e outro na linha, somam: a rota sai com as duas marcas e é recusada nos dois lados.
 
 ### Export

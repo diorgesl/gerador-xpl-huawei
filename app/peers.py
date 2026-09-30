@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from app.plan import FAMILIAS, Rede, comprimento
+from app.plan import FAMILIAS, TETO_PREFIXO, Rede, comprimento
 
 RAIZ = Path(__file__).resolve().parent.parent
 PEERS_YAML = RAIZ / "peers.yaml"
@@ -126,8 +126,14 @@ class Peer:
             for fam in FAMILIAS}
 
     def cidrs(self, fam):
-        """Os prefixos em servico da familia, para as duas prefix-lists."""
-        return [b.prefixo for b in self.prefixos.get(fam) or [] if b.ativo]
+        """(prefixo, alcance) das linhas em servico, para as prefix-lists.
+
+        O alcance e o `ate` da linha, e o None e o prefixo exato: a lista do
+        confinamento e a clausula do import leem o mesmo par, para as duas
+        dizerem a mesma coisa sobre o mesmo prefixo.
+        """
+        return [(b.prefixo, b.ate) for b in self.prefixos.get(fam) or []
+                if b.ativo]
 
     def tratamentos(self, fam):
         """(prefixo, ate, communities) de cada linha com tratamento, na ordem da cadeia.
@@ -419,13 +425,16 @@ class Grupo:
         return self.nome
 
     def cidrs(self, fam):
-        """Os CIDR do grupo, que nao tem tratamento por prefixo.
+        """(prefixo, teto) das linhas do grupo, que nao tem tratamento por prefixo.
 
-        O metodo existe porque as macros do import sao de alvo duplo: o
+        O grupo nao tem o sufixo do peer: o campo dele e CIDR puro, entao o
+        alcance segue sendo o teto do confinamento, como sempre foi. O
+        metodo existe porque as macros do import sao de alvo duplo: o
         StrictUndefined do render estoura no teste quando o alvo nao tem o
         que a macro pede.
         """
-        return list(self.prefixos.get(fam) or [])
+        return [(cidr, TETO_PREFIXO[fam])
+                for cidr in self.prefixos.get(fam) or []]
 
     def tratamentos(self, fam):
         """O grupo nao tem community por prefixo: a linha dele e CIDR puro."""

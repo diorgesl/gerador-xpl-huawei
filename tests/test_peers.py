@@ -602,7 +602,7 @@ def test_o_prefixo_fora_de_servico_sai_das_listas():
         mod.Bloco(prefixo="45.169.232.0/22", communities=["64512:210"]),
         mod.Bloco(prefixo="45.169.236.0/23", communities=["64512:211"],
                   ativo=False)], "v6": []})
-    assert peer.cidrs("v4") == ["45.169.232.0/22"]
+    assert peer.cidrs("v4") == [("45.169.232.0/22", None)]
     assert [p for p, _, _ in peer.tratamentos("v4")] == ["45.169.232.0/22"]
 
 
@@ -655,7 +655,8 @@ def test_tratamentos_poe_o_exato_antes_do_intervalo_e_o_estreito_primeiro():
 def test_o_grupo_nao_tem_tratamento_por_prefixo():
     grupo = mod.Grupo(nome="PARCEIROS", prefixos={"v4": ["45.169.232.0/22"],
                                                   "v6": []})
-    assert grupo.cidrs("v4") == ["45.169.232.0/22"]
+    # o grupo nao tem sufixo: o alcance dele segue sendo o teto
+    assert grupo.cidrs("v4") == [("45.169.232.0/22", 24)]
     assert grupo.tratamentos("v4") == []
 
 
