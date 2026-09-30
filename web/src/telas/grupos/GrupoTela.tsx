@@ -154,7 +154,12 @@ export function GrupoTela() {
     mutationFn: (forcar: boolean) =>
       cliente.POST("/api/irr", {
         params: { query: { asn: Number(asn) } },
-        body: { asn: form.getValues("asn"), apelido: form.getValues("nome"), forcar },
+        body: {
+          asn: form.getValues("asn"), apelido: form.getValues("nome"), forcar,
+          // a mesma mesclagem do peer: no grupo ela so muda a ordem e a marca
+          // do ausente, porque a linha do grupo nao tem tratamento
+          v4: form.getValues("prefixos_v4"), v6: form.getValues("prefixos_v6"),
+        },
       }),
     onSuccess: (r, forcar) => {
       if (r.error) {

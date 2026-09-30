@@ -169,6 +169,10 @@ def test_o_texto_do_bloco_marca_o_ausente_e_o_fora_de_servico():
                                communities=["64512:211"])
     assert formulario._linhas_de_blocos(ativos + [fora]) == [
         "45.169.232.0/22 64512:210", "!- 45.169.236.0/23"]
+    assert formulario._linhas_de_blocos(ativos + [ausente],
+                                        ausentes=[ausente]) == [
+        "45.169.232.0/22 64512:210",
+        "45.169.240.0/24 64512:211  !- nao veio na consulta ao IRR"]
     assert formulario._texto_blocos({"v4": ativos + [ausente], "v6": []},
                                     ausentes=[ausente])["v4"] == (
         "45.169.232.0/22 64512:210\n"

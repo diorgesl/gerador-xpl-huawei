@@ -194,7 +194,12 @@ export function PeerTela() {
     mutationFn: (forcar: boolean) =>
       cliente.POST("/api/irr", {
         params: { query: { asn: Number(asn) } },
-        body: { asn: form.getValues("asn"), apelido: form.getValues("apelido"), forcar },
+        body: {
+          asn: form.getValues("asn"), apelido: form.getValues("apelido"), forcar,
+          // o que esta na tela vai junto: e a base da mesclagem, e sem ela a
+          // reconsulta apagaria o tratamento escrito a mao
+          v4: form.getValues("prefixos_v4"), v6: form.getValues("prefixos_v6"),
+        },
       }),
     onSuccess: (r, forcar) => {
       if (r.error) {

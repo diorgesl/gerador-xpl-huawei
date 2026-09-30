@@ -746,6 +746,29 @@ describe("a tela do peer", () => {
     ])
   })
 
+  it("a consulta ao IRR manda as linhas da tela e devolve as mescladas", async () => {
+    // O tratamento escrito a mao so sobrevive a reconsulta se o pedido levar o
+    // que esta no campo: sem isso o servidor mescla contra nada e a lista volta
+    // como o IRR respondeu, apagando o trabalho
+    mockFetch({
+      ...BASE,
+      "POST /api/irr": {
+        corpo: {
+          v4: ["45.169.232.0/22",
+               "45.169.240.0/24 64512:211  !- nao veio na consulta ao IRR"],
+          v6: [],
+        },
+      },
+    })
+    montarRota(rotas, "/peers/7")
+    await userEvent.click(await screen.findByRole("button", { name: /^consultar IRR$/i }))
+    await waitFor(() => {
+      const pedido = peticoes().find((p) => p.caminho === "/api/irr")
+      expect(pedido?.corpo).toMatchObject({ v4: ["45.169.232.0/22"] })
+    })
+    expect(await screen.findByDisplayValue(/45\.169\.240\.0\/24/)).toBeInTheDocument()
+  })
+
   it("a consulta ao IRR que falha nao apaga o bloco do painel", async () => {
     // O erro do bgpq4 nao e de campo nenhum, e contar o mapa inteiro apagava o
     // painel ("a previa volta quando os erros forem corrigidos") sem nenhum

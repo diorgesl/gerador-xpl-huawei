@@ -272,3 +272,19 @@ def test_toda_rota_de_dados_pede_o_asn():
                                  for p in get_flat_dependant(
                                      rota.dependant).query_params}]
     assert sem_asn == []
+
+
+def test_o_irr_do_peer_preserva_o_tratamento_e_marca_o_ausente(
+        api, fake_bgpq4):
+    # a consulta devolve 45.169.232.0/22 e 45.169.236.0/23 em v4, e o
+    # 45.169.240.0/24 que estava na tela nao veio mais
+    r = api.post("/api/irr", json={
+        "asn": "268127",
+        "v4": ["45.169.232.0/22 64512:210", "45.169.240.0/24 64512:211"],
+        "v6": []})
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        "v4": ["45.169.232.0/22 64512:210",
+               "45.169.236.0/23",
+               "45.169.240.0/24 64512:211  !- nao veio na consulta ao IRR"],
+        "v6": ["2001:db8::/32"]}

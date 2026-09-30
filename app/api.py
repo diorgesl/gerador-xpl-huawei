@@ -568,7 +568,18 @@ def consultar_irr(pedido: IrrPedido, t: tenants_mod.Tenant = Depends(tenant)):
                                   forcar=pedido.forcar)
     except (OSError, RuntimeError, ValueError) as exc:
         return _falha(502, [validate.Erro("bgpq4", str(exc))])
-    return Prefixos(v4=coleta.get("v4") or [], v6=coleta.get("v6") or [])
+    # a mesclagem e a mesma do bloco proprio: o que veio da consulta e ja
+    # tinha linha mantem o tratamento, o prefixo novo entra sem tratamento, e
+    # o que sumiu volta no fim marcado. A base e o que esta na tela, e nao o
+    # arquivo: o operador pode ter mexido numa linha antes de consultar.
+    linhas = {"v4": pedido.v4, "v6": pedido.v6}
+    resposta = {}
+    for fam in plan.FAMILIAS:
+        salvos = form._blocos_das_linhas(linhas[fam])
+        visiveis, ausentes = peers_mod.mesclar_blocos(
+            salvos, coleta.get(fam) or [])
+        resposta[fam] = form._linhas_de_blocos(visiveis, ausentes)
+    return Prefixos(v4=resposta["v4"], v6=resposta["v6"])
 
 
 def _membros(grupo, peers):

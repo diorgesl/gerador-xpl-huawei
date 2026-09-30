@@ -888,6 +888,16 @@ export interface components {
              * @default false
              */
             forcar: boolean;
+            /**
+             * V4
+             * @default []
+             */
+            v4: string[];
+            /**
+             * V6
+             * @default []
+             */
+            v6: string[];
         };
         /**
          * LoginPedido

@@ -114,8 +114,13 @@ def _linha_do_bloco(bloco, marcado=False):
 
 
 def _linhas_de_blocos(blocos, ausentes=()):
-    """As linhas de um registro, uma por bloco, sem a marca do ausente."""
-    return [_linha_do_bloco(b) for b in blocos or []]
+    """As linhas de um registro, uma por bloco, com a marca de quem sumiu.
+
+    Sem `ausentes` a lista sai limpa, que e o que o formulario salvo quer: a
+    marca so existe entre a consulta e o salvamento.
+    """
+    marcados = {b.prefixo for b in ausentes}
+    return [_linha_do_bloco(b, b.prefixo in marcados) for b in blocos or []]
 
 
 def _texto_blocos(blocos, ausentes=()):

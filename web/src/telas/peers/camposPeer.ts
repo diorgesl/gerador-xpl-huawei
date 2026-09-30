@@ -119,8 +119,10 @@ export const CAMPOS_PEER: Campo[] = [
   { nome: "default_route", rotulo: "Anuncia default route", tipo: "caixa", secao: "limites" },
   { nome: "bh_upstream", rotulo: "Blackhole do upstream", tipo: "texto", secao: "limites", mono: true, largo: true },
 
-  { nome: "prefixos_v4", rotulo: "IPv4", tipo: "area", secao: "prefixos", mono: true, linhas: 5 },
-  { nome: "prefixos_v6", rotulo: "IPv6", tipo: "area", secao: "prefixos", mono: true, linhas: 5 },
+  { nome: "prefixos_v4", rotulo: "IPv4", tipo: "area", secao: "prefixos", mono: true, linhas: 5,
+    ajuda: "uma linha por prefixo: cidr e depois as communities. a linha começada por !- fica fora do anúncio" },
+  { nome: "prefixos_v6", rotulo: "IPv6", tipo: "area", secao: "prefixos", mono: true, linhas: 5,
+    ajuda: "uma linha por prefixo: cidr e depois as communities. a linha começada por !- fica fora do anúncio" },
 
   { nome: "te_prefixos_v4", rotulo: "Exceção de TE IPv4", tipo: "area", secao: "te", mono: true, linhas: 3 },
   { nome: "te_prefixos_v6", rotulo: "Exceção de TE IPv6", tipo: "area", secao: "te", mono: true, linhas: 3 },

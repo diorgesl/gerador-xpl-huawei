@@ -251,6 +251,10 @@ class IrrPedido(Modelo):
     # o token do cache e o do peer: o apelido quando ha, senao o ASN
     apelido: str = ""
     forcar: bool = False
+    # as linhas que estao na tela, uma por prefixo: e o que a mesclagem usa
+    # como base, para a reconsulta nao apagar o tratamento escrito a mao
+    v4: list[str] = []
+    v6: list[str] = []
 
 
 class Prefixos(BaseModel):
