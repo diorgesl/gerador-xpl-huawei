@@ -1142,7 +1142,8 @@ def peer_membro_com_override_remocao():
     # remocao, para o laco de familia aparecer no arquivo (a fabrica do
     # membro esta no fim deste arquivo).
     membro = peer_membro_sem_override(1)
-    membro.prefixos = {"v4": ["198.51.100.0/24"], "v6": ["2001:db8:100::/48"]}
+    membro.prefixos = {"v4": [Bloco(prefixo="198.51.100.0/24")],
+                       "v6": [Bloco(prefixo="2001:db8:100::/48")]}
     membro.classe = "transito"
     membro.origem = 1100
     membro.pop = 2001

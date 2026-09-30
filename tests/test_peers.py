@@ -609,3 +609,20 @@ def test_o_grupo_nao_tem_tratamento_por_prefixo():
                                                   "v6": []})
     assert grupo.cidrs("v4") == ["45.169.232.0/22"]
     assert grupo.tratamentos("v4") == []
+
+
+def test_o_prefixo_em_branco_no_yaml_carrega_sem_estourar(tmp_path):
+    """O campo vazio tem que chegar ao validate, que recusa com o campo e o
+    texto. Estourar aqui derruba o GET de toda tela do tenant, que e o
+    oposto do que a leitura tolerante existe para fazer."""
+    caminho = tmp_path / "peers.yaml"
+    caminho.write_text(
+        "peers:\n"
+        "- id: 1\n"
+        "  asn: 268127\n"
+        "  prefixos:\n"
+        "    v4:\n"
+        "    - prefixo:\n",
+        encoding="utf-8")
+    (peer,) = mod.carregar(caminho)
+    assert peer.prefixos["v4"][0].prefixo == ""

@@ -230,3 +230,28 @@ def test_valor_numerico_torto_no_grupo_e_erro_no_campo(api, tmp_path):
     assert r.status_code == 422
     assert r.json()["erros"]["lp_base"] == "valor numerico invalido"
     assert peers_mod.carregar_grupos(caminho_tenant(tmp_path)) == []
+
+
+def test_o_irr_do_grupo_mescla_e_o_salvar_guarda_o_prefixo_limpo(
+        api, tmp_path, fake_bgpq4):
+    """O ciclo que o operador faz: consulta, decide manter o que saiu do IRR
+    e salva. A marca e da tela, e o cadastro guarda o CIDR limpo."""
+    # o grupo com prefixo proprio exige ASN: o filtro usa o ASN para o
+    # blackhole e o confinamento de as-path
+    grupo = dict(GRUPO_PARCEIROS, asn="64500",
+                 prefixos_v4=["45.169.232.0/22", "45.169.240.0/24"])
+    assert api.post("/api/grupos", json=grupo).status_code == 201
+    # o 45.169.240.0/24 estava na tela e nao veio mais na consulta
+    consulta = api.post("/api/irr", json={
+        "asn": "14840", "v4": grupo["prefixos_v4"], "v6": []})
+    assert consulta.status_code == 200, consulta.text
+    linhas = consulta.json()["v4"]
+    assert linhas == [
+        "45.169.232.0/22",
+        "45.169.236.0/23",
+        "45.169.240.0/24  !- nao veio na consulta ao IRR"]
+    salvo = api.put("/api/grupos/0", json=dict(grupo, prefixos_v4=linhas))
+    assert salvo.status_code == 200, salvo.text
+    (grupo,) = peers_mod.carregar_grupos(caminho_tenant(tmp_path))
+    assert grupo.prefixos["v4"] == [
+        "45.169.232.0/22", "45.169.236.0/23", "45.169.240.0/24"]

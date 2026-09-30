@@ -1319,3 +1319,13 @@ def test_o_prefixo_do_peer_usa_o_namespace_da_rede():
     (erro,) = validar(peer, [], rede=rede)
     assert "classe 7" in erro.mensagem
     assert validar(peer, [], rede=plan.Rede()) == []
+
+
+def test_o_grupo_aceita_a_linha_marcada_pela_consulta():
+    """A marca do ausente e escrita pela consulta ao IRR, e o salvamento
+    ignora o que vem depois dela: manter o prefixo que saiu do IRR e a linha
+    continuar, e a decisao e do operador. O que a recusa do grupo barra e a
+    community de verdade, nao a marca."""
+    grupo = um_grupo(prefixos={
+        "v4": ["45.169.240.0/24  !- nao veio na consulta ao IRR"], "v6": []})
+    assert validar_grupo(grupo, [grupo], [], anterior=grupo) == []

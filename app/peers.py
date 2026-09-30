@@ -526,12 +526,26 @@ def canoniza(cidr):
     analisa fica como veio, para o validate recusar e o operador ler a
     mensagem.
     """
+    if not isinstance(cidr, str):
+        # campo vazio no yaml (`- prefixo:`) chega aqui como None, e o
+        # validate e quem tem que recusar, com o campo e o texto
+        return "" if cidr is None else str(cidr)
     if "/" not in cidr:
         return cidr
     try:
         return str(ipaddress.ip_network(cidr, strict=False))
     except ValueError:
         return cidr
+
+
+def sem_marca(linha):
+    """A linha sem o que vier depois do `!-` do fim.
+
+    A marca do ausente e escrita pela consulta ao IRR, e o salvamento ignora
+    o que vem depois dela. Vale para o peer, que ainda tem o `!-` do comeco
+    como estado proprio, e para o grupo, que so conhece esta ponta.
+    """
+    return linha.split("!-")[0].strip()
 
 
 def _bloco(item):

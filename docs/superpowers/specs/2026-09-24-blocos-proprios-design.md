@@ -266,8 +266,8 @@ A community vai na forma completa, com o namespace: o `_forma_ok` do validate ex
 A marca de ausente entra no fim da linha, e a linha sai marcada na tela antes de salvar. O salvamento ignora a marca: o prefixo continua se a linha continuar, e sai se o operador apagar a linha.
 
 ```
-38.252.66.0/24  211  !- nao veio na consulta ao IRR
-!- 38.252.67.0/24  211
+38.252.66.0/24  64512:211  !- nao veio na consulta ao IRR
+!- 38.252.67.0/24  64512:211
 ```
 
 Linha que começa com `!-` é ignorada, e isso serve para tirar um prefixo do ar sem perder o tratamento já escrito nele.

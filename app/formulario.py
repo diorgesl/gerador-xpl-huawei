@@ -7,7 +7,7 @@ quando moravam la.
 
 from app import plan, politica, validate
 from app import peers as peers_mod
-from app.peers import Bloco, Grupo, Peer, canoniza
+from app.peers import Bloco, Grupo, Peer, canoniza, sem_marca
 
 
 CAMPOS_INT = ("asn", "id", "lp_base", "origem", "pop", "aprendizado",
@@ -91,6 +91,17 @@ def _blocos_das_linhas(linhas):
     """As linhas de uma familia em lista de Bloco."""
     return [b for b in (_bloco_da_linha(l) for l in linhas or [])
             if b is not None]
+
+
+def _linhas_sem_marca(dados, nome):
+    """As linhas do campo sem a marca do IRR e sem o que ficar vazio.
+
+    E o que o `prefixos` do grupo le: ele nao tem `!-` de estado, so a marca
+    que a consulta escreve no fim da linha. Sem esta limpeza, o prefixo
+    guardado sairia com o comentario colado e o PL-CUST nao sairia.
+    """
+    return [limpa for limpa in
+            (sem_marca(l) for l in _linhas(dados, nome)) if limpa]
 
 
 def _blocos_do_formulario(dados):
@@ -486,7 +497,8 @@ def grupo_do_formulario(dados, grupos, anterior=None, peers=()):
         graceful_restart=dados.get("graceful_restart") == "on",
         timer_keepalive=valores.get("timer_keepalive"),
         timer_hold=valores.get("timer_hold"),
-        prefixos={f: _linhas(dados, "prefixos_%s" % f) for f in plan.FAMILIAS},
+        prefixos={f: _linhas_sem_marca(dados, "prefixos_%s" % f)
+                  for f in plan.FAMILIAS},
         te_prefixos={f: _linhas(dados, "te_prefixos_%s" % f) for f in plan.FAMILIAS},
         communities=_linhas(dados, "communities"),
         large_communities=_linhas(dados, "large_communities"),

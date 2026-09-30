@@ -58,6 +58,10 @@ tests/                 peers, formulario, validate, render, api, e o golden novo
 
 ---
 
+> **Nota de execução (2026-09-30).** Duas coisas mudaram na execução, e as duas estão no ledger da worktree (`.superpowers/sdd/2026-09-30-community-por-prefixo-do-downstream/progress.md`): a **Task 2 foi absorvida pela Task 1**, porque trocar `Peer.prefixos` por `Bloco` quebra o `validate`, o `modelo_do_peer` e os dois laços de prefix-list no mesmo passo, e as adaptações mecânicas dos três tiveram que entrar junto para a suíte fechar verde; e o **"Expected" de suíte verde da Task 1** vale com essa fusão, não sem ela. As tarefas 3, 4, 5 e 6 correram como estão escritas.
+
+---
+
 ### Task 1: O prefixo do peer vira Bloco
 
 **Files:**
@@ -331,7 +335,7 @@ git commit -m "O prefixo do peer vira Bloco, com o tratamento por linha"
 
 ---
 
-### Task 2: A ida e volta do campo na tela
+### Task 2 (absorvida pela Task 1): A ida e volta do campo na tela
 
 **Files:**
 - Modify: `app/formulario.py` (`_blocos_do_formulario`, `_texto_blocos`, e os helpers novos)

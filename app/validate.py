@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 
 from app import plan
-from app.peers import achar_grupo_id
+from app.peers import achar_grupo_id, sem_marca
 
 TOKEN_RE = re.compile(r"^[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?$")
 TOKEN_MAX = 12
@@ -417,11 +417,16 @@ def _valida_prefixos(alvo, erros, rede=None, tratado=False):
                                                  rede, True, erros)
                 continue
             for texto in itens:
-                if not tratado and campo == "prefixos" and len(texto.split()) > 1:
-                    erros.append(Erro(
-                        campo, "o grupo nao aceita community por prefixo: o "
-                        "tratamento por prefixo e do peer avulso"))
-                    continue
+                if not tratado and campo == "prefixos":
+                    # a marca do ausente e da consulta, e o salvamento
+                    # ignora: o que a recusa do grupo barra e a community
+                    # de verdade, nao o comentario
+                    texto = sem_marca(texto)
+                    if len(texto.split()) > 1:
+                        erros.append(Erro(
+                            campo, "o grupo nao aceita community por prefixo: "
+                            "o tratamento por prefixo e do peer avulso"))
+                        continue
                 if not _cidr_ok(texto):
                     erros.append(Erro(campo, "prefixo invalido: %s" % texto))
 
