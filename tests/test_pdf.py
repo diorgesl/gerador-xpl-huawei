@@ -254,3 +254,8 @@ def test_a_rota_recusa_asn_sem_tenant(api):
     r = api.get("/politica-cliente.pdf", params={"asn": 999})
     assert r.status_code == 404
     assert "999" in r.json()["erros"]["_"]
+
+
+def test_o_pdf_diz_o_que_o_cliente_recebe():
+    texto = secao("O que você recebe de nós")
+    assert "full table" in texto

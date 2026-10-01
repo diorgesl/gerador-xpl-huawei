@@ -283,3 +283,15 @@ def test_o_documento_avisa_para_nao_misturar_os_dois_blocos():
     # a unica ambiguidade que o PLANO marca como erro de leitura: os dois
     # blocos de escopo na mesma rota
     assert "misture" in texto(politica.documento(REDE)).lower()
+
+
+def test_o_documento_diz_o_que_o_cliente_pode_receber():
+    doc = politica.documento(REDE)
+    secao = next(s for s in doc.secoes if s.titulo == "O que você recebe de nós")
+    corpo = " ".join(secao.textos)
+    for trecho in ("default", "parcial", "IX", "full table"):
+        assert trecho in corpo, trecho
+    # a default combina com qualquer tabela, e e o que o cadastro novo recebe
+    assert "junto com qualquer" in corpo
+    # a parcial com IX leva a rota selecionada, e nao todo prefixo do IX
+    assert "fica de fora" in corpo

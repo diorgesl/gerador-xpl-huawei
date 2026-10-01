@@ -135,6 +135,27 @@ def _anuncio(rede):
     )
 
 
+def _recebido(rede):
+    # o que a sessao entrega e combinado na contratacao, e nao pedido por
+    # community: a secao diz as opcoes, e nao como pedir cada uma
+    return Secao(
+        titulo="O que você recebe de nós",
+        textos=(
+            "A sessão BGP com o AS%s entrega uma destas tabelas, combinada "
+            "na contratação: só a rota default; a tabela parcial, com os "
+            "prefixos do AS%s e dos nossos clientes; a parcial mais as rotas "
+            "que selecionamos pelo IX; ou a full table." % (rede.ASN, rede.ASN),
+            "Na parcial com IX vai a rota que escolhemos para cada prefixo "
+            "quando ela veio do IX. Um prefixo que alcançamos melhor por um "
+            "trânsito fica de fora, mesmo que também exista pelo IX.",
+            "A rota default (0.0.0.0/0 e ::/0) vai junto com qualquer uma "
+            "delas quando contratada. Sem pedido em contrário, a sessão nova "
+            "recebe só a default.",
+        ),
+        tabelas=(),
+    )
+
+
 def _prepend(rede):
     linhas = []
     for classe in (7, 1, 2, 3, 4, 5):
@@ -381,6 +402,7 @@ def documento(rede=None, peers=(), grupos=(), emitido_em=""):
         secoes=(
             _preferencia(rede),
             _anuncio(rede),
+            _recebido(rede),
             _prepend(rede),
             _por_asn(rede),
             _alias(rede, peers, grupos),
