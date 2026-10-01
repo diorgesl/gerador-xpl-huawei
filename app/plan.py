@@ -218,6 +218,18 @@ ORIGEM_ANUNCIAVEL = _origem_anunciavel()
 TABELAS = ("nenhuma", "parcial", "parcial_ix", "full")
 
 
+def exige_tabela(valor):
+    """O valor, se ele e um dos modos do plano; senao, o erro.
+
+    O portao do export escolhe o ramo pelo valor, e o ramo sem portao e o da
+    full table: um valor que escapasse da lista, gravado a mao no yaml, sairia
+    como full sem ninguem ter pedido. O render chama isto e para.
+    """
+    if valor not in TABELAS:
+        raise ValueError("tabela recebida invalida: %r" % (valor,))
+    return valor
+
+
 # a tabela parcial + IX: a anunciavel mais a origem que o import do IX
 # carimba. Uma lista so, e nao duas no mesmo if, para o portao do export de
 # cliente nao depender da precedencia de and/or (PLANO, armadilhas de fluxo).

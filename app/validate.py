@@ -45,6 +45,19 @@ def erros_para_dict(erros):
     return saida
 
 
+def erro_de_tabela(alvo):
+    """O Erro da tabela fora da lista, para quem le o yaml sem o validar.
+
+    O /saida e a config inteira renderizam o que esta gravado; o salvar ja
+    recusa a tabela invalida, mas o arquivo editado a mao nao passa por ele.
+    """
+    if alvo.tipo in plan.TIPOS_DOWNSTREAM and alvo.tabela not in plan.TABELAS:
+        nome = getattr(alvo, "token", None) or alvo.nome
+        return Erro("tabela", "tabela recebida invalida em %s: %r"
+                    % (nome, alvo.tabela))
+    return None
+
+
 def avisos(peer, peers, rede=None):
     """Coisas que o usuario precisa saber mas que nao impedem gerar."""
     # o Rede so chega ate aqui e nao ate o validar: o que depende do

@@ -273,3 +273,13 @@ def test_a_lista_de_grupos_traz_a_tabela(api, tmp_path):
 
 def test_o_plano_publica_as_tabelas(api):
     assert api.get("/api/plano").json()["tabelas"] == list(plan.TABELAS)
+
+
+def test_a_saida_do_grupo_recusa_tabela_invalida(api, tmp_path):
+    peers_mod.gravar_grupos(
+        [peers_mod.Grupo(id=3, nome="CLIENTES", tipo="cliente", classe="transito",
+                         origem=1100, pop=2001, tabela="tudo")],
+        caminho_tenant(tmp_path))
+    r = api.get("/api/grupos/3/saida")
+    assert r.status_code == 422
+    assert "tabela" in r.json()["erros"]

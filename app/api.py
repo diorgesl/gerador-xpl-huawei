@@ -372,6 +372,34 @@ def _origem_do_peer(peer, peers):
     return peers_mod.achar_id(peers, peer.politica_de)
 
 
+def _dono_do_export(peer):
+    """O peer, quando e ele quem define o proprio export.
+
+    O membro chama o export do grupo e quem reaproveita chama o da origem: a
+    tabela gravada neles nao chega a filtro nenhum, e recusar por ela seria
+    recusar por um valor que nao vale.
+    """
+    if peer.grupo_id is None and peer.politica_de is None:
+        return peer
+    return None
+
+
+def _tabela_invalida(alvos):
+    """O 422 da tabela fora da lista, no primeiro alvo que a tiver.
+
+    Os alvos sao quem define o export do bloco: o proprio peer avulso, o grupo
+    do membro e a origem de quem reaproveita. O render tambem para com o
+    valor invalido; isto e o que devolve o campo no lugar do 500.
+    """
+    for alvo in alvos:
+        if alvo is None:
+            continue
+        erro = validate.erro_de_tabela(alvo)
+        if erro is not None:
+            return _falha(422, [erro])
+    return None
+
+
 def _sem_origem(peer, peers):
     """O 422 de quem reaproveita de uma origem que o cadastro nao sustenta.
 
@@ -544,6 +572,10 @@ def saida_peer(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
     sem_origem = _sem_origem(peer, peers)
     if sem_origem is not None:
         return sem_origem
+    recusa = _tabela_invalida([_dono_do_export(peer), grupo,
+                               _origem_do_peer(peer, peers)])
+    if recusa is not None:
+        return recusa
     rede = _rede(t)
     return Saida(bloco=render.render_peer(peer, grupo=grupo, rede=rede,
                                           origem=_origem_do_peer(peer, peers)),
@@ -737,6 +769,9 @@ def saida_grupo(ident: int, t: tenants_mod.Tenant = Depends(tenant)):
     grupo = peers_mod.achar_grupo_id(_grupos(t), ident)
     if grupo is None:
         return _nao_encontrado("grupo")
+    recusa = _tabela_invalida([grupo])
+    if recusa is not None:
+        return recusa
     rede = _rede(t)
     # o grupo nao tem bloco de remocao: o Saida sai com o remover nulo
     return Saida(bloco=render.render_grupo(grupo, rede=rede),
@@ -912,6 +947,10 @@ def _secoes_da_config(t):
     # a ordem e a do "Ordem de colagem no F1A" do README: o base primeiro, o
     # grupo antes dos membros que herdam dele, e os prefixos proprios por
     # ultimo, que nao dependem de nem sustentam bloco nenhum
+    for grupo in grupos:
+        recusa = _tabela_invalida([grupo])
+        if recusa is not None:
+            return None, rede, recusa
     secoes = [_secao_base(rede, peers_mod.carregar_blocos(t.caminho))]
     secoes.extend(_secao_grupo(grupo, rede, t.saida) for grupo in grupos)
     for peer in peers:
@@ -928,6 +967,9 @@ def _secoes_da_config(t):
         sem_origem = _sem_origem(peer, peers)
         if sem_origem is not None:
             return None, rede, sem_origem
+        recusa = _tabela_invalida([_dono_do_export(peer)])
+        if recusa is not None:
+            return None, rede, recusa
         secoes.append(_secao_peer(peer, grupo, rede, t.saida,
                                   origem=_origem_do_peer(peer, peers)))
     originacao = _secao_originacao(peers_mod.carregar_blocos(t.caminho), rede,

@@ -2,8 +2,12 @@
 
 import re
 
+import pytest
+
+from app import peers as peers_mod
 from dados_api import (ASN_DE_TESTE, BLOCOS, CLIENTE, GRUPO_PARCEIROS,
                        GRUPO_UPSTREAM, arvore, caminho_tenant, membro_de)
+from test_render import peer_cliente
 
 
 def _chaves(api):
@@ -225,3 +229,22 @@ def test_origem_de_quem_reaproveita_que_saiu_recusa_a_config(api, tmp_path):
     assert r.status_code == 422
     assert r.json()["erros"]["politica_de"] == (
         "peer de origem nao encontrado no cadastro")
+
+
+@pytest.mark.parametrize("rota", ["/api/config", "/api/config/organizada"])
+def test_a_config_inteira_recusa_tabela_invalida(api, tmp_path, rota):
+    peers_mod.gravar([peer_cliente(tabela="tudo")], caminho_tenant(tmp_path))
+    r = api.get(rota)
+    assert r.status_code == 422
+    assert "tabela" in r.json()["erros"]
+
+
+@pytest.mark.parametrize("rota", ["/api/config", "/api/config/organizada"])
+def test_a_config_inteira_recusa_grupo_com_tabela_invalida(api, tmp_path, rota):
+    peers_mod.gravar_grupos(
+        [peers_mod.Grupo(id=3, nome="CLIENTES", tipo="cliente", classe="transito",
+                         origem=1100, pop=2001, tabela="tudo")],
+        caminho_tenant(tmp_path))
+    r = api.get(rota)
+    assert r.status_code == 422
+    assert "tabela" in r.json()["erros"]

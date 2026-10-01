@@ -454,3 +454,11 @@ def test_a_parcial_com_ix_e_a_anunciavel_mais_a_origem_do_ix():
     assert plan.ORIGEM_PARCIAL_IX == plan.ORIGEM_ANUNCIAVEL + ("64512:1300",)
     assert "64512:1500" not in plan.ORIGEM_PARCIAL_IX
     assert "64512:1400" not in plan.ORIGEM_PARCIAL_IX
+
+
+def test_exige_tabela_devolve_o_valor_da_lista_e_recusa_o_resto():
+    for valor in plan.TABELAS:
+        assert plan.exige_tabela(valor) == valor
+    for valor in ("", None, "PARCIAL", "tudo"):
+        with pytest.raises(ValueError):
+            plan.exige_tabela(valor)

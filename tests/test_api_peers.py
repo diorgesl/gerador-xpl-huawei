@@ -611,3 +611,19 @@ def test_o_fora_de_servico_volta_com_o_menos_na_frente(api, tmp_path):
         "!- 45.169.232.0/22 64512:210"]
     peer = peers_mod.carregar(caminho_tenant(tmp_path))[0]
     assert peer.prefixos["v4"][0].ativo is False
+
+
+def test_a_saida_recusa_tabela_invalida_do_yaml(api, tmp_path):
+    _grava(tmp_path, peer_cliente(tabela="PARCIAL"))
+    r = api.get("/api/peers/1/saida")
+    assert r.status_code == 422
+    assert "tabela" in r.json()["erros"]
+
+
+def test_a_saida_nao_recusa_a_tabela_ignorada_do_membro(api, tmp_path):
+    # o membro carrega a tabela gravada, mas quem define o export e o grupo
+    peers_mod.gravar_grupos(
+        [peers_mod.Grupo(id=3, nome="CLIENTES", tipo="cliente", classe="transito",
+                         origem=1100, pop=2001)], caminho_tenant(tmp_path))
+    _grava(tmp_path, peer_cliente(tabela="", grupo_id=3))
+    assert api.get("/api/peers/1/saida").status_code == 200

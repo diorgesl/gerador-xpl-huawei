@@ -3139,3 +3139,33 @@ def test_golden_do_cliente_com_a_linha_coberta():
         Bloco(prefixo="45.169.238.0/23", communities=["64512:5000"])],
         "v6": []}))
     assert texto == (GOLDEN / "cliente-coberto.txt").read_text(encoding="ascii")
+
+
+@pytest.mark.parametrize("valor", ["", "PARCIAL", "tudo", None])
+def test_tabela_invalida_nao_vira_full_no_render(valor):
+    # so o full explicito cai no ramo sem portao; o resto nao gera nada
+    with pytest.raises(ValueError):
+        render.render_peer(peer_cliente(tabela=valor))
+
+
+@pytest.mark.parametrize("tipo", ["cliente", "parceiro"])
+@pytest.mark.parametrize("tabela", ["nenhuma", "parcial", "parcial_ix", "full"])
+def test_matriz_dos_modos_nas_duas_familias(tipo, tabela):
+    peer = peer_cliente(tipo=tipo, tabela=tabela, sessoes={
+        "v4": {"local": "198.51.100.1", "remoto": "198.51.100.2"},
+        "v6": {"local": "2001:db8::1", "remoto": "2001:db8::2"}},
+        prefixos={"v4": ["45.169.232.0/22"], "v6": ["2001:db8:100::/48"]})
+    texto = render.render_peer(peer)
+    for fam in ("V4", "V6"):
+        export = _export(texto, fam=fam)
+        if tabela == "nenhuma":
+            assert [l.strip() for l in export.splitlines()
+                    if l.strip()] == ["refuse"], fam
+            continue
+        for veto in ("CL-RESTRICAO", "CL-BLACKHOLE", "CL-NOADV-CUST",
+                     "CL-ONLY-NOT-CLIENT", "{64512:0:268127}",
+                     "64512:1900"):
+            assert veto in export, (fam, veto)
+        assert ("CL-ORIGEM-ANUNCIAVEL" in export) == (tabela == "parcial")
+        assert ("CL-ORIGEM-PARCIAL-IX" in export) == (tabela == "parcial_ix")
+        assert export.strip().endswith("finish"), fam

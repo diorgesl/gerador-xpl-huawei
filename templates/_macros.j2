@@ -305,8 +305,11 @@ end-filter
 
 {% macro filtro_downstream_export(alvo, fam) -%}
 {% set U = fam|upper %}
+{# o exige_tabela para o render com valor fora da lista: o ramo sem portao e
+   o da full table, e so o "full" explicito pode chegar nele #}
+{% set tabela = plan.exige_tabela(alvo.tabela) %}
 xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
-{% if alvo.tabela == "nenhuma" %}
+{% if tabela == "nenhuma" %}
  {# So a default vai para esta sessao, e ela nao passa por este filtro: o VRP
     a origina por fora do export. Nao ha rota para vetar nem para prependar,
     e o filtro existe porque a sessao o referencia. #}
@@ -337,12 +340,12 @@ xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
  if community matches-any {{ plan.conjunto(plan.c(1900), plan.c(1901)) }} then
   refuse
  endif
-{% if alvo.tabela in ("parcial", "parcial_ix") %}
+{% if tabela in ("parcial", "parcial_ix") %}
  {# A tabela parcial: so a rota propria e a de cliente, e na parcial_ix tambem
     a aprendida no IX. A rota de upstream e de PNI para aqui. Vem depois dos
     vetos, que valem em qualquer tabela, e antes do prepend, que nao tem o
     que fazer com rota recusada. #}
- if not community matches-any {{ "CL-ORIGEM-PARCIAL-IX" if alvo.tabela == "parcial_ix" else "CL-ORIGEM-ANUNCIAVEL" }} then
+ if not community matches-any {{ "CL-ORIGEM-PARCIAL-IX" if tabela == "parcial_ix" else "CL-ORIGEM-ANUNCIAVEL" }} then
   refuse
  endif
 {% endif %}
