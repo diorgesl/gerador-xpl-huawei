@@ -1,0 +1,83 @@
+# gerado por bgpgen - nao editar a mao
+# grupo 3 - cliente - nome CLIENTES_REDUNDANTES
+# tabela recebida: parcial
+# pressupoe o bloco base ja aplicado neste equipamento
+
+# Filtro XPL Import
+xpl route-filter CUST-CLIENTES_REDUNDANTES-IMPORT-V4
+ call route-filter IMPORT-SANITY-V4
+ call route-filter APPLY-CUSTOMER-LP
+ apply community {64512:1100, 64512:2001} additive
+ refuse
+end-filter
+
+xpl route-filter CUST-CLIENTES_REDUNDANTES-EXPORT-V4
+ if community matches-any CL-RESTRICAO then
+  refuse
+ endif
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
+ if community matches-any CL-NOADV-CUST then
+  refuse
+ endif
+ if community matches-any CL-ONLY-NOT-CLIENT then
+  refuse
+ endif
+ if community matches-any {64512:1900, 64512:1901} then
+  refuse
+ endif
+ if not community matches-any CL-ORIGEM-ANUNCIAVEL then
+  refuse
+ endif
+ finish
+end-filter
+# Filtro XPL Import
+xpl route-filter CUST-CLIENTES_REDUNDANTES-IMPORT-V6
+ call route-filter IMPORT-SANITY-V6
+ call route-filter APPLY-CUSTOMER-LP
+ apply community {64512:1100, 64512:2001} additive
+ refuse
+end-filter
+
+xpl route-filter CUST-CLIENTES_REDUNDANTES-EXPORT-V6
+ if community matches-any CL-RESTRICAO then
+  refuse
+ endif
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
+ if community matches-any CL-NOADV-CUST then
+  refuse
+ endif
+ if community matches-any CL-ONLY-NOT-CLIENT then
+  refuse
+ endif
+ if community matches-any {64512:1900, 64512:1901} then
+  refuse
+ endif
+ if not community matches-any CL-ORIGEM-ANUNCIAVEL then
+  refuse
+ endif
+ finish
+end-filter
+
+
+bgp 64512
+ group CLIENTES_REDUNDANTES external
+ peer CLIENTES_REDUNDANTES public-as-only force
+ peer CLIENTES_REDUNDANTES capability-advertise graceful-restart
+ peer CLIENTES_REDUNDANTES bfd enable
+
+ ipv4-family unicast
+  peer CLIENTES_REDUNDANTES enable
+  peer CLIENTES_REDUNDANTES route-filter CUST-CLIENTES_REDUNDANTES-IMPORT-V4 import
+  peer CLIENTES_REDUNDANTES route-filter CUST-CLIENTES_REDUNDANTES-EXPORT-V4 export
+  peer CLIENTES_REDUNDANTES advertise-community
+  peer CLIENTES_REDUNDANTES advertise-large-community
+ ipv6-family unicast
+  peer CLIENTES_REDUNDANTES enable
+  peer CLIENTES_REDUNDANTES route-filter CUST-CLIENTES_REDUNDANTES-IMPORT-V6 import
+  peer CLIENTES_REDUNDANTES route-filter CUST-CLIENTES_REDUNDANTES-EXPORT-V6 export
+  peer CLIENTES_REDUNDANTES advertise-community
+  peer CLIENTES_REDUNDANTES advertise-large-community

@@ -1,5 +1,6 @@
 # gerado por bgpgen - nao editar a mao
 # peer 2 - cliente - AS270620 - token NETMAC-BKP
+# tabela recebida: full (a do peer NETMAC, de quem a politica vem)
 # pressupoe o bloco base ja aplicado neste equipamento
 
 bgp 64512

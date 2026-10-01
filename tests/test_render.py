@@ -296,11 +296,12 @@ def test_default_route_sai_nas_duas_familias():
 
 
 def test_default_route_avisa_no_cabecalho():
-    # o comando so anuncia havendo um default na tabela do equipamento, e o
-    # gerador nao tem como conferir isso: o aviso sai antes da colagem
+    # o VRP origina a default nesta sessao mesmo sem default na tabela, e o
+    # filtro de export nao a ve: o aviso diz isso antes da colagem
     texto = render.render_peer(peer_cliente(default_route=True))
-    cabecalho = [l for l in texto.splitlines()[:6] if l.startswith("#")]
-    assert any("default" in l for l in cabecalho)
+    cabecalho = [l for l in texto.splitlines()[:8] if l.startswith("#")]
+    assert ("# default route: o VRP origina 0/0 e ::/0 nesta sessao mesmo "
+            "sem default na tabela") in cabecalho
 
 
 def test_filtro_com_asn_falsy_pula_confinamento_por_as_path():
@@ -403,6 +404,103 @@ def test_o_parceiro_emite_os_mesmos_objetos_do_cliente():
 def test_golden_do_parceiro():
     assert render.render_peer(peer_parceiro()) == (
         GOLDEN / "parceiro.txt").read_text(encoding="ascii")
+
+
+def _export(texto, token="268127", fam="V4"):
+    return texto.split("xpl route-filter CUST-%s-EXPORT-%s" % (token, fam))[1] \
+        .split("end-filter")[0]
+
+
+def test_tabela_full_nao_tem_portao():
+    export = _export(render.render_peer(peer_cliente(tabela="full")))
+    assert "CL-ORIGEM-ANUNCIAVEL" not in export
+    assert "CL-ORIGEM-PARCIAL-IX" not in export
+    assert export.strip().endswith("finish")
+
+
+def test_tabela_nenhuma_recusa_tudo():
+    # a default nao passa por este filtro: o VRP a origina por fora dele
+    export = _export(render.render_peer(peer_cliente(tabela="nenhuma")))
+    linhas = [l.strip() for l in export.splitlines()
+              if l.strip() and not l.strip().startswith("#")]
+    assert linhas == ["refuse"]
+
+
+def test_tabela_parcial_so_libera_propria_e_de_cliente():
+    export = _export(render.render_peer(peer_cliente(tabela="parcial")))
+    assert ("if not community matches-any CL-ORIGEM-ANUNCIAVEL then\n"
+            "  refuse\n endif") in export
+    assert "CL-ORIGEM-PARCIAL-IX" not in export
+
+
+def test_tabela_parcial_ix_usa_a_lista_com_o_ix():
+    export = _export(render.render_peer(peer_cliente(tabela="parcial_ix")))
+    assert ("if not community matches-any CL-ORIGEM-PARCIAL-IX then\n"
+            "  refuse\n endif") in export
+
+
+def test_o_portao_vem_depois_dos_vetos_e_antes_do_prepend():
+    export = _export(render.render_peer(peer_cliente(tabela="parcial")))
+    assert export.index("CL-RESTRICAO") < export.index("CL-ORIGEM-ANUNCIAVEL")
+    assert export.index("64512:1901") < export.index("CL-ORIGEM-ANUNCIAVEL")
+    assert export.index("CL-ORIGEM-ANUNCIAVEL") < export.index("{64512:3:268127}")
+
+
+def test_o_cabecalho_do_downstream_diz_a_tabela():
+    texto = render.render_peer(peer_cliente(tabela="parcial"))
+    assert "# tabela recebida: parcial" in texto.splitlines()[:8]
+
+
+def test_o_cabecalho_do_upstream_nao_fala_de_tabela():
+    assert "tabela recebida" not in render.render_peer(peer_upstream())
+
+
+def test_o_membro_mostra_a_tabela_do_grupo_e_nao_a_dele():
+    # o export do membro chama o do grupo: a tabela gravada no membro nao
+    # vale, e o cabecalho nao pode dizer que vale
+    grupo = grupo_cliente_sem_asn()
+    grupo.tabela = "parcial"
+    membro = peer_membro_sem_override(grupo.id)
+    membro.tipo = "cliente"
+    membro.tabela = "full"
+    texto = render.render_peer(membro, grupo=grupo)
+    assert ("# tabela recebida: parcial (a do grupo %s)" % grupo.nome
+            in texto.splitlines()[:8])
+    assert "CL-ORIGEM" not in texto
+
+
+def test_o_grupo_de_cliente_aplica_o_portao():
+    grupo = grupo_cliente_sem_asn()
+    grupo.tabela = "parcial"
+    texto = render.render_grupo(grupo)
+    assert "# tabela recebida: parcial" in texto
+    assert "if not community matches-any CL-ORIGEM-ANUNCIAVEL then" in texto
+
+
+def test_quem_reaproveita_mostra_a_tabela_da_origem():
+    origem = peer_cliente(tabela="parcial_ix")
+    copia = peer_cliente(id=2, apelido="ACME-BKP", tabela="nenhuma",
+                         politica_de=origem.id)
+    texto = render.render_peer(copia, origem=origem)
+    assert any(l.startswith("# tabela recebida: parcial_ix")
+               for l in texto.splitlines()[:8])
+
+
+@pytest.mark.parametrize("arquivo,tabela", [
+    ("cliente-nenhuma.txt", "nenhuma"),
+    ("cliente-parcial.txt", "parcial"),
+    ("cliente-parcial-ix.txt", "parcial_ix"),
+])
+def test_golden_do_cliente_por_tabela(arquivo, tabela):
+    assert render.render_peer(peer_cliente(tabela=tabela, default_route=True)) == (
+        GOLDEN / arquivo).read_text(encoding="ascii")
+
+
+def test_golden_do_grupo_de_cliente_parcial():
+    grupo = grupo_cliente_sem_asn()
+    grupo.tabela = "parcial"
+    assert render.render_grupo(grupo) == (
+        GOLDEN / "grupo-cliente-parcial.txt").read_text(encoding="ascii")
 
 
 # Fix round 2: o golden nao pega esta. Ele cobre so um peer v4-only, entao o
@@ -1696,13 +1794,13 @@ def test_bloco_do_grupo_sem_asn_nao_confina_e_nega_por_padrao():
 
 def test_bloco_do_grupo_com_default_route_avisa_e_anuncia():
     texto = render.render_grupo(grupo_com_asn(default_route=True))
-    assert "a default route vai para este cliente: confirme que ha um default na tabela" in texto
+    assert "default route: o VRP origina 0/0 e ::/0" in texto
     assert "peer UP-REDUNDANTE default-route-advertise" in texto
 
 
 def test_bloco_do_grupo_sem_default_route_nao_avisa_nem_anuncia():
     texto = render.render_grupo(grupo_com_asn())
-    assert "a default route vai para este cliente" not in texto
+    assert "default route: o VRP origina 0/0 e ::/0" not in texto
     assert "default-route-advertise" not in texto
 
 

@@ -1,6 +1,7 @@
 # gerado por bgpgen - nao editar a mao
 # peer 1 - cliente - AS268127 - token 268127
-# tabela recebida: full
+# tabela recebida: nenhuma
+# default route: o VRP origina 0/0 e ::/0 nesta sessao mesmo sem default na tabela
 # pressupoe o bloco base ja aplicado neste equipamento
 
 xpl ip-prefix-list PL-CUST-268127-V4
@@ -38,32 +39,7 @@ xpl route-filter CUST-268127-IMPORT-V4
 end-filter
 
 xpl route-filter CUST-268127-EXPORT-V4
- if community matches-any CL-RESTRICAO then
-  refuse
- endif
- if community matches-any CL-BLACKHOLE or tag eq 666 then
-  refuse
- endif
- if community matches-any CL-NOADV-CUST then
-  refuse
- endif
- if community matches-any CL-ONLY-NOT-CLIENT then
-  refuse
- endif
- if large-community matches-any {64512:0:268127} then
-  refuse
- endif
- if community matches-any {64512:1900, 64512:1901} then
-  refuse
- endif
- if large-community matches-any {64512:3:268127} then
-  apply as-path 64512 3 additive
- elseif large-community matches-any {64512:2:268127} then
-  apply as-path 64512 2 additive
- elseif large-community matches-any {64512:1:268127} then
-  apply as-path 64512 1 additive
- endif
- finish
+ refuse
 end-filter
 
 xpl as-path-list AP-CUST-268127
@@ -89,3 +65,4 @@ bgp 64512
   peer 198.51.100.2 route-filter CUST-268127-EXPORT-V4 export
   peer 198.51.100.2 advertise-community
   peer 198.51.100.2 advertise-large-community
+  peer 198.51.100.2 default-route-advertise

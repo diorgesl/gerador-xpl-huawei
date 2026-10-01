@@ -1,11 +1,26 @@
-{% macro cabecalho(peer) -%}
+{% macro cabecalho(peer, grupo=none, origem=none) -%}
 # gerado por bgpgen - nao editar a mao
 # peer {{ peer.id }} - {{ peer.tipo }} - AS{{ peer.asn }} - token {{ peer.token }}
+{# A tabela que vale e a de quem define o export: o grupo, no membro, porque
+   o export do membro termina chamando o do grupo; a origem, em quem
+   reaproveita, porque o bloco dele chama os filtros dela. O valor gravado no
+   proprio peer nesses dois casos nao chega a filtro nenhum. #}
+{% if peer.tipo in plan.TIPOS_DOWNSTREAM %}
+{% if origem is not none %}
+# tabela recebida: {{ origem.tabela }} (a do peer {{ origem.token }}, de quem a politica vem)
+{% elif grupo %}
+# tabela recebida: {{ grupo.tabela }} (a do grupo {{ grupo.nome }})
+{% else %}
+# tabela recebida: {{ peer.tabela }}
+{% endif %}
+{% endif %}
 {# o aviso da default route nao cabe no bloco bgp: nenhum tipo tem comentario
    renderizado dentro do grupo de sessao nem da familia. Ele fica aqui, que e
-   o que o operador le antes de colar. #}
+   o que o operador le antes de colar. O VRP origina a default nesta sessao
+   mesmo sem default na RIB, e por fora do route-filter de export
+   (confirmado no equipamento). #}
 {% if peer.default_route %}
-# a default route vai para este cliente: confirme que ha um default na tabela
+# default route: o VRP origina 0/0 e ::/0 nesta sessao mesmo sem default na tabela
 {% endif %}
 # pressupoe o bloco base ja aplicado neste equipamento
 {%- endmacro %}
@@ -218,8 +233,11 @@ end-filter
 {% macro cabecalho_grupo(grupo) -%}
 # gerado por bgpgen - nao editar a mao
 # grupo {{ grupo.id }} - {{ grupo.tipo }} - nome {{ grupo.nome }}
+{% if grupo.tipo in plan.TIPOS_DOWNSTREAM %}
+# tabela recebida: {{ grupo.tabela }}
+{% endif %}
 {% if grupo.default_route %}
-# a default route vai para este cliente: confirme que ha um default na tabela
+# default route: o VRP origina 0/0 e ::/0 nesta sessao mesmo sem default na tabela
 {% endif %}
 # pressupoe o bloco base ja aplicado neste equipamento
 {%- endmacro %}
@@ -288,6 +306,12 @@ end-filter
 {% macro filtro_downstream_export(alvo, fam) -%}
 {% set U = fam|upper %}
 xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
+{% if alvo.tabela == "nenhuma" %}
+ {# So a default vai para esta sessao, e ela nao passa por este filtro: o VRP
+    a origina por fora do export. Nao ha rota para vetar nem para prependar,
+    e o filtro existe porque a sessao o referencia. #}
+ refuse
+{% else %}
  {# Restricao padronizada recebida: a rota nao sai do AS, e isso vale tambem
     para a entrega ao cliente, que e eBGP. Vem antes de tudo, e o egresso de
     cliente e o unico caminho que nao passa pelo EXPORT-SANITY. #}
@@ -313,6 +337,15 @@ xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
  if community matches-any {{ plan.conjunto(plan.c(1900), plan.c(1901)) }} then
   refuse
  endif
+{% if alvo.tabela in ("parcial", "parcial_ix") %}
+ {# A tabela parcial: so a rota propria e a de cliente, e na parcial_ix tambem
+    a aprendida no IX. A rota de upstream e de PNI para aqui. Vem depois dos
+    vetos, que valem em qualquer tabela, e antes do prepend, que nao tem o
+    que fazer com rota recusada. #}
+ if not community matches-any {{ "CL-ORIGEM-PARCIAL-IX" if alvo.tabela == "parcial_ix" else "CL-ORIGEM-ANUNCIAVEL" }} then
+  refuse
+ endif
+{% endif %}
 {% if alvo.asn %}
  if large-community matches-any {{ plan.conjunto(plan.c_large(3, alvo.asn)) }} then
   apply as-path {{ plan.ASN }} 3 additive
@@ -323,6 +356,7 @@ xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
  endif
 {% endif %}
  finish
+{% endif %}
 end-filter
 {%- endmacro %}
 

@@ -1,5 +1,6 @@
 # gerado por bgpgen - nao editar a mao
 # peer 1 - cliente - AS268127 - token 268127
+# tabela recebida: full
 # pressupoe o bloco base ja aplicado neste equipamento
 
 xpl ip-prefix-list PL-CUST-268127-V4

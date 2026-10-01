@@ -1,5 +1,6 @@
 # gerado por bgpgen - nao editar a mao
 # peer 9 - parceiro - AS64500 - token 64500
+# tabela recebida: full
 # pressupoe o bloco base ja aplicado neste equipamento
 
 xpl ip-prefix-list PL-CUST-64500-V4

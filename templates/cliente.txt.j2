@@ -3,7 +3,7 @@
    o segundo lugar para esquecer quando ela mudar. A diferenca entre os dois
    e a marca de 2091, que entra pelo plan.c_downstream. #}
 {% import "_macros.j2" as m %}
-{{ m.cabecalho(peer) }}
+{{ m.cabecalho(peer, grupo, origem) }}
 
 {# `is not none`, e nao a verdade do valor: o id 0 e uma origem legitima -
    e o primeiro peer de um tenant novo -, e no `if peer.politica_de` ele
