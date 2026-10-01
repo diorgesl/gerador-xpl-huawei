@@ -137,6 +137,7 @@ O detalhe por ASN vai na large community `64512:1000:<ASN>`, descrita adiante. A
 | `64512:9003` | RPKI Invalid (apenas em modo observação) |
 | `64512:9010` | Aceito via IRR / AS-SET                  |
 | `64512:9011` | Aceito por exceção manual (ticket)       |
+| `64512:9020` | Restrição padronizada recebida (não anunciar) |
 | `64512:9666` | Prefixo em blackhole                     |
 
 ## Communities de ação
@@ -1265,7 +1266,14 @@ xpl route-filter UP-IMPORT-14840($lp_base)
  !- overwrite: nada do que o upstream escreveu em community sobrevive.
  !- e o que torna seguro o matches-any CL-ORIGEM-ANUNCIAVEL no export.
  !- 2000 marca "aprendida de fora", e o export de outro upstream recusa.
- apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+ !- a restricao padronizada recebida (NO_EXPORT, NO_ADVERTISE ou
+ !- NO_EXPORT_SUBCONFED) e relida aqui, dentro do ramo que carimba, porque
+ !- depois do overwrite ela nao existe mais: ela volta como a marca propria
+ if community matches-any CL-RESTRICAO then
+  apply community {64512:1400, 64512:3100, 64512:2000, 64512:9020} overwrite
+ else
+  apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+ endif
  apply large-community {64512:1000:14840} overwrite
 
  !- excecoes de TE, aplicadas depois do carimbo base
@@ -1754,6 +1762,37 @@ O filtro é chamado pelos imports de **upstream, IX e PNI**, logo depois do
 legítima daquela sessão. A lista sai dos blocos ativos do cadastro, podada
 pelos que já estão dentro de outro (o `le 32` de um agregado alcança os
 pedaços), porque esse filtro roda no import de toda sessão externa.
+
+### Restrição padronizada recebida
+
+`NO_EXPORT` (`65535:65281`), `NO_ADVERTISE` (`65535:65282`) e
+`NO_EXPORT_SUBCONFED` (`65535:65283`) são as três communities da RFC 1997 que
+dizem "não anunciar". O carimbo do import externo substitui a community
+recebida, e a restrição iria junto: uma rota que chega marcada assim deixaria
+de estar restrita e passaria a ser anunciada ao cliente, que é eBGP.
+
+A restrição é relida **dentro do ramo que carimba**, que é a única janela em
+que ela ainda existe, e volta como a marca própria `64512:9020`:
+
+```scss
+ if community matches-any CL-RESTRICAO then
+  apply community {64512:1400, 64512:3100, 64512:2000, 64512:9020} overwrite
+ else
+  apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+ endif
+```
+
+O `CL-RESTRICAO` casa as três de uma vez, então duas restrições juntas não têm
+como uma apagar a outra antes de ser vista, que é o problema que um ramo por
+valor teria. A marca é do nosso namespace de propósito: o peer não consegue
+forjar a restrição de ninguém, e a que ele escrever de verdade chega como
+restrição dele mesmo, que é o efeito pretendido.
+
+O veto vale em destino nenhum, e por isso está em três lugares: no
+`EXPORT-SANITY`, que cobre os egressos de upstream, IX e PNI; no egresso de
+cliente, que não passa por ele; e dentro do ramo de RTBH do export de upstream,
+que termina em `finish` antes dos outros dois. A rota restrita continua na
+tabela e serve para o encaminhamento local; o que ela perde é o anúncio.
 
 ### IRR
 

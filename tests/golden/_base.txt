@@ -70,6 +70,13 @@ xpl community-list CL-GSHUT
  65535:0
 end-list
 
+xpl community-list CL-RESTRICAO
+ 65535:65281,
+ 65535:65282,
+ 65535:65283,
+ 64512:9020
+end-list
+
 xpl community-list CL-ORIGEM-ANUNCIAVEL
  64512:1000,
  64512:1100,
@@ -152,6 +159,9 @@ xpl route-filter REJEITA-BLOCO-PROPRIO-V6
 end-filter
 
 xpl route-filter EXPORT-SANITY
+ if community matches-any CL-RESTRICAO then
+  refuse
+ endif
  if community matches-any {64512:1900, 64512:1901} then
   refuse
  endif

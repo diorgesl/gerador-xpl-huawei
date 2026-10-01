@@ -939,9 +939,17 @@ def test_o_import_de_cada_tipo_externo_responde_ao_gshut_do_vizinho():
         # o ramo vem antes do carimbo, que e quem apaga a community
         assert (filtro.index("if community matches-any CL-GSHUT")
                 < filtro.index("apply community")), nome
-        ramo = filtro.split("if community matches-any CL-GSHUT then")[1]
-        linhas = [l.strip() for l in ramo.split("endif")[0].splitlines()
-                  if l.strip()]
+        # o corpo do ramo e o que esta indentado um nivel a mais que o corpo
+        # do filtro: o carimbo de dentro dele tem if/else proprio, entao cortar
+        # no primeiro endif pegaria o de dentro
+        linhas = []
+        for linha in filtro.split("if community matches-any CL-GSHUT then\n")[1].splitlines():
+            if not linha.strip():
+                continue
+            if not linha.startswith("  "):
+                break
+            linhas.append(linha.strip())
+        assert "if community matches-any CL-RESTRICAO then" in linhas, (nome, linhas)
         # o ramo carimba (sem isso a rota drenada sai sem classificacao e o
         # EXPORT-SANITY a recusa no egress), drena com LP 0 e encerra o
         # filtro, para o 250, o 500 e o LP do CDN preferido nao passarem por
@@ -1017,6 +1025,46 @@ def test_o_rtbh_do_export_de_upstream_respeita_bloqueio_e_escopo():
     assert plan.c(200) not in checagem
     # e as checagens vem antes do finish que aceita
     assert ramo.index("CL-ONLY-NOT-UP") < ramo.index("finish")
+
+
+def test_o_import_externo_preserva_a_restricao_padronizada():
+    """NO_EXPORT, NO_ADVERTISE e NO_EXPORT_SUBCONFED dizem "nao anunciar", e o
+    carimbo do import apaga a community recebida. A restricao e relida dentro
+    do ramo que carimba, que e a unica janela em que ela existe, e volta como
+    a marca propria: o egresso recusa rota marcada em qualquer destino. O
+    `matches-any` de uma lista so le as tres de uma vez, entao duas restricoes
+    juntas nao tem como uma apagar a outra antes de ser vista."""
+    from app import plan
+    base = render.render_base()
+    assert [l.strip() for l in base.split("xpl community-list CL-RESTRICAO")[1].split("end-list")[0].splitlines() if l.strip()] == [
+        "%s," % plan.RESTRICOES[0], "%s," % plan.RESTRICOES[1],
+        "%s," % plan.RESTRICOES[2], plan.RESTRICAO]
+
+    for nome, peer, marca in (("upstream", peer_upstream(), "UP-14840-IMPORT-V4"),
+                              ("ix", peer_ix(), "IX-IX-SP-IMPORT-V4"),
+                              ("pni", peer_pni(), "PNI-CDN-A-IMPORT-V4")):
+        filtro = render.render_peer(peer)
+        filtro = filtro[filtro.index("xpl route-filter %s" % marca):]
+        filtro = filtro[:filtro.index("end-filter")]
+        # duas vezes: o ramo de GSHUT e o caminho normal carimbam os dois
+        assert filtro.count("if community matches-any CL-RESTRICAO then") == 2, nome
+        # o ramo de cima carimba com a marca, o de baixo sem ela
+        assert "apply community {64512:1400, 64512:3100, 64512:2000, 64512:9020} overwrite" in filtro or \
+               "64512:9020} overwrite" in filtro, nome
+
+
+def test_o_egresso_recusa_rota_com_restricao_padronizada():
+    """Em destino nenhum: o EXPORT-SANITY cobre upstream, IX e PNI; o egresso
+    de cliente nao passa por ele e tem a checagem propria; e o ramo de RTBH do
+    upstream termina em finish antes dos dois, entao tem a dele."""
+    assert "if community matches-any CL-RESTRICAO then" in render.render_base()
+    for peer in (peer_cliente(), peer_parceiro()):
+        assert "if community matches-any CL-RESTRICAO then" in render.render_peer(peer)
+
+    texto = render.render_peer(peer_upstream())
+    ramo = texto.split("if community matches-any CL-BLACKHOLE-PROPAGATE then")[1]
+    ramo = ramo.split("else")[0]
+    assert "if community matches-any CL-RESTRICAO then" in ramo
 
 
 def test_peer_sem_descricao_nao_emite_a_linha_do_description():

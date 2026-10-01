@@ -34,6 +34,9 @@ xpl route-filter CUST-268127-IMPORT-V4
 end-filter
 
 xpl route-filter CUST-268127-EXPORT-V4
+ if community matches-any CL-RESTRICAO then
+  refuse
+ endif
  if community matches-any CL-NOADV-CUST then
   refuse
  endif

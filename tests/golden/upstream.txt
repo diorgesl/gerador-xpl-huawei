@@ -14,13 +14,21 @@ xpl route-filter UP-14840-IMPORT-V4
   refuse
  endif
  if community matches-any CL-GSHUT then
-  apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+  if community matches-any CL-RESTRICAO then
+   apply community {64512:1400, 64512:3100, 64512:2000, 64512:9020} overwrite
+  else
+   apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+  endif
   apply large-community {64512:1000:14840} overwrite
   apply local-preference 0
   finish
  endif
  apply local-preference 100
- apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+ if community matches-any CL-RESTRICAO then
+  apply community {64512:1400, 64512:3100, 64512:2000, 64512:9020} overwrite
+ else
+  apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+ endif
  apply large-community {64512:1000:14840} overwrite
  if ip route-destination in PL-TE-PREFER-14840-V4 or as-path in AP-TE-PREFER-14840 then
   apply local-preference 250
@@ -38,6 +46,9 @@ xpl route-filter UP-14840-EXPORT-V4
     refuse
    endif
    if community matches-any CL-ONLY-NOT-UP then
+    refuse
+   endif
+   if community matches-any CL-RESTRICAO then
     refuse
    endif
    apply community {14840:666} overwrite
