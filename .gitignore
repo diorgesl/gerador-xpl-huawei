@@ -61,3 +61,5 @@ BGP_EXEMPLO.txt
 # grafo derivado do codigo e do config acima, refaz com o graphify
 graphify-out/
 compose.yaml
+
+bagulhos/
