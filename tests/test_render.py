@@ -925,8 +925,10 @@ def test_o_import_de_cada_tipo_externo_responde_ao_gshut_do_vizinho():
     ultima escrita de local-preference - antes das outras, a drenagem pedida
     pelo vizinho seria sobrescrita. O ponto em aberto do PLANO fica fechado
     nos tres tipos, que antes so o cliente respondia."""
+    # `finish` nos tres: `approve` nao encerra o processamento, so reencaminha
+    # para o proximo `if`, e o LP 100/500 de baixo passaria por cima do zero
     for nome, peer, marca, fim in (
-            ("upstream", peer_upstream(), "UP-14840-IMPORT-V4", "approve"),
+            ("upstream", peer_upstream(), "UP-14840-IMPORT-V4", "finish"),
             ("ix", peer_ix(), "IX-IX-SP-IMPORT-V4", "finish"),
             ("pni", peer_pni(), "PNI-CDN-A-IMPORT-V4", "finish")):
         texto = render.render_peer(peer)
@@ -1565,8 +1567,8 @@ def test_bloco_do_grupo_sem_asn_nao_confina_e_nega_por_padrao():
     for fam in ("V4", "V6"):
         filtro = texto[texto.index("xpl route-filter CUST-PARCEIROS_CDN-IMPORT-%s" % fam):]
         filtro = filtro[:filtro.index("end-filter")]
-        assert [l.strip() for l in filtro.splitlines() if l.strip()][-2:] == [
-            "refuse", "finish"], filtro
+        # `refuse` e terminal: nao ha `finish` depois dele
+        assert [l.strip() for l in filtro.splitlines() if l.strip()][-1] == "refuse", filtro
 
 
 def test_bloco_do_grupo_com_default_route_avisa_e_anuncia():

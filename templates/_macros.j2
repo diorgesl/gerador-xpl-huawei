@@ -194,15 +194,17 @@ xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
 {% endfor %}
  endif
 {% endif %}
-{% if not confinar_prefixo %}
+{% if confinar_prefixo %}
+ finish
+{% else %}
  {#- sem confinamento nao ha whitelist nenhuma: o import aceitaria qualquer
      prefixo que passasse pelo sanity e o carimbaria como de cliente, que e
      rota anunciável no egress. Negar por padrao inverte isso, e e o que
      protege o membro de grupo que nao trouxe prefixo proprio - o de hoje
-     todos trazem, mas o proximo so entra na internet depois de trazer. #}
+     todos trazem, mas o proximo so entra na internet depois de trazer. O
+     `refuse` e terminal, entao nao ha `finish` depois dele. #}
  refuse
 {% endif %}
- finish
 end-filter
 {%- endmacro %}
 
@@ -349,7 +351,10 @@ xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
   apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
   apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
   apply local-preference 0
-  approve
+  {# finish, e nao approve: `approve` NAO encerra o processamento, so
+     reencaminha para o proximo `if` (PLANO, referencia de sintaxe XPL), e as
+     escritas de LP de baixo poriam 100 ou 500 por cima da drenagem. #}
+  finish
  endif
  apply local-preference {{ alvo.lp_base }}
  {# overwrite: nada do que o upstream escreveu em community sobrevive. e o que
