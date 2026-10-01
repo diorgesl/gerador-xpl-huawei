@@ -4,6 +4,7 @@
 
 xpl route-filter PNI-CDN-A-IMPORT-V4
  call route-filter IMPORT-SANITY-V4
+ call route-filter REJEITA-BLOCO-PROPRIO-V4
 
  if not as-path in AP-CDN-A-ALLOWED then
   refuse

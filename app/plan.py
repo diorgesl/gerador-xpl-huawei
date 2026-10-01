@@ -442,6 +442,32 @@ def entrada_do_prefixo(cidr, ate=None):
     return "%s le %d" % (cidr_para_xpl(cidr), ate)
 
 
+def blocos_minimos(blocos):
+    """Os blocos que nao estao dentro de outro bloco da mesma lista.
+
+    O cadastro guarda o agregado e os pedacos dele, porque as linhas
+    `network` sao por prefixo. No filtro que recusa o prefixo proprio vindo
+    de fora o `le 32` de um agregado ja alcanca os pedacos: sem esta poda o
+    mesmo refuse se repete uma vez por pedaco, num filtro que roda no import
+    de toda sessao externa. Bloco repetido na lista tambem cai fora.
+    """
+    saida = []
+    vistos = set()
+    for bloco in blocos:
+        rede = ipaddress.ip_network(bloco.prefixo, strict=False)
+        if str(rede) in vistos:
+            continue
+        vistos.add(str(rede))
+        coberto = any(
+            rede.subnet_of(outra)
+            for outra in (ipaddress.ip_network(b.prefixo, strict=False)
+                          for b in blocos)
+            if str(outra) != str(rede))
+        if not coberto:
+            saida.append(bloco)
+    return saida
+
+
 def conjunto_do_prefixo(cidr, ate=None):
     """O conjunto inline de um prefixo: `{45.169.232.0 22}` ou `{... 22 le 24}`.
 

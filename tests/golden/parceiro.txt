@@ -61,7 +61,7 @@ xpl as-path-list AP-CUST-64500
 end-list
 
 xpl route-filter APPLY-PEER-64500
- apply community community-list CL-PEER-64500 additive
+ apply community CL-PEER-64500 additive
  break
 end-filter
 

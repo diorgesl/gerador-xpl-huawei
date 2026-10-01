@@ -4,10 +4,7 @@
 
 xpl route-filter IX-IX-SP-IMPORT-V4
  call route-filter IMPORT-SANITY-V4
-
- if as-path length ge 4 then
-  refuse
- endif
+ call route-filter REJEITA-BLOCO-PROPRIO-V4
 
  if community matches-any CL-GSHUT then
   apply community {64512:1300, 64512:3010, 64512:2000} overwrite

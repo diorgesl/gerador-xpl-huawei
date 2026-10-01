@@ -143,6 +143,14 @@ xpl route-filter IMPORT-SANITY-V6
  break
 end-filter
 
+xpl route-filter REJEITA-BLOCO-PROPRIO-V4
+ break
+end-filter
+
+xpl route-filter REJEITA-BLOCO-PROPRIO-V6
+ break
+end-filter
+
 xpl route-filter EXPORT-SANITY
  if community matches-any {64512:1900, 64512:1901} then
   refuse

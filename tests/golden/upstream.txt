@@ -9,6 +9,7 @@ end-list
 
 xpl route-filter UP-14840-IMPORT-V4
  call route-filter IMPORT-SANITY-V4
+ call route-filter REJEITA-BLOCO-PROPRIO-V4
  if as-path in AP-BLOCK-14840 then
   refuse
  endif
@@ -123,7 +124,7 @@ xpl as-path-list AP-OWN-14840
 end-list
 
 xpl route-filter APPLY-PEER-14840
- apply community community-list CL-PEER-14840 additive
+ apply community CL-PEER-14840 additive
  break
 end-filter
 

@@ -147,6 +147,29 @@ xpl route-filter IMPORT-SANITY-{{ fam|upper }}
 end-filter
 
 {% endfor %}
+{# PLANO.md / RPKI, IRR e anti-leak. O prefixo proprio nao volta de fora: nem
+   o agregado nem os mais especificos dele, e a ancora NULL0 nao impede o
+   desvio, porque no encaminhamento o mais especifico ganha. Quem chama este
+   filtro sao os imports de upstream, IX e PNI, onde nao ha whitelist - no
+   import de cliente quem confina e o PL-CUST do cadastro dele, e um bloco
+   alocado para ele dentro do nosso agregado e rota legitima da sessao.
+
+   O filtro sai sempre, mesmo sem bloco cadastrado, para as tres sessoes
+   poderem chama-lo sem depender do cadastro: sem bloco ele so fecha em break
+   e nao decide nada. So o bloco ativo entra na lista, que e o mesmo portao do
+   bloco da originacao. #}
+{% for fam in ["v4", "v6"] %}
+{% set fim = 128 if fam == "v6" else 32 %}
+xpl route-filter REJEITA-BLOCO-PROPRIO-{{ fam|upper }}
+{% for b in plan.blocos_minimos(blocos.get(fam, []) | selectattr("ativo")) %}
+ if ip route-destination in {{ plan.conjunto_do_prefixo(b.prefixo, fim) }} then
+  refuse
+ endif
+{% endfor %}
+ break
+end-filter
+
+{% endfor %}
 xpl route-filter EXPORT-SANITY
  {# infra interna nunca sai do AS, nem como rota propria. A unica recusa
     que existia era a do export de cliente: os egress de upstream, IX e

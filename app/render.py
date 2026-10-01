@@ -17,13 +17,18 @@ CABECALHO_BASE = ("bloco base: sets e filtros compartilhados. "
                   "Cole antes do bloco de qualquer peer.")
 
 
-def ambiente(rede=None):
+def ambiente(rede=None, blocos=None):
     """O ambiente Jinja com o plano injetado.
 
     O `plan` que o template ve e um plan.Rede e nao o modulo, mas o
     template nao sabe disso: ele segue escrevendo plan.c5ppa e plan.TIPOS,
     e o namespace que sai e o do AS declarado no peers.yaml. Sem argumento
     o Rede e o de fabrica, e a config gerada e a de antes.
+
+    Os `blocos` (os prefixos proprios do tenant) entram pelo mesmo caminho,
+    porque o filtro que recusa o proprio prefixo vindo de fora mora no base
+    e precisa da lista. Sem eles o filtro sai sem condicao nenhuma, que e o
+    caso dos testes de render e do tenant sem bloco cadastrado.
     """
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES)),
@@ -33,11 +38,12 @@ def ambiente(rede=None):
         lstrip_blocks=True,
     )
     env.globals["plan"] = rede if rede is not None else plan.Rede()
+    env.globals["blocos"] = blocos or {}
     return env
 
 
-def render_base(rede=None):
-    return ambiente(rede).get_template("base.txt.j2").render()
+def render_base(rede=None, blocos=None):
+    return ambiente(rede, blocos).get_template("base.txt.j2").render()
 
 
 # o parceiro e um cliente que fica no roteador das CDNs, e nao tem arquivo

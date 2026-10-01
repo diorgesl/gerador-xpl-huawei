@@ -16,13 +16,15 @@
    aqui, e nao copiado em cada template. #}
 {% macro apply_peer(peer) -%}
 xpl route-filter APPLY-PEER-{{ peer.token }}
-{# confirmar com "?" se o "community-list" do meio e obrigatorio: o legado
-   usa "apply community community-list <nome>", mas la e route-policy, e as
-   duas views divergem em outros pontos. A mesma duvida vale para a linha de
-   large-community, que nem o legado tem como referencia. #}
- apply community community-list CL-PEER-{{ peer.token }} additive
+{# Em XPL o nome da lista entra direto: "apply community <lista>". O
+   "community-list" do meio, que o legado usa em route-policy, NAO existe
+   aqui - confirmado no equipamento, e o pior tipo de erro: a linha e aceita,
+   porque o VRP le o token como se fosse uma community, e a lista nunca e
+   aplicada. A mesma coisa vale para o "large-community-list" da linha de
+   large-community. #}
+ apply community CL-PEER-{{ peer.token }} additive
 {% if peer.large_communities %}
- apply large-community large-community-list LC-PEER-{{ peer.token }} additive
+ apply large-community LC-PEER-{{ peer.token }} additive
 {% endif %}
  break
 end-filter
@@ -325,6 +327,7 @@ end-list
 {% set U = fam|upper %}
 xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
  call route-filter IMPORT-SANITY-{{ U }}
+ call route-filter REJEITA-BLOCO-PROPRIO-{{ U }}
 {% if alvo.ap_block %}
  if as-path in AP-BLOCK-{{ alvo.token }} then
   refuse
@@ -537,12 +540,12 @@ end-list
 {% set U = fam|upper %}
 xpl route-filter IX-{{ alvo.token }}-IMPORT-{{ U }}
  call route-filter IMPORT-SANITY-{{ U }}
+ call route-filter REJEITA-BLOCO-PROPRIO-{{ U }}
 
- {# anti-leak de IX: membro nao deve anunciar rota de transito #}
- if as-path length ge 4 then
-  refuse
- endif
-
+{# O limite `as-path length ge 4` saiu daqui: comprimento de path mede
+   tamanho, nao autorizacao, e a regra recusava cone legitimo e prepend de
+   membro anunciando para o IX inteiro. Quem autoriza no IX e o
+   IMPORT-SANITY, com o AP-LOCAL-ORIGIN, mais o confinamento de origem. #}
 {# O GSHUT do membro (RFC 8326) e o pedido de drenagem sem derrubar a sessao.
    Ele sai num ramo proprio, ANTES do carimbo: a community so existe ate o
    overwrite, que e quem a apaga. O ramo repete o carimbo e encerra o filtro
@@ -651,6 +654,7 @@ xpl as-path-list AP-IX-{{ alvo.token }}
 {% set U = fam|upper %}
 xpl route-filter PNI-{{ alvo.token }}-IMPORT-{{ U }}
  call route-filter IMPORT-SANITY-{{ U }}
+ call route-filter REJEITA-BLOCO-PROPRIO-{{ U }}
 
  {# sessao bilateral: so entra o que a CDN pode anunciar #}
  if not as-path in AP-{{ alvo.token }}-ALLOWED then

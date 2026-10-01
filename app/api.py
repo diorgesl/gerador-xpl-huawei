@@ -827,11 +827,13 @@ def _nome_do_peer(peer):
     return peer.apelido or peer.nome or peer.token
 
 
-def _secao_base(rede):
+def _secao_base(rede, blocos):
     # sem arquivo e sem `salvo`: o base e montado a cada requisicao, como no
-    # /base.txt, e nunca teve uma versao em out/ para comparar
+    # /base.txt, e nunca teve uma versao em out/ para comparar. Os blocos
+    # entram porque o filtro que recusa o prefixo proprio vindo de fora mora
+    # aqui e a lista deles e do tenant
     return SecaoConfig(chave="base", titulo="Bloco base",
-                       texto=render.render_base(rede=rede))
+                       texto=render.render_base(rede=rede, blocos=blocos))
 
 
 def _secao_originacao(blocos, rede, saida):
@@ -903,7 +905,7 @@ def _secoes_da_config(t):
     # a ordem e a do "Ordem de colagem no F1A" do README: o base primeiro, o
     # grupo antes dos membros que herdam dele, e os prefixos proprios por
     # ultimo, que nao dependem de nem sustentam bloco nenhum
-    secoes = [_secao_base(rede)]
+    secoes = [_secao_base(rede, peers_mod.carregar_blocos(t.caminho))]
     secoes.extend(_secao_grupo(grupo, rede, t.saida) for grupo in grupos)
     for peer in peers:
         grupo = _grupo_do_peer(peer, grupos)

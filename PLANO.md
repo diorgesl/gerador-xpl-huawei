@@ -1077,10 +1077,7 @@ xpl community-list CL-PEER-268127
  end-list
 
 xpl route-filter APPLY-PEER-268127
- !- confirmar com "?" se o "community-list" do meio e obrigatorio: o
- !- legado usa "apply community community-list <nome>", mas la e
- !- route-policy, e as duas views divergem em outros pontos.
- apply community community-list CL-PEER-268127 additive
+ apply community CL-PEER-268127 additive
  break
  end-filter
 ```
@@ -1092,10 +1089,16 @@ xpl community-list CL-PEER-14840
  end-list
 
 xpl route-filter APPLY-PEER-14840
- apply community community-list CL-PEER-14840 additive
+ apply community CL-PEER-14840 additive
  break
  end-filter
 ```
+
+**Resolvido no F1A:** em XPL o nome da lista entra direto, `apply community
+CL-PEER-<T>`. O `community-list` do meio, que o legado usa em `route-policy`,
+não existe nessa view, e o erro é do tipo silencioso: a linha com o token
+extra é aceita, porque o VRP lê `community-list` como se fosse uma community, e
+a lista nunca é aplicada.
 
 O que muda entre os dois lados é onde o `call` fica, e isso segue o alcance que a lista precisa ter. No import do cliente ele é a última linha, depois de tudo: é a marca que a operadora põe no bloco dele, e ela precisa estar na RIB para sair por qualquer upstream. No export do upstream é o último passo, e vale para tudo que sai por aquela sessão, venha de cliente, de peer ou de prefixo próprio.
 
@@ -1420,11 +1423,6 @@ No **ingress**, `peer-is` identifica o membro que realmente anunciou, dando pol�
 xpl route-filter IX-IMPORT-SP
  call route-filter IMPORT-SANITY
 
- !- anti-leak de IX: membro nao deve anunciar rota de transito
- if as-path length ge 4 then
-  refuse
- endif
-
  !- overwrite: nada do que o membro do IX escreveu sobrevive.
  !- 1001:9999 e a informativa de IX; 9999 e o ID do IX no PeeringDB
  !- e PRECISA ser trocado pelo real. Nao e o ASN do route server.
@@ -1478,7 +1476,13 @@ xpl route-filter IX-EXPORT-SP
 
 Esta limitação precisa constar na tabela publicada ao cliente. "Prepend só para o AS X no IX" só funciona se houver sessão bilateral com o X, e é reclamação garantida se não estiver documentado.
 
-O `as-path length ge 4` no import é um anti-leak simples para IX: um membro anunciando rota com path longo está repassando trânsito que não deveria. Ajuste o limiar conforme a topologia do IX — alguns membros legítimos têm downstreams.
+O `as-path length ge 4` saiu do import do IX. Comprimento de path mede tamanho,
+não autorização: a regra recusava prepend de membro anunciando para o IX
+inteiro e cone legítimo de quem tem downstream, que é o caso comum. Quem
+autoriza ali é o `IMPORT-SANITY`, com o `AP-LOCAL-ORIGIN`, e o confinamento de
+origem do próprio import. Se um dia fizer falta um teto de tamanho, ele entra
+como limite operacional cadastrado, com margem, e não como filtro de
+autorização.
 
 O `public-as-only force` vale dobrado aqui. No IX o AS-path que chega é o do membro mais os downstreams dele, e ASN privado de cliente de terceiro é comum. Sem ele, esse ASN sai no seu anúncio para os outros membros, que reagem como quiserem. As duas formas diferem no que fazem com a rota que carrega ASN privado, e onde o path pode trazer mais de um deles a escolha aparece no resultado. Confirme o comportamento antes de padronizar.
 
@@ -1690,6 +1694,33 @@ Valide origem com RPKI-to-Router, usando Routinator ou rpki-client como validado
 
 Publique ROA para todos os seus blocos no LACNIC. Sem ROA próprio, seus prefixos aparecem como NotFound e ficam vulneráveis a sequestro por prefixo mais específico.
 
+### O prefixo próprio não volta de fora
+
+O ROA protege contra o sequestro **lá fora**; a mesma proteção precisa existir
+na chegada. O `REJEITA-BLOCO-PROPRIO-<U>` recusa, no import das sessões
+externas, qualquer rota cujo destino caia dentro de um bloco próprio ou de um
+subprefixo dele:
+
+```scss
+xpl route-filter REJEITA-BLOCO-PROPRIO-V4
+ if ip route-destination in {201.131.152.0 22 le 32} then
+  refuse
+ endif
+ break
+end-filter
+```
+
+A âncora `NULL0` não substitui isso: ela segura o agregado na tabela, mas no
+encaminhamento quem ganha é o mais específico, então um `/25` nosso anunciado
+por outra operadora desviaria o tráfego mesmo com a âncora no lugar.
+
+O filtro é chamado pelos imports de **upstream, IX e PNI**, logo depois do
+`IMPORT-SANITY`. No import de cliente ele não entra: lá quem confina é o
+`PL-CUST` do cadastro dele, e um bloco alocado dentro do agregado é rota
+legítima daquela sessão. A lista sai dos blocos ativos do cadastro, podada
+pelos que já estão dentro de outro (o `le 32` de um agregado alcança os
+pedaços), porque esse filtro roda no import de toda sessão externa.
+
 ### IRR
 
 Mantenha `AS-64512` e um as-set por cliente no LACNIC ou no RADB. Gere as prefix-lists com `bgpq4` em cron, nunca à mão.
@@ -1796,7 +1827,6 @@ Um cuidado que custa tempo: `permit` e `deny` só se movem para filtro **armado*
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Parâmetro em set literal            | `{64512:1:$peer_asn}` é aceito?                                                                          | `xpl simulate` numa cópia sem parâmetro, com o valor literal. Se for aceito, os filtros per-peer colapsam num só                                                                                                                                                                                           |
 | Ações de desvio em `route-filter`   | `apply preference` e `apply preferred-value` existem na view do `route-filter`?                          | `?` na view; hoje só aparecem em `route-policy`, na seção de scrubbing center                                                                                                                                                                                                                              |
-| `apply community` com lista nomeada | A sintaxe leva `community-list` no meio, ou só o nome basta?                                             | `?` na view do `route-filter`. O legado usa `apply community community-list <nome>`, mas em `route-policy`; as duas views divergem, como no `apply as-path`                                                                                                                                                |
 | `apply community` com lista vazia   | Lista sem nenhum membro é aceita, e a rota segue sem alteração?                                          | `xpl simulate`. Se recusar, a lista nasce com um valor inerte que o peer ignore, e o teste passa a ser obrigatório antes de pendurar a sessão                                                                                                                                                              |
 | `undo network` com `route-filter`   | A linha remove a entrada que tem `route-filter` junto, ou é preciso reemitir a linha sem o filtro antes? | `display this` na view da família depois do `undo`. O desenho assume que remove, que é o que o comando significa, mas é um `display this` de distância                                                                                                                                                     |
 | Filtro do `network` na originação   | O `route-filter` roda na originação e aplica o LP e as communities, ou só na configuração?               | `display bgp routing-table <prefixo>` de um prefixo dos blocos: a rota originada tem que aparecer com o `900` de local-preference e com o `64512:1000`                                                                                                                                                     |

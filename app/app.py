@@ -109,7 +109,12 @@ def baixar_base(asn: int = Query(...)):
     # texto puro, e nao HTML: e o mesmo corpo de antes do corte, montado na
     # hora do download (nao ha arquivo na pasta do tenant com uma versao
     # antiga dele)
-    return HTMLResponse(render.render_base(rede=rede(asn)), media_type="text/plain")
+    # os blocos entram junto: o filtro que recusa o prefixo proprio vindo de
+    # fora mora no base, e o corpo servido aqui e o mesmo do /api/config
+    return HTMLResponse(
+        render.render_base(rede=rede(asn),
+                           blocos=peers_mod.carregar_blocos(tenant(asn).caminho)),
+        media_type="text/plain")
 
 
 @app.get("/politica-cliente.pdf", response_class=Response,

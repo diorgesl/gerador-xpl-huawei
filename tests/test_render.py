@@ -203,7 +203,7 @@ def test_apply_peer_fecha_em_break():
     corpo = texto.split("xpl route-filter APPLY-PEER-268127")[1].split("end-filter")[0]
     assert corpo.strip().endswith("break")
     assert "finish" not in corpo
-    assert "apply community community-list CL-PEER-268127 additive" in corpo
+    assert "apply community CL-PEER-268127 additive" in corpo
 
 
 def test_import_do_cliente_ordena_sanidade_blackhole_e_prefixo():
@@ -760,7 +760,7 @@ def test_ix_nao_emite_o_par_do_peer():
     texto = render.render_peer(peer_ix())
     assert "CL-PEER-IX-SP" not in texto
     assert "APPLY-PEER-IX-SP" not in texto
-    assert "apply community community-list" not in texto
+    assert "apply community CL-PEER" not in texto
 
 
 def test_noadv_do_ix_leva_absoluta_do_tipo_e_deste_peer():
@@ -777,16 +777,15 @@ def test_ap_prefer_usa_peer_is():
     assert "pass" not in corpo
 
 
-def test_ix_import_recusa_path_longo_antes_de_carimbar():
+def test_ix_import_nao_limita_comprimento_de_path():
+    """O limite `length ge 4` saiu: comprimento mede tamanho, nao autorizacao,
+    e a regra recusava prepend de membro e cone legitimo. Quem autoriza no IX
+    e o IMPORT-SANITY, com o AP-LOCAL-ORIGIN."""
     texto = render.render_peer(peer_ix())
     import_ = texto.split("xpl route-filter IX-IX-SP-IMPORT-V4")[1].split("end-filter")[0]
-    # a varredura e sobre o XPL, nao sobre a prosa: o comentario acima do
-    # carimbo cita o overwrite. Os dois lados do index saem do mesmo texto,
-    # senao o indice cru conta os comentarios e a comparacao vira ordem de
-    # prosa contra ordem de operacao.
-    codigo = "\n".join(l for l in import_.splitlines() if not l.strip().startswith("!-"))
-    assert "if as-path length ge 4 then" in codigo
-    assert codigo.index("length ge 4") < codigo.index("overwrite")
+    assert "length" not in import_
+    assert "refuse" not in import_
+    assert import_.lstrip().startswith("call route-filter IMPORT-SANITY-V4")
 
 
 def test_ix_import_carimba_com_overwrite_e_a_informativa_do_ix():
@@ -950,6 +949,48 @@ def test_o_import_de_cada_tipo_externo_responde_ao_gshut_do_vizinho():
         assert linhas[-1] == fim, (nome, linhas)
 
 
+def test_o_base_recusa_o_prefixo_proprio_vindo_de_fora():
+    """Nem o agregado nem os mais especificos dele voltam de upstream, IX ou
+    PNI. A ancora NULL0 nao impede o desvio: no encaminhamento, o mais
+    especifico ganha."""
+    blocos = {"v4": [Bloco(prefixo="45.169.232.0/22"),
+                     Bloco(prefixo="45.169.236.0/23", ativo=False),
+                     Bloco(prefixo="45.169.237.0/24")],
+              "v6": [Bloco(prefixo="2804:3300::/32")]}
+    texto = render.render_base(blocos=blocos)
+
+    v4 = texto.split("xpl route-filter REJEITA-BLOCO-PROPRIO-V4")[1].split("end-filter")[0]
+    assert "if ip route-destination in {45.169.232.0 22 le 32} then" in v4
+    assert "refuse" in v4
+    # o bloco fora de servico nao entra: e o mesmo portao da originacao
+    assert "45.169.236.0" not in v4
+    # o pedaco dentro do agregado tambem nao: o `le 32` do /22 ja o alcanca,
+    # e o filtro roda no import de toda sessao externa
+    assert "45.169.237.0" not in v4
+    v6 = texto.split("xpl route-filter REJEITA-BLOCO-PROPRIO-V6")[1].split("end-filter")[0]
+    assert "if ip route-destination in {2804:3300:: 32 le 128} then" in v6
+
+
+def test_o_filtro_do_bloco_proprio_sai_vazio_sem_bloco_cadastrado():
+    """Ele sai sempre, para os imports externos poderem chama-lo sem depender
+    do cadastro; sem bloco, so fecha em break e nao decide nada."""
+    v4 = render.render_base().split("xpl route-filter REJEITA-BLOCO-PROPRIO-V4")[1]
+    v4 = v4.split("end-filter")[0]
+    assert "refuse" not in v4
+    assert v4.strip() == "break"
+
+
+def test_os_imports_externos_chamam_o_filtro_do_bloco_proprio():
+    """O filtro entra em upstream, IX e PNI, onde nao ha whitelist. No import
+    de cliente nao: quem confina la e o PL-CUST do cadastro dele, e um bloco
+    alocado dentro do nosso agregado e rota legitima da sessao."""
+    for peer in (peer_upstream(), peer_ix(), peer_pni()):
+        assert ("call route-filter REJEITA-BLOCO-PROPRIO-V4"
+                in render.render_peer(peer))
+    for peer in (peer_cliente(), peer_parceiro()):
+        assert "REJEITA-BLOCO-PROPRIO" not in render.render_peer(peer)
+
+
 def test_peer_sem_descricao_nao_emite_a_linha_do_description():
     """`peer X description` sem argumento e linha incompleta de CLI, e o campo
     e livre no cadastro. Sem descricao, o comando nao sai."""
@@ -1013,7 +1054,7 @@ def test_pni_nao_emite_o_par_do_peer():
     texto = render.render_peer(peer_pni())
     assert "CL-PEER-CDN-A" not in texto
     assert "APPLY-PEER-CDN-A" not in texto
-    assert "apply community community-list" not in texto
+    assert "apply community CL-PEER" not in texto
 
 
 def test_pni_nao_carrega_ponto_de_aprendizado():
@@ -1464,7 +1505,7 @@ def test_o_apply_peer_so_ganha_a_linha_de_large_com_large_no_cadastro():
     com = _apply_peer(
         render.render_peer(_com_communities(peer_cliente, [], ["64512:4:1"])),
         "268127")
-    assert "apply large-community large-community-list LC-PEER-268127 additive" in com
+    assert "apply large-community LC-PEER-268127 additive" in com
 
 
 def test_o_quadro_do_peer_com_o_cadastro_novo_e_ascii():
@@ -2245,6 +2286,9 @@ def test_todo_call_route_filter_tem_a_definicao_em_algum_texto_gerado():
     # um bloco que perdeu a definicao pelo caminho
     esperado = {"IMPORT-SANITY-V4", "IMPORT-SANITY-V6", "EXPORT-SANITY",
                 "APPLY-CUSTOMER-LP",
+                # o anti-leak do prefixo proprio mora no base e e chamado
+                # pelos imports externos, como o IMPORT-SANITY
+                "REJEITA-BLOCO-PROPRIO-V4", "REJEITA-BLOCO-PROPRIO-V6",
                 "APPLY-PEER-%s" % grupos["upstream"].token,
                 # o export do membro de grupo de downstream sem ASN chama o
                 # export do grupo, que mora no bloco do grupo - o mesmo caso
