@@ -29,6 +29,10 @@
 - Membro de grupo com `tabela` gravada diferente da do grupo: o bloco do membro não muda e o cabeçalho mostra a do grupo. Teste na Task 3.
 - Peer que reaproveita a política de outro (`politica_de`): o cabeçalho mostra a tabela da origem, e o aviso de "sessão sem rota" não dispara. Testes nas Tasks 3 e 4.
 - Troca de tipo no formulário, de cliente para upstream e de volta: a caixa da default e a tabela acompanham o padrão do tipo, sem deixar `default_route=true` num upstream (que o `validate` recusaria). Teste na Task 6.
+- Ordem de execução: as Tasks 6 a 9 vieram da auditoria e rodam depois da 5 e antes da 10; as Tasks 10 a 13 são as antigas 6 a 9.
+- Tabela inválida no YAML (`PARCIAL`, `null`, digitação): render para e as quatro rotas de saída devolvem 422 no campo `tabela`. Teste na Task 6.
+- PUT de um cliente antigo sem a `tabela` no corpo: a tabela gravada fica. Teste na Task 7.
+- Membro com a caixa da default gravada num grupo sem default: aviso no salvar. Teste na Task 9.
 - Rede com namespace trocado (`plan.Rede(asn=64500)`): a `CL-ORIGEM-PARCIAL-IX` sai com `64500:1300`, nunca com `64512:1300`. Teste na Task 1.
 
 ---
@@ -830,7 +834,464 @@ git commit -m "O cadastro novo de downstream nasce recebendo so a default"
 
 ---
 
-### Task 6: A tela
+### Task 6: Valor inválido nunca vira full (auditoria, achado 1)
+
+**Files:**
+- Modify: `app/plan.py` (função nova perto de `TABELAS`)
+- Modify: `templates/_macros.j2` (`filtro_downstream_export`)
+- Modify: `app/validate.py` (função nova `erro_de_tabela`)
+- Modify: `app/api.py` (`saida_peer`, `saida_grupo`, `_secoes_da_config`)
+- Test: `tests/test_plan.py`, `tests/test_render.py`, `tests/test_api_peers.py`, `tests/test_api_grupos.py`, `tests/test_api_config.py`
+
+**Interfaces:**
+- Consumes: `plan.TABELAS`, o portão da Task 3.
+- Produces: `plan.exige_tabela(valor) -> str` (devolve o valor ou levanta `ValueError`); `validate.erro_de_tabela(alvo) -> Erro | None`; `api._tabela_invalida(alvos) -> JSONResponse | None`.
+
+- [ ] **Step 1: Testes que falham**
+
+`tests/test_plan.py`:
+
+```python
+def test_exige_tabela_devolve_o_valor_da_lista_e_recusa_o_resto():
+    for valor in plan.TABELAS:
+        assert plan.exige_tabela(valor) == valor
+    for valor in ("", None, "PARCIAL", "tudo"):
+        with pytest.raises(ValueError):
+            plan.exige_tabela(valor)
+```
+
+(acrescente `import pytest` no topo se faltar).
+
+`tests/test_render.py`:
+
+```python
+@pytest.mark.parametrize("valor", ["", "PARCIAL", "tudo", None])
+def test_tabela_invalida_nao_vira_full_no_render(valor):
+    # so o full explicito cai no ramo sem portao; o resto nao gera nada
+    with pytest.raises(ValueError):
+        render.render_peer(peer_cliente(tabela=valor))
+
+
+@pytest.mark.parametrize("tipo", ["cliente", "parceiro"])
+@pytest.mark.parametrize("tabela", ["nenhuma", "parcial", "parcial_ix", "full"])
+def test_matriz_dos_modos_nas_duas_familias(tipo, tabela):
+    peer = peer_cliente(tipo=tipo, tabela=tabela, sessoes={
+        "v4": {"local": "198.51.100.1", "remoto": "198.51.100.2"},
+        "v6": {"local": "2001:db8::1", "remoto": "2001:db8::2"}},
+        prefixos={"v4": ["45.169.232.0/22"], "v6": ["2001:db8:100::/48"]})
+    texto = render.render_peer(peer)
+    for fam in ("V4", "V6"):
+        export = _export(texto, fam=fam)
+        if tabela == "nenhuma":
+            assert [l.strip() for l in export.splitlines()
+                    if l.strip()] == ["refuse"], fam
+            continue
+        for veto in ("CL-RESTRICAO", "CL-BLACKHOLE", "CL-NOADV-CUST",
+                     "CL-ONLY-NOT-CLIENT", "{64512:0:268127}",
+                     "64512:1900"):
+            assert veto in export, (fam, veto)
+        assert ("CL-ORIGEM-ANUNCIAVEL" in export) == (tabela == "parcial")
+        assert ("CL-ORIGEM-PARCIAL-IX" in export) == (tabela == "parcial_ix")
+        assert export.strip().endswith("finish"), fam
+```
+
+`tests/test_api_peers.py` (a recusa do `/saida` lendo o YAML):
+
+```python
+def test_a_saida_recusa_tabela_invalida_do_yaml(api, tmp_path):
+    _grava(tmp_path, peer_cliente(tabela="PARCIAL"))
+    r = api.get("/api/peers/1/saida")
+    assert r.status_code == 422
+    assert "tabela" in r.json()["erros"]
+```
+
+`tests/test_api_grupos.py`:
+
+```python
+def test_a_saida_do_grupo_recusa_tabela_invalida(api, tmp_path):
+    peers_mod.gravar_grupos(
+        [peers_mod.Grupo(id=3, nome="CLIENTES", tipo="cliente", classe="transito",
+                         origem=1100, pop=2001, tabela="tudo")],
+        caminho_tenant(tmp_path))
+    r = api.get("/api/grupos/3/saida")
+    assert r.status_code == 422
+    assert "tabela" in r.json()["erros"]
+```
+
+`tests/test_api_config.py` (siga a forma de gravar e chamar dos casos que já existem no arquivo):
+
+```python
+@pytest.mark.parametrize("rota", ["/api/config", "/api/config/organizada"])
+def test_a_config_inteira_recusa_tabela_invalida(api, tmp_path, rota):
+    peers_mod.gravar([peer_cliente(tabela="tudo")], caminho_tenant(tmp_path))
+    r = api.get(rota)
+    assert r.status_code == 422
+    assert "tabela" in r.json()["erros"]
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+Run: `.venv/bin/python -m pytest tests/test_plan.py tests/test_render.py tests/test_api_peers.py tests/test_api_grupos.py tests/test_api_config.py -q -k "tabela or matriz"`
+Expected: FAIL (função ausente, render gerando full, rotas devolvendo 200).
+
+- [ ] **Step 3: Implementar**
+
+`app/plan.py`, logo depois de `TABELAS`:
+
+```python
+def exige_tabela(valor):
+    """O valor, se ele e um dos modos do plano; senao, o erro.
+
+    O portao do export escolhe o ramo pelo valor, e o ramo sem portao e o da
+    full table: um valor que escapasse da lista, gravado a mao no yaml, sairia
+    como full sem ninguem ter pedido. O render chama isto e para.
+    """
+    if valor not in TABELAS:
+        raise ValueError("tabela recebida invalida: %r" % (valor,))
+    return valor
+```
+
+`templates/_macros.j2`, no `filtro_downstream_export`: logo depois do `{% set U = fam|upper %}`, `{% set tabela = plan.exige_tabela(alvo.tabela) %}`, e as três comparações do macro passam a usar `tabela` no lugar de `alvo.tabela`. O ramo sem portão continua sendo o `else` da cadeia, mas só o `full` chega até ele, porque o `exige_tabela` já parou qualquer outro valor.
+
+`app/validate.py`, perto de `avisos`:
+
+```python
+def erro_de_tabela(alvo):
+    """O Erro da tabela fora da lista, para quem le o yaml sem o validar.
+
+    O /saida e a config inteira renderizam o que esta gravado; o salvar ja
+    recusa a tabela invalida, mas o arquivo editado a mao nao passa por ele.
+    """
+    if alvo.tipo in plan.TIPOS_DOWNSTREAM and alvo.tabela not in plan.TABELAS:
+        nome = getattr(alvo, "token", None) or alvo.nome
+        return Erro("tabela", "tabela recebida invalida em %s: %r"
+                    % (nome, alvo.tabela))
+    return None
+```
+
+`app/api.py`, uma função nova perto de `_sem_origem`:
+
+```python
+def _tabela_invalida(alvos):
+    """O 422 da tabela fora da lista, no primeiro alvo que a tiver.
+
+    Os alvos sao quem define o export do bloco: o proprio peer avulso, o grupo
+    do membro e a origem de quem reaproveita. O render tambem para com o
+    valor invalido; isto e o que devolve o campo no lugar do 500.
+    """
+    for alvo in alvos:
+        if alvo is None:
+            continue
+        erro = validate.erro_de_tabela(alvo)
+        if erro is not None:
+            return _falha(422, [erro])
+    return None
+```
+
+Em `saida_peer`, depois do `sem_origem`:
+
+```python
+    recusa = _tabela_invalida([peer, grupo, _origem_do_peer(peer, peers)])
+    if recusa is not None:
+        return recusa
+```
+
+Em `saida_grupo`, depois do `if grupo is None`: `recusa = _tabela_invalida([grupo])` e o mesmo `return`. Em `_secoes_da_config`, antes do `secoes.extend(...)` dos grupos:
+
+```python
+    for grupo in grupos:
+        recusa = _tabela_invalida([grupo])
+        if recusa is not None:
+            return None, rede, recusa
+```
+
+e dentro do laço dos peers, depois do `sem_origem`:
+
+```python
+        recusa = _tabela_invalida([peer])
+        if recusa is not None:
+            return None, rede, recusa
+```
+
+(o grupo do membro e a origem de quem reaproveita já entram como alvos próprios nesse laço). O membro e quem reaproveita carregam `tabela` gravada que não é lida; para não recusar por um valor que não chega a filtro nenhum, em `saida_peer` e no laço passe `peer` só quando `peer.grupo_id is None and peer.politica_de is None`.
+
+- [ ] **Step 4: Rodar e ver passar; suíte inteira**
+
+Run: `.venv/bin/python -m pytest -q`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/plan.py app/validate.py app/api.py templates/_macros.j2 tests/
+git commit -m "A tabela invalida para o render, e as rotas de saida a recusam"
+```
+
+---
+
+### Task 7: Editar não apaga a tabela (auditoria, achado 2)
+
+**Files:**
+- Modify: `app/formulario.py` (`peer_do_formulario`, `grupo_do_formulario`)
+- Test: `tests/test_formulario.py`, `tests/test_api_peers.py`, `tests/test_api_grupos.py`
+
+**Interfaces:**
+- Consumes: `anterior` (já é parâmetro das duas funções).
+- Produces: `formulario._tabela_do_formulario(dados, tipo, anterior) -> dict` (o kwarg `tabela`, ou vazio fora do downstream).
+
+- [ ] **Step 1: Testes que falham**
+
+`tests/test_formulario.py`:
+
+```python
+def test_tabela_em_branco_na_edicao_preserva_a_anterior():
+    anterior = peer_cliente(tabela="full")
+    modelo = modelo_do_peer(anterior).model_copy(update={"tabela": ""})
+    peer, _ = peer_do_formulario(dados_do_formulario(modelo), [anterior], anterior, ())
+    assert peer.tabela == "full"
+
+
+def test_tabela_em_branco_vinda_de_upstream_vira_nenhuma():
+    anterior = peer_upstream()
+    modelo = modelo_do_peer(peer_cliente()).model_copy(update={"tabela": ""})
+    peer, _ = peer_do_formulario(dados_do_formulario(modelo), [anterior], anterior, ())
+    assert peer.tabela == "nenhuma"
+
+
+def test_tabela_em_branco_na_edicao_do_grupo_preserva_a_anterior():
+    anterior = grupo_do_tipo("cliente")
+    anterior.tabela = "parcial"
+    modelo = modelo_do_grupo(anterior).model_copy(update={"tabela": ""})
+    grupo, _ = grupo_do_formulario(dados_do_formulario(modelo), [anterior], anterior, ())
+    assert grupo.tabela == "parcial"
+```
+
+`tests/test_api_peers.py`:
+
+```python
+def test_put_sem_tabela_preserva_a_do_cadastro(api, tmp_path):
+    _grava(tmp_path, peer_cliente(id=0, tabela="full"))
+    r = api.put("/api/peers/0", json=dict(CLIENTE, descricao="NOVA"))
+    assert r.status_code == 200, r.text
+    assert peers_mod.carregar(caminho_tenant(tmp_path))[0].tabela == "full"
+```
+
+(confira o verbo e o código de sucesso da rota de atualização com `grep -n "def atualizar_peer" -B2 app/api.py`). O mesmo caso para o grupo em `tests/test_api_grupos.py`, com `GRUPO_PARCEIROS` e um grupo gravado com `tabela="parcial"`.
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+Run: `.venv/bin/python -m pytest tests/test_formulario.py tests/test_api_peers.py tests/test_api_grupos.py -q -k "preserva or vinda"`
+Expected: FAIL (a edição vira `nenhuma`).
+
+- [ ] **Step 3: Implementar**
+
+Em `app/formulario.py`, acima de `peer_do_formulario`:
+
+```python
+def _tabela_do_formulario(dados, tipo, anterior):
+    """O kwarg da tabela, so no downstream.
+
+    O branco nao e uma escolha: na criacao vira "nenhuma", o padrao do
+    cadastro novo; na edicao de um downstream fica a do registro anterior.
+    Sem isso um PUT que nao conhece o campo tirava a tabela do cliente.
+    """
+    if tipo not in plan.TIPOS_DOWNSTREAM:
+        return {}
+    valor = _texto(dados, "tabela")
+    if valor:
+        return {"tabela": valor}
+    if anterior is not None and anterior.tipo in plan.TIPOS_DOWNSTREAM:
+        return {"tabela": anterior.tabela}
+    return {"tabela": "nenhuma"}
+```
+
+Nos dois construtores, trocar o `**({"tabela": _texto(dados, "tabela") or "nenhuma"} if tipo in plan.TIPOS_DOWNSTREAM else {}),` por `**_tabela_do_formulario(dados, tipo, anterior),` (o comentário de cima sai, porque a função explica).
+
+- [ ] **Step 4: Rodar e ver passar; suíte inteira**
+
+Run: `.venv/bin/python -m pytest -q`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/formulario.py tests/
+git commit -m "Editar sem a tabela preserva a do cadastro"
+```
+
+---
+
+### Task 8: Origem anunciável só em downstream (auditoria, achado 3)
+
+**Files:**
+- Modify: `app/plan.py` (`ORIGENS_POR_TIPO`)
+- Modify: `app/validate.py` (`validar`, ramo de fora do downstream)
+- Test: `tests/test_validate.py` (casos existentes nas linhas ~885 e ~1128 e casos novos), fixtures do front que citam `origens_por_tipo` só se algum teste depender do 1000
+
+**Interfaces:**
+- Produces: `ORIGENS_POR_TIPO` sem `1000` em upstream, IX e PNI; `Erro("origem", ...)` no peer externo com origem anunciável.
+
+- [ ] **Step 1: Testes que falham**
+
+Atualizar as expectativas existentes: em `tests/test_validate.py:885` a mensagem passa a `"origem do upstream tem que ser uma de 1400, 1900"`; nas linhas ~1128-1130 as tuplas passam a `(1400, 1900)`, `(1300, 1200, 1900)` e `(1500, 1200, 1900)`. Caso novo:
+
+```python
+def test_peer_externo_nao_carimba_origem_anunciavel():
+    # a parcial e o EXPORT-SANITY selecionam pela marca de origem: um upstream
+    # carimbando 1000 ou 11xx sairia como rota propria ou de cliente
+    for tipo, extra in (("upstream", {}), ("ix", {"ix_id": 1}),
+                        ("pni", {"ap_allowed": ["64500"]})):
+        for origem in (1000, 1100, 1130):
+            peer = um_peer(tipo=tipo, classe=None, aprendizado=3000,
+                           origem=origem, **extra)
+            assert "origem" in campos(validar(peer, [])), (tipo, origem)
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+Run: `.venv/bin/python -m pytest tests/test_validate.py -q`
+Expected: FAIL nos três casos.
+
+- [ ] **Step 3: Implementar**
+
+`app/plan.py`: tirar o `1000` das três linhas de `ORIGENS_POR_TIPO` (upstream, ix, pni), com um comentário acima do dicionário: `# a origem anunciavel (1000 e 11xx) fica so no downstream: a parcial e o EXPORT-SANITY leem a marca, e um tipo externo com ela vazaria como rota propria ou de cliente`.
+
+`app/validate.py`, em `validar`, no `else:` do `if peer.tipo in plan.TIPOS_DOWNSTREAM:`, antes da checagem do `default_route`:
+
+```python
+        # a parcial e o EXPORT-SANITY selecionam pela marca de origem: um
+        # tipo externo com origem anunciavel sairia como rota propria ou de
+        # cliente para outro upstream e para o cliente da parcial
+        anunciaveis = {int(c.split(":")[1]) for c in plan.ORIGEM_ANUNCIAVEL}
+        if peer.origem in anunciaveis:
+            erros.append(Erro(
+                "origem", "origem %d e de rota propria ou de cliente: o %s "
+                "nao pode usa-la" % (peer.origem, peer.tipo)))
+```
+
+- [ ] **Step 4: Rodar e ver passar; suíte inteira e front**
+
+Run: `.venv/bin/python -m pytest -q` e `cd web && npm test`
+Expected: PASS. Se algum teste do front quebrar por causa do 1000 num fixture de `origens_por_tipo`, o fixture é cópia de dados: troque pelo valor novo.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/plan.py app/validate.py tests/ web/src
+git commit -m "Tipo externo nao carimba origem de rota propria nem de cliente"
+```
+
+---
+
+### Task 9: A default route do membro é a do grupo (auditoria, achado 4)
+
+**Files:**
+- Modify: `templates/cliente.txt.j2` (ramo do membro, linha ~75)
+- Modify: `templates/_macros.j2` (`cabecalho`)
+- Modify: `app/api.py` (`modelo_do_peer`; chamadas de `validate.avisos`)
+- Modify: `app/validate.py` (`avisos` ganha `grupos=()`)
+- Test: `tests/test_render.py`, `tests/test_validate.py`, `tests/test_formulario.py`
+
+**Interfaces:**
+- Produces: `validate.avisos(peer, peers, rede=None, grupos=())`; o bloco do membro sem `default-route-advertise` próprio; `modelo_do_peer` devolve `default_route=False` no membro.
+
+- [ ] **Step 1: Testes que falham**
+
+`tests/test_render.py`:
+
+```python
+def test_o_membro_nao_emite_a_default_propria():
+    # quem emite e o grupo; o membro com a caixa gravada nao muda nada
+    grupo = grupo_cliente_sem_asn()
+    membro = peer_membro_sem_override(grupo.id)
+    membro.tipo = "cliente"
+    membro.default_route = True
+    texto = render.render_peer(membro, grupo=grupo)
+    assert "default-route-advertise" not in texto
+
+
+def test_o_cabecalho_do_membro_mostra_a_default_do_grupo():
+    grupo = grupo_cliente_sem_asn()
+    grupo.default_route = True
+    membro = peer_membro_sem_override(grupo.id)
+    membro.tipo = "cliente"
+    cabecalho = render.render_peer(membro, grupo=grupo).splitlines()[:8]
+    assert any(l.startswith("# default route: a do grupo %s" % grupo.nome)
+               for l in cabecalho)
+```
+
+`tests/test_validate.py`:
+
+```python
+def test_membro_com_default_gravada_e_grupo_sem_default_avisa():
+    grupo = um_grupo(id=3, default_route=False)
+    membro = um_peer(grupo_id=3, default_route=True)
+    assert "default_route" in campos(validate.avisos(membro, [], grupos=[grupo]))
+    grupo.default_route = True
+    assert "default_route" not in campos(validate.avisos(membro, [], grupos=[grupo]))
+```
+
+`tests/test_formulario.py`:
+
+```python
+def test_o_modelo_do_membro_nao_mostra_a_default():
+    assert modelo_do_peer(peer_cliente(default_route=True, grupo_id=3)).default_route is False
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+Run: `.venv/bin/python -m pytest tests/test_render.py tests/test_validate.py tests/test_formulario.py -q -k "default"`
+Expected: FAIL nos quatro.
+
+- [ ] **Step 3: Implementar**
+
+`templates/cliente.txt.j2`: no ramo do membro (`{% elif grupo %}`), apagar o bloco `{% if peer.default_route %} peer {{ s.remoto }} default-route-advertise {% endif %}`, com um comentário Jinja no lugar: `{# a default do membro e a do grupo: o grupo emite o comando para todos, e o membro nao tem como tira-la (ver PLANO, default route) #}`.
+
+`templates/_macros.j2`, no `cabecalho`: trocar o `{% if peer.default_route %} ... {% endif %}` por
+
+```jinja
+{% if grupo and peer.politica_de is none %}
+{% if grupo.default_route %}
+# default route: a do grupo {{ grupo.nome }}; o VRP origina 0/0 e ::/0 mesmo sem default na tabela
+{% endif %}
+{% elif peer.default_route %}
+# default route: o VRP origina 0/0 e ::/0 nesta sessao mesmo sem default na tabela
+{% endif %}
+```
+
+`app/api.py`, em `modelo_do_peer`: `default_route=peer.default_route and peer.grupo_id is None,` (com o mesmo comentário da tabela: o membro não decide). As duas chamadas `validate.avisos(peer, peers, rede=rede)` passam `grupos=grupos` (a variável já existe nas duas funções; confira com `grep -n "validate.avisos" app/api.py`).
+
+`app/validate.py`, `avisos(peer, peers, rede=None, grupos=())`, e antes do `_avisa_communities`:
+
+```python
+    # a default do membro e a do grupo. A caixa gravada no membro vem de
+    # antes desta regra; se o grupo nao anuncia, a sessao perde a default
+    # na proxima colagem, e o operador precisa saber antes
+    if peer.grupo_id is not None and peer.default_route:
+        grupo = achar_grupo_id(list(grupos), peer.grupo_id)
+        if grupo is not None and not grupo.default_route:
+            saida.append(Erro(
+                "default_route", "a default route deste membro vem do grupo "
+                "%s, que nao a anuncia: ligue no grupo para manter" % grupo.nome))
+```
+
+(`achar_grupo_id` já é importado em `validate.py`; confira a assinatura em `app/peers.py:494`.)
+
+- [ ] **Step 4: Regerar goldens afetadas e rodar tudo**
+
+Run: `.venv/bin/python -m pytest -q`
+Expected: PASS. Se alguma golden de membro mudar, o diff só pode ser a linha `default-route-advertise` do membro ou o cabeçalho.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add templates/ app/api.py app/validate.py tests/
+git commit -m "A default route do membro e a do grupo"
+```
+
+---
+
+### Task 10: A tela
 
 **Files:**
 - Modify: `web/src/lib/campos.ts` (`Padroes`, `CAMPOS_POR_TIPO`, `SECOES_PEER`, `SECOES_GRUPO`, `CASCATA_PEER`, `CASCATA_GRUPO`, `cascata`)
@@ -966,10 +1427,10 @@ No `CAMPO_BRANCO`: `default_route: true,` e acrescentar `tabela: "nenhuma",`.
 e, depois de `const valores = useWatch(...)`:
 
 ```tsx
-  // o membro de grupo nao escolhe tabela: o export dele chama o do grupo, e
-  // o select dele nao mudaria nada no que e gerado
+  // o membro de grupo nao escolhe tabela nem default: o export dele chama o
+  // do grupo, e a default e emitida pelo grupo
   const membro = String(valores.grupo_id ?? "") !== ""
-  const camposPorTipo = membro ? { ...camposDaApi, tabela: [] } : camposDaApi
+  const camposPorTipo = membro ? { ...camposDaApi, tabela: [], default_route: [] } : camposDaApi
 ```
 
 - No começo de `aoEditarCampo`, antes do `if (campo !== "tipo" && campo !== "asn") return`:
@@ -979,8 +1440,9 @@ e, depois de `const valores = useWatch(...)`:
     // padrao do downstream, que e o que o peer avulso recebe ao nascer
     if (campo === "grupo_id") {
       const downstream = plano.padroes.downstream.includes(String(valores.tipo ?? ""))
-      form.setValue("tabela", String(valor ?? "") === "" && downstream ? "nenhuma" : "",
-                    { shouldDirty: true })
+      const avulso = String(valor ?? "") === "" && downstream
+      form.setValue("tabela", avulso ? "nenhuma" : "", { shouldDirty: true })
+      form.setValue("default_route", avulso, { shouldDirty: true })
       return
     }
 ```
@@ -996,6 +1458,34 @@ e, depois de `const valores = useWatch(...)`:
 
 Confira o nome da variável da consulta do plano nessa tela (`grep -n "usePlano\|plano\." web/src/telas/peers/PeerTela.tsx | head`) e importe `ROTULO_TABELA`.
 
+**Achado 5 da auditoria (troca de tipo).** Em `campos.ts`, exportar `export const CAMPOS_SO_DOWNSTREAM = ["default_route", "tabela"]` e, na `cascata`, dentro do `if (tipo !== tipoAntes && antes && agora)`, antes do laço:
+
+```ts
+    // fora do downstream a default e a tabela nao existem: a escolha feita a
+    // mao no cliente nao pode ficar guardada (e visivel) num upstream
+    const saiuDoDownstream = !padroes.downstream.includes(tipo)
+```
+
+e no laço, a condição de escrita vira `if (texto(valores[campo]) === texto(velho) || (saiuDoDownstream && CAMPOS_SO_DOWNSTREAM.includes(campo)))`. Teste em `campos.test.ts`:
+
+```ts
+  it.each(["nenhuma", "parcial", "parcial_ix", "full"])("sair do downstream limpa a tabela %s", (tabela) => {
+    const doCliente = { tipo: "cliente", default_route: false, tabela, origem: "1100", classe: "" }
+    const novo = cascata("cliente", "upstream", doCliente, PADROES, ["default_route", "tabela"])
+    expect(novo.tabela).toBe("")
+    expect(novo.default_route).toBe(false)
+  })
+```
+
+E em `FormularioPeer.test.tsx`, o membro também não vê a caixa:
+
+```tsx
+  it("o membro de grupo nao ve a caixa da default", () => {
+    render(<Montar iniciais={{ grupo_id: "3", tabela: "", default_route: false }} />)
+    expect(screen.queryByLabelText(/Anuncia default route/)).not.toBeInTheDocument()
+  })
+```
+
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `cd web && npm test -- --run && npm run lint && npm run api:conferir`
@@ -1010,7 +1500,7 @@ git commit -m "A tela escolhe a tabela recebida, e o membro herda a do grupo"
 
 ---
 
-### Task 7: O documento do cliente
+### Task 11: O documento do cliente
 
 **Files:**
 - Modify: `app/politica.py` (função nova e a tupla de `documento`, linha ~389)
@@ -1031,6 +1521,8 @@ def test_o_documento_diz_o_que_o_cliente_pode_receber():
     corpo = " ".join(secao.textos)
     for trecho in ("default", "parcial", "IX", "full table"):
         assert trecho in corpo, trecho
+    # a parcial com IX leva a rota selecionada, e nao todo prefixo do IX
+    assert "fica de fora" in corpo
     # a default combina com qualquer tabela, e e o que o cadastro novo recebe
     assert "junto com qualquer" in corpo
 ```
@@ -1061,8 +1553,11 @@ def _recebido(rede):
         textos=(
             "A sessão BGP com o AS%s entrega uma destas tabelas, combinada "
             "na contratação: só a rota default; a tabela parcial, com os "
-            "prefixos do AS%s e dos nossos clientes; a parcial com as rotas "
-            "que aprendemos no IX; ou a full table." % (rede.ASN, rede.ASN),
+            "prefixos do AS%s e dos nossos clientes; a parcial mais as rotas "
+            "que selecionamos pelo IX; ou a full table." % (rede.ASN, rede.ASN),
+            "Na parcial com IX vai a rota que escolhemos para cada prefixo "
+            "quando ela veio do IX. Um prefixo que alcançamos melhor por um "
+            "trânsito fica de fora, mesmo que também exista pelo IX.",
             "A rota default (0.0.0.0/0 e ::/0) vai junto com qualquer uma "
             "delas quando contratada. Sem pedido em contrário, a sessão nova "
             "recebe só a default.",
@@ -1087,7 +1582,7 @@ git commit -m "O documento do cliente diz qual tabela a sessao entrega"
 
 ---
 
-### Task 8: O PLANO
+### Task 12: O PLANO
 
 **Files:**
 - Modify: `PLANO.md` (parágrafo da linha ~96; seção "Export" do exemplo de cliente, linha ~1200; seção "Aplicação" do mesmo exemplo, linha ~1249; tabela pública, linha ~1978)
@@ -1128,6 +1623,20 @@ Depois do parágrafo do `public-as-only force`, acrescentar:
 A default route sai pela sessão, e não pelo filtro: `peer 198.51.100.2 default-route-advertise` dentro da família. O VRP origina `0.0.0.0/0` e `::/0` nessa sessão mesmo quando não há default na RIB nem na FIB, e o anúncio não passa pelo route-filter de export, então nenhum `refuse` do filtro a segura. Comportamento confirmado no equipamento. É por isso que o modo `nenhuma` pode recusar tudo no export e a sessão continua recebendo a default.
 ```
 
+- [ ] **Step 3b: As premissas que a auditoria levantou**
+
+Logo depois do parágrafo novo do Step 1, acrescentar:
+
+```markdown
+A parcial seleciona pela marca de origem da rota, com a mesma premissa do `EXPORT-SANITY`: upstream, IX e PNI nunca carimbam origem anunciável (`1000` ou `11xx`), e o app recusa esse cadastro. A parcial com IX leva a rota selecionada para o prefixo quando ela veio do IX: o export só vê o melhor caminho, e um prefixo que vence por upstream fica de fora mesmo havendo caminho pelo IX. Entregar todo prefixo disponível no IX exigiria outro desenho. Antes de pôr qualquer sessão em `parcial_ix`, reaplique o bloco base no equipamento, porque é ele que traz a `CL-ORIGEM-PARCIAL-IX`.
+```
+
+E, depois do parágrafo novo do Step 3 (a default fora do filtro):
+
+```markdown
+Num grupo, a default é do grupo: o `peer <GRUPO> default-route-advertise` vale para todos os membros, e o membro não emite nem tira o dele. O gerador não emite `undo`: para tirar a default de uma sessão que já a tinha, aplique `undo peer <ip> default-route-advertise` (ou `undo peer <GRUPO> default-route-advertise`) à mão.
+```
+
 - [ ] **Step 4: A tabela pública**
 
 Na "Tabela pública para clientes", antes de "**Informativas que você recebe de nós**", acrescentar:
@@ -1135,7 +1644,7 @@ Na "Tabela pública para clientes", antes de "**Informativas que você recebe de
 ```markdown
 **O que você recebe de nós**
 
-A sessão BGP entrega uma destas tabelas, combinada na contratação: só a rota default; a tabela parcial, com os prefixos do AS64512 e dos nossos clientes; a parcial com as rotas que aprendemos no IX; ou a full table. A rota default (`0.0.0.0/0` e `::/0`) vai junto com qualquer uma delas quando contratada. Sem pedido em contrário, a sessão nova recebe só a default.
+A sessão BGP entrega uma destas tabelas, combinada na contratação: só a rota default; a tabela parcial, com os prefixos do AS64512 e dos nossos clientes; a parcial mais as rotas que selecionamos pelo IX (um prefixo que alcançamos melhor por trânsito fica de fora); ou a full table. A rota default (`0.0.0.0/0` e `::/0`) vai junto com qualquer uma delas quando contratada. Sem pedido em contrário, a sessão nova recebe só a default.
 ```
 
 - [ ] **Step 5: Conferir consistência e ASCII dos blocos**
@@ -1164,13 +1673,13 @@ git commit -m "O PLANO descreve a tabela recebida e a default fora do filtro"
 
 ---
 
-### Task 9: Fechamento
+### Task 13: Fechamento
 
 - [ ] **Step 1: Suítes completas**
 
 ```bash
 .venv/bin/python -m pytest -q
-cd web && npm test -- --run && npm run lint && npm run api:conferir && cd ..
+cd web && npm test -- --run && npm run lint && npm run api:conferir && npm run build && cd ..
 graphify update .
 ```
 
@@ -1181,13 +1690,14 @@ Expected: tudo PASS. O e2e do Playwright (`npm run e2e`) depende do `playwright 
 ```bash
 .venv/bin/python - <<'EOF'
 from app import peers, render, plan
-for p in peers.carregar("peers/264130.yaml"):
+# o cadastro real fica no checkout principal; a worktree nao tem peers/
+for p in peers.carregar("/Users/diorgera/Projetos/POLITICA_BGP/peers/264130.yaml"):
     if p.tipo in plan.TIPOS_DOWNSTREAM:
         print(p.nome, p.tabela, p.default_route)
 EOF
 ```
 
-Expected: os dois parceiros com `full`, um com `True` e outro com `False`, como antes.
+Expected: os dois parceiros com `full`, um com `True` e outro com `False`, como antes. O de `True` (id 10) é membro do grupo 1, que está sem default: com a regra da Task 9 ele perde a default na próxima colagem. Diga isso ao usuário no relatório final; a correção é ligar a default no grupo 1, no cadastro dele, fora do repositório.
 
 - [ ] **Step 3: Commit do que sobrar (graph do graphify, se versionado)**
 

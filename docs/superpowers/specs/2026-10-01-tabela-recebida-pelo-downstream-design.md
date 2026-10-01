@@ -31,7 +31,7 @@ Dois campos independentes em `Peer` e `Grupo`:
 - O contrato do POST não muda para o `default_route`: o campo ausente no corpo continua `false`. Se ele passasse a `true`, um POST de upstream sem o campo seria recusado pelo `validate`, que barra default route fora de downstream. A `tabela` ausente ou em branco num downstream vira `nenhuma`.
 - Os dois campos combinam livremente. Parcial + default é o pacote comum para cliente multihomed.
 - `tabela` entra em `CAMPOS_POR_TIPO` e em `CAMPOS_POR_TIPO_GRUPO` (`app/formulario.py:658`) só para `cliente` e `parceiro`, ao lado do `default_route`.
-- Membro de grupo herda a tabela do grupo. O export do membro (`export_por_asn_do_membro`, `_macros.j2:253`) já termina em `call route-filter CUST-<grupo>-EXPORT-<U>`, então o portão do grupo vale para ele sem nada novo. O render ignora o valor gravado no membro. O `default_route` continua sendo por membro, como hoje.
+- Membro de grupo herda a tabela do grupo. O export do membro (`export_por_asn_do_membro`, `_macros.j2:253`) já termina em `call route-filter CUST-<grupo>-EXPORT-<U>`, então o portão do grupo vale para ele sem nada novo. O render ignora o valor gravado no membro. O `default_route` também passa a ser do grupo (ver "Revisão da auditoria").
 - Quem reaproveita a política de outro peer (`politica_de`) chama o export da origem, então recebe a tabela da origem. A tela já avisa que editar os campos de quem reaproveita não muda o que é gerado.
 - `tabela` não entra em `tem_filtro_proprio`, porque o membro não sobrescreve a tabela.
 
@@ -119,6 +119,19 @@ Rótulos dos modos na tela:
 - `test_formulario.py`: a conferência do `CAMPOS_POR_TIPO` passa com o campo novo.
 - `test_politica.py` e `test_pdf.py`: a seção nova sai no documento.
 - vitest: o select aparece em cliente e parceiro, não aparece em upstream, IX e PNI, vira a linha de herança no membro de grupo, e o novo cadastro vem com os padrões.
+
+## Revisão da auditoria
+
+A auditoria do plano levantou seis pontos. As decisões abaixo valem por cima do resto da spec.
+
+1. **Valor inválido nunca vira full.** O macro só cai no ramo sem portão com `full` explícito; qualquer valor fora de `plan.TABELAS` faz o render falhar (`plan.exige_tabela`). O `/api/peers/{id}/saida`, o `/api/grupos/{id}/saida`, o `/api/config` e o `/api/config/organizada`, que leem o YAML sem passar pelo `validate`, recusam com 422 no campo `tabela`, nomeando o registro. A conferência olha quem define o export: o peer avulso, o grupo do membro e a origem de quem reaproveita.
+2. **Editar não apaga a tabela.** A `tabela` em branco ou omitida no formulário vira `nenhuma` só na criação. Na edição de um downstream ela preserva a do registro anterior (`anterior.tabela`); se o anterior não era downstream, vira `nenhuma`. Vale para peer e grupo.
+3. **A parcial seleciona pela marca de origem da rota**, com a mesma premissa do `EXPORT-SANITY`. Para a premissa valer, upstream, IX e PNI não podem carimbar origem que esteja na `CL-ORIGEM-ANUNCIAVEL`: o `1000` sai de `ORIGENS_POR_TIPO` desses três tipos, e no peer a origem anunciável nesses tipos passa de aviso a erro. O cadastro real (`peers/264130.yaml`) usa `1400` nos seis upstreams.
+4. **A default route do membro é a do grupo**, como a tabela. O bloco do membro deixa de emitir o `default-route-advertise` próprio; quem emite é o grupo. O cabeçalho do membro mostra a default do grupo, a tela esconde a caixa no membro, e o `avisos()` avisa o membro que tem a caixa gravada e está num grupo sem default. O gerador não emite `undo`: desligar a default numa sessão que já a tinha exige `undo peer <ip> default-route-advertise` à mão, e o PLANO diz isso.
+5. **Trocar o tipo para fora do downstream limpa os dois campos**, mesmo com valor escolhido à mão (`parcial`, `parcial_ix`, `full`); entre cliente e parceiro a escolha fica.
+6. **Parcial + IX entrega a rota selecionada que veio do IX.** O export só vê o melhor caminho: um prefixo cujo vencedor veio de upstream fica fora, mesmo havendo caminho pelo IX. O PLANO, a tabela pública e o PDF dizem isso. O bloco base precisa ser reaplicado no equipamento (por causa da `CL-ORIGEM-PARCIAL-IX`) antes de qualquer sessão em `parcial_ix`.
+
+Critérios de aceite acrescentados: YAML inválido recusado nas quatro rotas de saída; PUT sem a tabela preservando a anterior, em peer e grupo; a matriz dos quatro modos em IPv4 e IPv6, cliente e parceiro, com todos os vetos; a default efetiva em grupo; o aviso de sessão sem rota pela política efetiva; `npm run build` no fechamento.
 
 ## Fora do escopo
 
