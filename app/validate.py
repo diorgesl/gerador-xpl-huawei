@@ -58,7 +58,7 @@ def erro_de_tabela(alvo):
     return None
 
 
-def avisos(peer, peers, rede=None):
+def avisos(peer, peers, rede=None, grupos=()):
     """Coisas que o usuario precisa saber mas que nao impedem gerar."""
     # o Rede so chega ate aqui e nao ate o validar: o que depende do
     # namespace sao os avisos das listas da CL-PEER, e a forma delas e
@@ -119,6 +119,15 @@ def avisos(peer, peers, rede=None):
         saida.append(Erro(
             "tabela", "sem default route e sem tabela, a sessao nao recebe "
             "rota nenhuma"))
+    # a default do membro e a do grupo. A caixa gravada no membro vem de
+    # antes desta regra; se o grupo nao anuncia, a sessao perde a default
+    # na proxima colagem, e o operador precisa saber antes
+    if peer.grupo_id is not None and peer.default_route:
+        grupo = achar_grupo_id(list(grupos), peer.grupo_id)
+        if grupo is not None and not grupo.default_route:
+            saida.append(Erro(
+                "default_route", "a default route deste membro vem do grupo "
+                "%s, que nao a anuncia: ligue no grupo para manter" % grupo.nome))
     _avisa_communities(peer, saida, rede)
     return saida
 

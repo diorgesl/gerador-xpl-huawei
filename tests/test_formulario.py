@@ -257,3 +257,9 @@ def test_tabela_em_branco_na_edicao_do_grupo_preserva_a_anterior():
     modelo = modelo_do_grupo(anterior).model_copy(update={"tabela": ""})
     grupo, _ = grupo_do_formulario(dados_do_formulario(modelo), [anterior], anterior, ())
     assert grupo.tabela == "parcial"
+
+
+def test_o_modelo_do_membro_nao_mostra_a_default():
+    # a default do membro e a do grupo: a caixa dele nao decide nada
+    assert modelo_do_peer(peer_cliente(default_route=True, grupo_id=3)).default_route is False
+    assert modelo_do_peer(peer_cliente(default_route=True)).default_route is True

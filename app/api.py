@@ -73,7 +73,9 @@ def modelo_do_peer(peer):
         timer_keepalive=_texto(peer.timer_keepalive),
         timer_hold=_texto(peer.timer_hold),
         bfd=peer.bfd, graceful_restart=peer.graceful_restart,
-        default_route=peer.default_route, bh_upstream=peer.bh_upstream,
+        # o membro nao decide a default: quem a emite e o grupo
+        default_route=peer.default_route and peer.grupo_id is None,
+        bh_upstream=peer.bh_upstream,
         # so quem usa a tabela a mostra: valor guardado aparece na tela mesmo
         # fora do tipo, e no upstream e no membro de grupo o select nao faria
         # nada
@@ -437,7 +439,7 @@ def _sem_origem(peer, peers):
 def _salvar_peer(t, formulario, peers, anterior):
     grupos, rede = _grupos(t), _rede(t)
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior, rede)
-    avisos = validate.avisos(peer, peers, rede=rede)
+    avisos = validate.avisos(peer, peers, rede=rede, grupos=grupos)
     if erros:
         return _falha(422, erros, avisos)
     if anterior is None:
@@ -538,7 +540,7 @@ def previa_peer(formulario: PeerForm,
     peers, grupos, rede = _peers(t), _grupos(t), _rede(t)
     anterior = peers_mod.achar_id(peers, ident) if ident is not None else None
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior, rede)
-    avisos = _avisos(validate.avisos(peer, peers, rede=rede))
+    avisos = _avisos(validate.avisos(peer, peers, rede=rede, grupos=grupos))
     salvo = _ler(anterior.arquivo(t.saida)) if anterior is not None else None
     if erros:
         return Previa(erros=validate.erros_para_dict(erros), avisos=avisos,

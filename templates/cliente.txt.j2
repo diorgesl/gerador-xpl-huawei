@@ -72,9 +72,8 @@ bgp {{ plan.ASN }}
 {% if not grupo.asn %}
   peer {{ s.remoto }} route-filter CUST-{{ peer.token }}-EXPORT-{{ U }} export
 {% endif %}
-{% if peer.default_route %}
-  peer {{ s.remoto }} default-route-advertise
-{% endif %}
+{# a default do membro e a do grupo: o grupo emite o comando para todos, e o
+   membro nao tem como tira-la (ver PLANO, default route) #}
 {% endfor %}
 {% else %}
 {% for fam in peer.familias() %}

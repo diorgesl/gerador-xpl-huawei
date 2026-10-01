@@ -2188,17 +2188,6 @@ def test_peer_sem_grupo_continua_igual_a_antes():
     assert texto_com_none == texto_com_grupo_none
 
 
-def test_membro_com_default_route_anuncia_a_flag_na_sessao_certa():
-    # default_route e por sessao, ortogonal ao agrupamento - o mesmo gap que
-    # a task 5 achou do lado do Grupo (ver plano); sem override, so pra
-    # confirmar que o ramo nao depende de tem_filtro_proprio()
-    grupo = grupo_sem_asn()
-    membro = peer_membro_sem_override(grupo.id)
-    membro.default_route = True
-    texto = render.render_peer(membro, grupo=grupo)
-    assert "peer 192.0.2.3 default-route-advertise" in texto
-
-
 def grupo_cliente_sem_asn():
     return peers.Grupo(id=3, nome="CLIENTES_REDUNDANTES", tipo="cliente",
                        classe="transito", lp_base=300, origem=1100, pop=2001)
@@ -3169,3 +3158,24 @@ def test_matriz_dos_modos_nas_duas_familias(tipo, tabela):
         assert ("CL-ORIGEM-ANUNCIAVEL" in export) == (tabela == "parcial")
         assert ("CL-ORIGEM-PARCIAL-IX" in export) == (tabela == "parcial_ix")
         assert export.strip().endswith("finish"), fam
+
+
+def test_o_membro_nao_emite_a_default_propria():
+    # quem emite e o grupo; o membro com a caixa gravada nao muda nada
+    grupo = grupo_cliente_sem_asn()
+    membro = peer_membro_sem_override(grupo.id)
+    membro.tipo = "cliente"
+    membro.default_route = True
+    texto = render.render_peer(membro, grupo=grupo)
+    assert "default-route-advertise" not in texto
+    assert "default route" not in texto
+
+
+def test_o_cabecalho_do_membro_mostra_a_default_do_grupo():
+    grupo = grupo_cliente_sem_asn()
+    grupo.default_route = True
+    membro = peer_membro_sem_override(grupo.id)
+    membro.tipo = "cliente"
+    cabecalho = render.render_peer(membro, grupo=grupo).splitlines()[:8]
+    assert any(l.startswith("# default route: a do grupo %s" % grupo.nome)
+               for l in cabecalho)

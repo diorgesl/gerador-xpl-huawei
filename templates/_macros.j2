@@ -19,7 +19,11 @@
    o que o operador le antes de colar. O VRP origina a default nesta sessao
    mesmo sem default na RIB, e por fora do route-filter de export
    (confirmado no equipamento). #}
-{% if peer.default_route %}
+{% if grupo and peer.politica_de is none %}
+{% if grupo.default_route %}
+# default route: a do grupo {{ grupo.nome }}; o VRP origina 0/0 e ::/0 mesmo sem default na tabela
+{% endif %}
+{% elif peer.default_route %}
 # default route: o VRP origina 0/0 e ::/0 nesta sessao mesmo sem default na tabela
 {% endif %}
 # pressupoe o bloco base ja aplicado neste equipamento

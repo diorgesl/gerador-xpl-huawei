@@ -1434,3 +1434,11 @@ def test_peer_externo_com_a_origem_do_tipo_passa():
         peer = um_peer(tipo=tipo, classe=None, aprendizado=3000,
                        origem=origem, **extra)
         assert "origem" not in campos(validar(peer, [])), tipo
+
+
+def test_membro_com_default_gravada_e_grupo_sem_default_avisa():
+    grupo = um_grupo(id=3, default_route=False)
+    membro = um_peer(grupo_id=3, default_route=True)
+    assert "default_route" in campos(validate.avisos(membro, [], grupos=[grupo]))
+    grupo.default_route = True
+    assert "default_route" not in campos(validate.avisos(membro, [], grupos=[grupo]))
