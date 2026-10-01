@@ -38,6 +38,9 @@ class PeerForm(Modelo):
     bfd: bool = True
     graceful_restart: bool = True
     default_route: bool = False
+    # em branco num downstream vira "nenhuma" no peer_do_formulario; nos
+    # outros tipos o campo nao e lido
+    tabela: str = ""
     bh_upstream: str = ""
     prefixos_v4: list[str] = []
     prefixos_v6: list[str] = []
@@ -75,6 +78,9 @@ class GrupoForm(Modelo):
     bfd: bool = True
     graceful_restart: bool = True
     default_route: bool = False
+    # em branco num downstream vira "nenhuma" no peer_do_formulario; nos
+    # outros tipos o campo nao e lido
+    tabela: str = ""
     bh_upstream: str = ""
     prefixos_v4: list[str] = []
     prefixos_v6: list[str] = []
@@ -133,6 +139,10 @@ class TabelaTipo(BaseModel):
     route_limit: int | None
     timer_keepalive: int | None
     timer_hold: int | None
+    # a caixa da default e a tabela que o tipo recebe ao nascer: a cascata da
+    # troca de tipo le estes dois junto com os de cima
+    default_route: bool
+    tabela: str
 
 
 class Padroes(BaseModel):
@@ -176,6 +186,9 @@ class Plano(BaseModel):
     tipos: list[str]
     tipos_com_criar_lista: list[str]
     classes_cliente: list[str]
+    # os valores da tabela recebida, na ordem da tela: o select do formulario
+    # sai daqui, e nao de uma copia no front
+    tabelas: list[str]
     lp_base: dict[str, int]
     route_limit: dict[str, int]
     route_limit_exemplo: dict[str, int]
@@ -271,6 +284,8 @@ class GrupoResumo(BaseModel):
     id: int
     nome: str
     tipo: str
+    # a tela do membro mostra a tabela que ele herda
+    tabela: str
     # a contagem sai dos peers, e nao de um campo gravado: e ela que diz se o
     # grupo ainda pode ser excluido
     membros: int

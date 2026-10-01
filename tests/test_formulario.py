@@ -15,6 +15,7 @@ from test_render import (grupo_do_tipo, peer_cliente, peer_ix, peer_parceiro,
 # "vazio" e o branco do tipo do campo.
 CHEIO = {
     "classe": "residencial", "pop": "2001", "default_route": True,
+    "tabela": "parcial",
     "aprendizado": "3100", "aprendizado_ix": "3010", "prepend_base": "2",
     "bh_upstream": "14840:666", "ap_block": ["270814"], "ap_te": ["264381"],
     "te_prefixos_v4": ["198.51.100.0/24"],
@@ -132,6 +133,8 @@ def test_o_bloco_da_cascata_e_a_tabela_do_plano():
             "route_limit": plan.ROUTE_LIMIT.get(tipo),
             "timer_keepalive": plan.TIMER_PADRAO.get(tipo, (None, None))[0],
             "timer_hold": plan.TIMER_PADRAO.get(tipo, (None, None))[1],
+            "default_route": tipo in plan.TIPOS_DOWNSTREAM,
+            "tabela": "nenhuma" if tipo in plan.TIPOS_DOWNSTREAM else "",
         }, tipo
 
 
@@ -202,3 +205,33 @@ def test_o_texto_do_bloco_marca_o_ausente_e_o_fora_de_servico():
                                     ausentes=[ausente])["v4"] == (
         "45.169.232.0/22 64512:210\n"
         "45.169.240.0/24 64512:211  !- nao veio na consulta ao IRR")
+
+
+def test_tabela_em_branco_no_downstream_vira_nenhuma():
+    modelo = modelo_do_peer(peer_cliente()).model_copy(update={"tabela": ""})
+    peer, _ = peer_do_formulario(dados_do_formulario(modelo), [], None, ())
+    assert peer.tabela == "nenhuma"
+
+
+def test_tabela_fora_do_downstream_fica_no_default():
+    modelo = modelo_do_peer(peer_upstream()).model_copy(update={"tabela": "parcial"})
+    peer, _ = peer_do_formulario(dados_do_formulario(modelo), [], None, ())
+    assert peer.tabela == "full"
+
+
+def test_o_modelo_so_mostra_a_tabela_de_quem_a_usa():
+    # valor guardado aparece na tela mesmo fora do tipo: o upstream e o
+    # membro de grupo teriam um select que nao faz nada
+    assert modelo_do_peer(peer_cliente(tabela="parcial")).tabela == "parcial"
+    assert modelo_do_peer(peer_upstream()).tabela == ""
+    assert modelo_do_peer(peer_cliente(tabela="parcial", grupo_id=3)).tabela == ""
+
+
+def test_o_peer_em_branco_de_downstream_recebe_so_a_default():
+    for tipo in plan.TIPOS:
+        p = formulario.peer_em_branco(tipo, [], [])
+        g = formulario.grupo_em_branco(tipo, [], [])
+        down = tipo in plan.TIPOS_DOWNSTREAM
+        assert (p.default_route, g.default_route) == (down, down), tipo
+        if down:
+            assert (p.tabela, g.tabela) == ("nenhuma", "nenhuma"), tipo

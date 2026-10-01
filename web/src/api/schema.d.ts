@@ -784,6 +784,11 @@ export interface components {
              */
             default_route: boolean;
             /**
+             * Tabela
+             * @default
+             */
+            tabela: string;
+            /**
              * Bh Upstream
              * @default
              */
@@ -857,6 +862,8 @@ export interface components {
             nome: string;
             /** Tipo */
             tipo: string;
+            /** Tabela */
+            tabela: string;
             /** Membros */
             membros: number;
         };
@@ -1061,6 +1068,11 @@ export interface components {
              */
             default_route: boolean;
             /**
+             * Tabela
+             * @default
+             */
+            tabela: string;
+            /**
              * Bh Upstream
              * @default
              */
@@ -1187,6 +1199,8 @@ export interface components {
             tipos_com_criar_lista: string[];
             /** Classes Cliente */
             classes_cliente: string[];
+            /** Tabelas */
+            tabelas: string[];
             /** Lp Base */
             lp_base: {
                 [key: string]: number;
@@ -1360,6 +1374,10 @@ export interface components {
             timer_keepalive: number | null;
             /** Timer Hold */
             timer_hold: number | null;
+            /** Default Route */
+            default_route: boolean;
+            /** Tabela */
+            tabela: string;
         };
         /** ValidationError */
         ValidationError: {

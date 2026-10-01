@@ -211,6 +211,8 @@ def _padroes(rede=None):
                 "route_limit": plan.ROUTE_LIMIT.get(t),
                 "timer_keepalive": plan.TIMER_PADRAO.get(t, (None, None))[0],
                 "timer_hold": plan.TIMER_PADRAO.get(t, (None, None))[1],
+                "default_route": t in plan.TIPOS_DOWNSTREAM,
+                "tabela": "nenhuma" if t in plan.TIPOS_DOWNSTREAM else "",
             }
             for t in plan.TIPOS
         },
@@ -420,6 +422,10 @@ def peer_do_formulario(dados, peers, anterior=None, grupos=()):
         sessoes=_sessoes(dados),
         bh_upstream=_texto(dados, "bh_upstream"),
         default_route=dados.get("default_route") == "on",
+        # so o downstream le a tabela; nos outros tipos fica o default do
+        # dataclass. O branco e "nenhuma", o padrao do cadastro novo
+        **({"tabela": _texto(dados, "tabela") or "nenhuma"}
+           if tipo in plan.TIPOS_DOWNSTREAM else {}),
         # o grupo_id vale nos cinco tipos: o membro herda do grupo o mesmo
         # objeto em qualquer um deles. Quem recusa o par errado - grupo que
         # nao existe, de outro tipo, ou ASN divergente - e o validate, com
@@ -519,6 +525,8 @@ def grupo_do_formulario(dados, grupos, anterior=None, peers=()):
         prepend_base=valores.get("prepend_base") or 0,
         bh_upstream=_texto(dados, "bh_upstream"),
         default_route=dados.get("default_route") == "on",
+        **({"tabela": _texto(dados, "tabela") or "nenhuma"}
+           if tipo in plan.TIPOS_DOWNSTREAM else {}),
         bfd=dados.get("bfd") == "on",
         graceful_restart=dados.get("graceful_restart") == "on",
         timer_keepalive=valores.get("timer_keepalive"),
@@ -609,6 +617,17 @@ def _conferir_faixas(valores):
     return erros
 
 
+def _padrao_do_downstream(tipo):
+    """O cadastro novo de cliente e de parceiro recebe so a default.
+
+    Fica aqui, e nao no dataclass, porque o default do dataclass e o do yaml
+    antigo, que recebia a full table e tem que continuar recebendo.
+    """
+    if tipo in plan.TIPOS_DOWNSTREAM:
+        return {"default_route": True, "tabela": "nenhuma"}
+    return {}
+
+
 def peer_em_branco(tipo, peers, grupos):
     """O peer novo do tipo: os defaults da tabela do plano e o proximo ID livre.
 
@@ -623,7 +642,8 @@ def peer_em_branco(tipo, peers, grupos):
                 origem=_origem_padrao(tipo),
                 route_limit=plan.ROUTE_LIMIT.get(tipo, 50),
                 timer_keepalive=k, timer_hold=h,
-                aprendizado=_aprendizado_padrao(tipo, peers, grupos))
+                aprendizado=_aprendizado_padrao(tipo, peers, grupos),
+                **_padrao_do_downstream(tipo))
 
 
 def grupo_em_branco(tipo, peers, grupos):
@@ -639,7 +659,8 @@ def grupo_em_branco(tipo, peers, grupos):
                  lp_base=plan.LP_BASE.get(tipo, 300),
                  origem=_origem_padrao(tipo),
                  timer_keepalive=k, timer_hold=h,
-                 aprendizado=_aprendizado_padrao(tipo, peers, grupos))
+                 aprendizado=_aprendizado_padrao(tipo, peers, grupos),
+                 **_padrao_do_downstream(tipo))
 
 
 # Os campos que so valem para alguns tipos, pelo nome de campo do formulario.
@@ -659,6 +680,7 @@ CAMPOS_POR_TIPO = {
     "classe": ("cliente", "parceiro"),
     "pop": ("cliente", "parceiro"),
     "default_route": ("cliente", "parceiro"),
+    "tabela": ("cliente", "parceiro"),
     "aprendizado": ("upstream", "ix"),
     "prepend_base": ("upstream",),
     "bh_upstream": ("upstream",),
@@ -679,6 +701,7 @@ CAMPOS_POR_TIPO_GRUPO = {
     "classe": ("cliente", "parceiro"),
     "pop": ("cliente", "parceiro"),
     "default_route": ("cliente", "parceiro"),
+    "tabela": ("cliente", "parceiro"),
     "aprendizado": ("upstream",),
     "aprendizado_ix": ("ix",),
     "prepend_base": ("upstream",),

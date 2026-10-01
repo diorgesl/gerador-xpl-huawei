@@ -35,7 +35,8 @@ def test_a_lista_conta_os_membros(api):
     api.post("/api/grupos", json=GRUPO_PARCEIROS)
     assert api.post("/api/peers", json=membro_de(0)).status_code == 201
     assert api.get("/api/grupos").json() == [
-        {"id": 0, "nome": "PARCEIROS_CDN", "tipo": "parceiro", "membros": 1}]
+        {"id": 0, "nome": "PARCEIROS_CDN", "tipo": "parceiro",
+         "tabela": "nenhuma", "membros": 1}]
 
 
 def test_o_registro_lista_os_membros(api):
@@ -255,3 +256,20 @@ def test_o_irr_do_grupo_mescla_e_o_salvar_guarda_o_prefixo_limpo(
     (grupo,) = peers_mod.carregar_grupos(caminho_tenant(tmp_path))
     assert grupo.prefixos["v4"] == [
         "45.169.232.0/22", "45.169.236.0/23", "45.169.240.0/24"]
+
+
+def test_o_grupo_novo_de_downstream_recebe_so_a_default(api):
+    f = api.get("/api/grupos/novo", params={"tipo": "cliente"}).json()["formulario"]
+    assert (f["default_route"], f["tabela"]) == (True, "nenhuma")
+
+
+def test_a_lista_de_grupos_traz_a_tabela(api, tmp_path):
+    peers_mod.gravar_grupos(
+        [peers_mod.Grupo(id=3, nome="CLIENTES", tipo="cliente", classe="transito",
+                         origem=1100, pop=2001, tabela="parcial")],
+        caminho_tenant(tmp_path))
+    assert api.get("/api/grupos").json()[0]["tabela"] == "parcial"
+
+
+def test_o_plano_publica_as_tabelas(api):
+    assert api.get("/api/plano").json()["tabelas"] == list(plan.TABELAS)

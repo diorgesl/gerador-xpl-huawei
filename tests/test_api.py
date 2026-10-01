@@ -180,9 +180,11 @@ def test_o_asn_do_tenant_chega_no_bloco_do_peer(api, tmp_path):
 def test_o_as_de_32_bits_com_namespace_chega_no_bloco(api, tmp_path):
     """As duas chaves: o ASN no bgp e no as-path, o namespace nas communities."""
     tenants.criar(264130, 64500)
+    # full: o `apply as-path` do ASN sai do prepend do export, que o modo
+    # nenhuma (o do POST sem tabela) nao tem
     corpo = dict(CLIENTE, asn="264130", nome="Cliente 32", apelido="C32",
                  prefixos_v4=["198.51.100.0/24"],
-                 sessao_v4_remoto="198.51.100.9")
+                 sessao_v4_remoto="198.51.100.9", tabela="full")
 
     r = api.post("/api/peers", json=corpo, params={"asn": 264130})
 

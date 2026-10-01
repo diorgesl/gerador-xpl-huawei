@@ -74,6 +74,11 @@ def modelo_do_peer(peer):
         timer_hold=_texto(peer.timer_hold),
         bfd=peer.bfd, graceful_restart=peer.graceful_restart,
         default_route=peer.default_route, bh_upstream=peer.bh_upstream,
+        # so quem usa a tabela a mostra: valor guardado aparece na tela mesmo
+        # fora do tipo, e no upstream e no membro de grupo o select nao faria
+        # nada
+        tabela=(peer.tabela if peer.tipo in plan.TIPOS_DOWNSTREAM
+                and peer.grupo_id is None else ""),
         ap_block=_lista(peer.ap_block), ap_te=_lista(peer.ap_te),
         ap_allowed=_lista(peer.ap_allowed), ap_prefer=_lista(peer.ap_prefer),
         communities=_lista(peer.communities),
@@ -106,6 +111,7 @@ def modelo_do_grupo(grupo):
         timer_hold=_texto(grupo.timer_hold),
         bfd=grupo.bfd, graceful_restart=grupo.graceful_restart,
         default_route=grupo.default_route, bh_upstream=grupo.bh_upstream,
+        tabela=grupo.tabela if grupo.tipo in plan.TIPOS_DOWNSTREAM else "",
         ap_block=_lista(grupo.ap_block), ap_te=_lista(grupo.ap_te),
         ap_allowed=_lista(grupo.ap_allowed), ap_prefer=_lista(grupo.ap_prefer),
         communities=_lista(grupo.communities),
@@ -244,6 +250,7 @@ def ler_plano(t: tenants_mod.Tenant = Depends(tenant)):
         tipos=list(plan.TIPOS),
         tipos_com_criar_lista=list(plan.TIPOS_COM_APPLY_PEER),
         classes_cliente=list(plan.CLASSES_CLIENTE),
+        tabelas=list(plan.TABELAS),
         lp_base=dict(plan.LP_BASE),
         route_limit=dict(plan.ROUTE_LIMIT),
         route_limit_exemplo=dict(plan.ROUTE_LIMIT_EXEMPLO),
@@ -633,7 +640,7 @@ def _salvar_grupo(t, formulario, grupos, anterior):
 @roteador.get("/grupos", response_model=list[GrupoResumo])
 def listar_grupos(t: tenants_mod.Tenant = Depends(tenant)):
     peers = _peers(t)
-    return [GrupoResumo(id=g.id, nome=g.nome, tipo=g.tipo,
+    return [GrupoResumo(id=g.id, nome=g.nome, tipo=g.tipo, tabela=g.tabela,
                         membros=len(_membros(g, peers)))
             for g in _grupos(t)]
 

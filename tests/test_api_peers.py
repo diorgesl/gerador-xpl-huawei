@@ -37,6 +37,20 @@ def test_o_peer_novo_traz_os_defaults_do_tipo(api):
     assert (f["aprendizado"], f["origem"], f["asn"]) == ("3100", "1400", "")
 
 
+def test_o_peer_novo_de_downstream_recebe_so_a_default(api):
+    for tipo in ("cliente", "parceiro"):
+        f = api.get("/api/peers/novo", params={"tipo": tipo}).json()["formulario"]
+        assert (f["default_route"], f["tabela"]) == (True, "nenhuma"), tipo
+    f = api.get("/api/peers/novo", params={"tipo": "upstream"}).json()["formulario"]
+    assert (f["default_route"], f["tabela"]) == (False, "")
+
+
+def test_post_de_cliente_sem_tabela_grava_nenhuma(api, tmp_path):
+    r = api.post("/api/peers", json=CLIENTE)
+    assert r.status_code == 201, r.text
+    assert peers_mod.carregar(caminho_tenant(tmp_path))[0].tabela == "nenhuma"
+
+
 def test_o_peer_novo_pula_o_id_ocupado(api, tmp_path):
     _grava(tmp_path, peer_cliente(id=0))
     assert api.get("/api/peers/novo").json()["id"] == 1
