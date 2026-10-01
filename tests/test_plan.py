@@ -391,3 +391,53 @@ def test_o_comprimento_do_cidr():
     # o torto devolve 0 em vez de estourar: quem recusa e o validate, e a
     # ordenacao nao pode ser mais um lugar que morre no mesmo dado
     assert plan.comprimento("nao-e-cidr") == 0
+
+
+def test_a_poda_do_confinamento_olha_bloco_e_intervalo():
+    """O /23 sai quando ha outra linha que alcanca tudo o que ele alcanca:
+    o bloco por dentro do bloco e o intervalo por dentro do intervalo."""
+    assert plan.linhas_do_confinamento(
+        [("45.169.232.0/22", 24), ("45.169.232.0/23", None),
+         ("45.169.236.0/23", None)]) == [
+        ("45.169.232.0/22", 24), ("45.169.236.0/23", None)]
+
+
+def test_o_intervalo_que_nao_alcanca_mantem_a_linha():
+    # o /22 exato nao chega no /23, e o 22-23 nao chega no /24: a lista
+    # libera exatamente o que as clausulas do import liberam
+    assert plan.linhas_do_confinamento(
+        [("45.169.232.0/22", None), ("45.169.232.0/23", None)]) == [
+        ("45.169.232.0/22", None), ("45.169.232.0/23", None)]
+    assert plan.linhas_do_confinamento(
+        [("45.169.232.0/22", 23), ("45.169.232.0/24", None)]) == [
+        ("45.169.232.0/22", 23), ("45.169.232.0/24", None)]
+
+
+def test_a_linha_de_fora_do_bloco_nao_cobre_nem_e_coberta():
+    linhas = [("45.169.236.0/23", None), ("45.169.232.0/22", 24)]
+    assert plan.linhas_do_confinamento(linhas) == linhas
+
+
+def test_a_poda_do_blackhole_olha_so_o_bloco():
+    # no BH o alcance e sempre `ge 32 le 32`, entao o /22 exato ja alcanca
+    # todo /32 que o /23 alcancaria
+    assert plan.linhas_do_blackhole(
+        [("45.169.232.0/22", None), ("45.169.232.0/23", None)]) == [
+        ("45.169.232.0/22", None)]
+    assert plan.linhas_do_blackhole(
+        [("45.169.236.0/23", None), ("45.169.232.0/22", 24)]) == [
+        ("45.169.236.0/23", None), ("45.169.232.0/22", 24)]
+
+
+def test_as_duas_formas_da_mesma_entrada_saem_uma_so():
+    # o /22 exato e o 22-22 escrevem a mesma entrada na lista, e a poda fica
+    # com a primeira, na ordem do cadastro
+    assert plan.linhas_do_confinamento(
+        [("45.169.232.0/22", None), ("45.169.232.0/22", 22)]) == [
+        ("45.169.232.0/22", None)]
+
+
+def test_a_poda_do_confinamento_em_v6():
+    assert plan.linhas_do_confinamento(
+        [("2804:36b4::/32", 48), ("2804:36b4:1000::/40", None)]) == [
+        ("2804:36b4::/32", 48)]

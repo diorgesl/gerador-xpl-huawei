@@ -468,6 +468,87 @@ def blocos_minimos(blocos):
     return saida
 
 
+def _faixa(linha):
+    """(rede, primeiro comprimento, ultimo) do que a entrada alcanca.
+
+    A linha e o par (prefixo, ate) do cadastro. Sem `ate` o casamento e o
+    prefixo exato, e o ultimo comprimento e o do proprio prefixo.
+    """
+    prefixo, ate = linha
+    rede = ipaddress.ip_network(prefixo, strict=False)
+    return rede, rede.prefixlen, rede.prefixlen if ate is None else ate
+
+
+def _chave(linha, alcance):
+    """O que a entrada alcanca, para a comparacao de cobertura.
+
+    Com `alcance` o que identifica a entrada e o bloco mais a faixa de
+    comprimentos; sem ele o bloco sozinho, que e o caso do BH, onde o
+    `ge le` e o mesmo em toda linha. E a mesma identidade que o `vistos`
+    usa: as duas formas de escrever o mesmo alcance (o exato e o 22-22)
+    sao uma entrada so.
+    """
+    rede, primeiro, ultimo = _faixa(linha)
+    return (str(rede), primeiro, ultimo) if alcance else str(rede)
+
+
+def _cobre(outra, linha, alcance):
+    """A entrada `outra` alcanca tudo o que a `linha` alcanca.
+
+    O bloco de `outra` tem que conter o da `linha` nos dois casos; com
+    `alcance`, a faixa de comprimentos tambem, porque e ela que diz ate
+    onde a entrada vai.
+    """
+    rede_a, ini_a, fim_a = _faixa(outra)
+    rede_b, ini_b, fim_b = _faixa(linha)
+    if not rede_b.subnet_of(rede_a):
+        return False
+    if not alcance:
+        return True
+    return ini_a <= ini_b and fim_b <= fim_a
+
+
+def _sem_cobertos(linhas, alcance):
+    """As linhas que nenhuma outra da mesma lista ja alcanca.
+
+    Mesma ideia do `blocos_minimos` para os blocos proprios, com uma
+    diferenca: aqui a linha e um prefixo com alcance, e nao um bloco, entao
+    quem cobre tem que conter o bloco e, quando o alcance conta, a faixa.
+    """
+    saida = []
+    vistos = set()
+    for linha in linhas:
+        chave = _chave(linha, alcance)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        if not any(_cobre(outra, linha, alcance) for outra in linhas
+                   if _chave(outra, alcance) != chave):
+            saida.append(linha)
+    return saida
+
+
+def linhas_do_confinamento(linhas):
+    """As entradas da PL-CUST-<T>: a linha que outra ja alcanca sai.
+
+    A lista e o que o import testa com `ip route-destination in`, e o /23
+    escrito dentro do /22 que alcanca o 24 nao acrescenta nada a ela. A
+    linha nao some do cadastro: e ela que carrega o tratamento por prefixo,
+    que a clausula do import le por outro caminho.
+    """
+    return _sem_cobertos(linhas, True)
+
+
+def linhas_do_blackhole(linhas):
+    """As entradas da PL-CUST-<T>-BH: a poda e so pelo bloco.
+
+    O `ge 32 le 32` e o mesmo em toda entrada, entao um /23 dentro do /22
+    nao alcanca nenhum /32 que o /22 ja nao alcance, mesmo quando a linha
+    do /22 e exata e no confinamento nao cobre o /23.
+    """
+    return _sem_cobertos(linhas, False)
+
+
 def conjunto_do_prefixo(cidr, ate=None):
     """O conjunto inline de um prefixo: `{45.169.232.0 22}` ou `{... 22 le 24}`.
 

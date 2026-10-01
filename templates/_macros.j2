@@ -89,15 +89,20 @@ end-filter
 {% set hostlen = 128 if fam == "v6" else 32 %}
 {#- a entrada segue o alcance da linha: exata sem sufixo, com `le` quando a
     linha escreve o intervalo. O grupo chega aqui com o teto no lugar do
-    alcance, e por isso a lista dele nao muda. #}
+    alcance, e por isso a lista dele nao muda.
+    As duas listas saem das mesmas linhas, cada uma sem o que a outra ja
+    alcanca: o /23 que so carrega um tratamento nao repete o que o /22
+    mais largo ja alcanca. #}
+{% set confinamento = plan.linhas_do_confinamento(alvo.cidrs(fam)) %}
+{% set blackhole = plan.linhas_do_blackhole(alvo.cidrs(fam)) %}
 xpl {{ kw }} PL-CUST-{{ alvo.token }}-{{ U }}
-{% for prefixo, ate in alvo.cidrs(fam) %}
+{% for prefixo, ate in confinamento %}
  {{ plan.entrada_do_prefixo(prefixo, ate) }}{{ "," if not loop.last }}
 {% endfor %}
 end-list
 
 xpl {{ kw }} PL-CUST-{{ alvo.token }}-BH-{{ U }}
-{% for prefixo, ate in alvo.cidrs(fam) %}
+{% for prefixo, ate in blackhole %}
  {{ plan.cidr_para_xpl(prefixo) }} ge {{ hostlen }} le {{ hostlen }}{{ "," if not loop.last }}
 {% endfor %}
 end-list

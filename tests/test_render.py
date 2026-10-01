@@ -2848,3 +2848,71 @@ def test_golden_do_cliente_tratado():
         Bloco(prefixo="45.169.236.0/23", ate=24,
               communities=["64512:211"])], "v6": []}))
     assert texto == (GOLDEN / "cliente-tratado.txt").read_text(encoding="ascii")
+
+
+def test_a_linha_coberta_pela_mais_larga_sai_das_duas_listas():
+    """A linha do /23 com community continua no cadastro, porque e ela que
+    carrega o tratamento, mas nao repete nas listas o que o `22 le 24` do
+    /22 ja alcanca. No BH a poda e so pelo bloco, porque ali o alcance e
+    sempre `ge 32 le 32`."""
+    texto = render.render_peer(peer_cliente(prefixos={"v4": [
+        Bloco(prefixo="45.169.232.0/22", ate=24),
+        Bloco(prefixo="45.169.232.0/23", communities=["64512:5000"]),
+        Bloco(prefixo="45.169.236.0/22", ate=24),
+        Bloco(prefixo="45.169.238.0/23", communities=["64512:5000"])],
+        "v6": []}))
+    cust = texto.split("xpl ip-prefix-list PL-CUST-268127-V4")[1].split(
+        "end-list")[0]
+    bh = texto.split("xpl ip-prefix-list PL-CUST-268127-BH-V4")[1].split(
+        "end-list")[0]
+    assert [l.strip() for l in cust.splitlines() if l.strip()] == [
+        "45.169.232.0 22 le 24,", "45.169.236.0 22 le 24"]
+    assert [l.strip() for l in bh.splitlines() if l.strip()] == [
+        "45.169.232.0 22 ge 32 le 32,", "45.169.236.0 22 ge 32 le 32"]
+    # o tratamento sai inteiro: e a clausula por prefixo que leva a community
+    assert "if ip route-destination in {45.169.232.0 23} then" in texto
+    assert "elseif ip route-destination in {45.169.238.0 23} then" in texto
+
+
+def test_o_blackhole_poda_o_que_o_confinamento_mantem():
+    """O /22 exato libera so o proprio /22 no confinamento, e a linha do /23
+    fica; no BH as duas alcancam os mesmos /32, e so o /22 sai."""
+    texto = render.render_peer(peer_cliente(prefixos={"v4": [
+        Bloco(prefixo="45.169.232.0/22", ate=22, communities=["64512:210"]),
+        Bloco(prefixo="45.169.232.0/23", communities=["64512:211"])],
+        "v6": []}))
+    cust = texto.split("xpl ip-prefix-list PL-CUST-268127-V4")[1].split(
+        "end-list")[0]
+    bh = texto.split("xpl ip-prefix-list PL-CUST-268127-BH-V4")[1].split(
+        "end-list")[0]
+    assert [l.strip() for l in cust.splitlines() if l.strip()] == [
+        "45.169.232.0 22 le 22,", "45.169.232.0 23"]
+    assert [l.strip() for l in bh.splitlines() if l.strip()] == [
+        "45.169.232.0 22 ge 32 le 32"]
+
+
+def test_o_grupo_tambem_nao_repete_a_linha_coberta():
+    # as listas do grupo tem a mesma forma (o teto no lugar do intervalo),
+    # entao a poda vale igual
+    grupo = grupo_com_asn(prefixos={"v4": ["203.0.113.0/22", "203.0.113.0/23"],
+                                    "v6": []})
+    texto = render.render_grupo(grupo)
+    cust = texto.split("xpl ip-prefix-list PL-CUST-UP-REDUNDANTE-V4")[1].split(
+        "end-list")[0]
+    bh = texto.split(
+        "xpl ip-prefix-list PL-CUST-UP-REDUNDANTE-BH-V4")[1].split(
+        "end-list")[0]
+    assert [l.strip() for l in cust.splitlines() if l.strip()] == [
+        "203.0.113.0 22 le 24"]
+    assert [l.strip() for l in bh.splitlines() if l.strip()] == [
+        "203.0.113.0 22 ge 32 le 32"]
+
+
+def test_golden_do_cliente_com_a_linha_coberta():
+    texto = render.render_peer(peer_cliente(prefixos={"v4": [
+        Bloco(prefixo="45.169.232.0/22", ate=24),
+        Bloco(prefixo="45.169.232.0/23", communities=["64512:5000"]),
+        Bloco(prefixo="45.169.236.0/22", ate=24),
+        Bloco(prefixo="45.169.238.0/23", communities=["64512:5000"])],
+        "v6": []}))
+    assert texto == (GOLDEN / "cliente-coberto.txt").read_text(encoding="ascii")
