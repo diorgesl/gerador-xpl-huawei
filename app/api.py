@@ -848,10 +848,22 @@ def _secao_originacao(blocos, rede, saida):
 
 
 def _secao_grupo(grupo, rede, saida):
+    """O bloco do grupo mais o quadro "ao criar", quando ele existe.
+
+    O quadro e o do grupo de upstream, e e ele que define o CL-PEER-<G> e o
+    APPLY-PEER-<G> que o export do grupo chama: sem ele na config inteira, a
+    chamada sai pendurada e o equipamento recusa a colagem. O quadro vai na
+    mesma secao do bloco pela mesma razao do peer: quem cola cola a secao
+    inteira, e o `salvo` continua sendo o do bloco em out/, que e o arquivo.
+    """
     destino = grupo.arquivo(saida)
+    partes = [render.render_grupo(grupo, rede=rede)]
+    criar = _criar_lista_do_grupo(grupo, rede)
+    if criar is not None:
+        partes.append(criar)
     return SecaoConfig(chave="grupo-%s" % grupo.id,
                        titulo="%s (%s)" % (grupo.nome, grupo.tipo),
-                       texto=render.render_grupo(grupo, rede=rede),
+                       texto="\n\n".join(partes),
                        arquivo=destino.name, salvo=destino.exists())
 
 

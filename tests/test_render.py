@@ -906,6 +906,34 @@ def test_ix_dual_stack_desliga_o_check_first_as_nas_duas_sessoes():
     assert texto.count("check-first-as") == 2
 
 
+def test_membro_de_grupo_de_ix_tambem_desliga_o_check_first_as():
+    """O membro de grupo nao passa pelo sessao_do_peer: ele escreve as linhas
+    da sessao dele no proprio bloco, e por isso o undo ficava so no caminho do
+    peer avulso. Dentro do grupo o route server continua transparente, e a
+    sessao sem o undo nao sobe com trafego nenhum."""
+    grupo = grupo_ix(nome="IXBR", id=4)
+    membro = membro_com_override_do_tipo("ix", grupo)
+    texto = render.render_peer(membro, grupo=grupo)
+    assert " undo peer 192.0.2.3 check-first-as enable\n" in texto
+    assert " undo peer 2001:db8:100::2 check-first-as enable\n" in texto
+    assert texto.count("check-first-as") == 2
+
+
+def test_peer_sem_descricao_nao_emite_a_linha_do_description():
+    """`peer X description` sem argumento e linha incompleta de CLI, e o campo
+    e livre no cadastro. Sem descricao, o comando nao sai."""
+    assert "description" not in render.render_peer(peer_upstream(descricao=""))
+    assert "description" not in render.render_peer(peer_cliente(descricao=""))
+
+
+def test_membro_sem_descricao_nao_emite_a_linha_do_description():
+    for tipo in ("cliente", "upstream", "ix", "pni"):
+        grupo = grupo_do_tipo(tipo)
+        membro = membro_com_override_do_tipo(tipo, grupo)
+        membro.descricao = ""
+        assert "description" not in render.render_peer(membro, grupo=grupo), tipo
+
+
 def test_cliente_e_upstream_nao_desligam_o_check_first_as():
     # o gate e por tipo, e so a sessao de IX desliga. Nos dois outros tipos o
     # default fica, e o golden deles e igualdade byte a byte: se a linha

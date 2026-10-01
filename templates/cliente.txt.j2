@@ -30,7 +30,11 @@
    macros do peer quebra a heranca do grupo em silencio. #}
 bgp {{ plan.ASN }}
 {% for fam in peer.familias() %}
+{# cadastro sem descricao nao vira `peer X description` sem argumento; a
+   guarda e a mesma do sessao_do_peer. #}
+{% if peer.descricao %}
  peer {{ peer.sessoes[fam].remoto }} description {{ peer.descricao }}
+{% endif %}
 {% if not grupo.asn %}
  peer {{ peer.sessoes[fam].remoto }} as-number {{ peer.asn }}
 {% endif %}

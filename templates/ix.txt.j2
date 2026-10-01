@@ -18,12 +18,18 @@
 {% endif %}
 bgp {{ plan.ASN }}
 {% for fam in peer.familias() %}
+{% if peer.descricao %}
  peer {{ peer.sessoes[fam].remoto }} description {{ peer.descricao }}
+{% endif %}
 {% if not grupo.asn %}
  peer {{ peer.sessoes[fam].remoto }} as-number {{ peer.asn }}
 {% endif %}
  peer {{ peer.sessoes[fam].remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
  peer {{ peer.sessoes[fam].remoto }} group {{ grupo.nome }}
+{# o membro nao passa pelo sessao_do_peer, entao o undo do check-first-as sai
+   aqui: dentro do grupo o route server continua transparente, e sem ele a
+   sessao nao sobe com trafego nenhum (PLANO, secao do IX). #}
+ undo peer {{ peer.sessoes[fam].remoto }} check-first-as enable
 {% endfor %}
 {% for fam in peer.familias() %}
 {% set U = fam|upper %}

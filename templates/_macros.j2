@@ -31,7 +31,13 @@ end-filter
 {% macro sessao_do_peer(peer, fam) -%}
 {% set s = peer.sessoes[fam] %}
  peer {{ s.remoto }} as-number {{ peer.asn }}
+{# a descricao e texto livre no cadastro, e pode estar em branco: sem ela o
+   comando nao sai, porque `peer X description` sem argumento e linha
+   incompleta de CLI. Os ramos de membro dos quatro templates de tipo
+   repetem esta guarda. #}
+{% if peer.descricao %}
  peer {{ s.remoto }} description {{ peer.descricao }}
+{% endif %}
  peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
  peer {{ s.remoto }} {{ plan.AS_ONLY }}
 {% if peer.tipo == "ix" %}

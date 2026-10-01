@@ -1,7 +1,9 @@
 """A config inteira numa resposta so: base, originacao, grupos e peers."""
 
-from dados_api import (ASN_DE_TESTE, BLOCOS, CLIENTE, GRUPO_PARCEIROS, arvore,
-                       caminho_tenant, membro_de)
+import re
+
+from dados_api import (ASN_DE_TESTE, BLOCOS, CLIENTE, GRUPO_PARCEIROS,
+                       GRUPO_UPSTREAM, arvore, caminho_tenant, membro_de)
 
 
 def _chaves(api):
@@ -131,6 +133,34 @@ def test_o_peer_que_reaproveita_sai_na_config_com_os_filtros_da_origem(api):
 
     assert "xpl " not in secao["texto"]
     assert "route-filter CUST-268127-IMPORT-V4 import" in secao["texto"]
+
+
+def test_o_grupo_de_upstream_traz_o_quadro_ao_criar(api):
+    """O export do grupo chama `APPLY-PEER-<G>`, e quem define esse filtro e o
+    quadro "ao criar" do grupo. Sem ele na config inteira, o arquivo do
+    "baixar tudo" sai com a chamada pendurada, e o equipamento recusa a
+    colagem. O peer ja entra com o quadro dele; o grupo de upstream tambem."""
+    ident = _criar(api, "/api/grupos", GRUPO_UPSTREAM)
+    saida = api.get("/api/grupos/%d/saida" % ident).json()
+    secao = _secoes(api)["grupo-%d" % ident]
+    assert saida["criar_lista"]
+    assert secao["texto"] == saida["bloco"] + "\n\n" + saida["criar_lista"]
+
+
+def test_nenhum_filtro_e_chamado_sem_definicao(api):
+    """A config inteira tem que se sustentar sozinha: um `call route-filter`
+    sem o `xpl route-filter` do outro lado so estoura no equipamento. Era o
+    caso do grupo de upstream, cujo export chamava o APPLY-PEER do grupo que
+    o quadro "ao criar" define e a config nao trazia."""
+    api.put("/api/blocos", json=BLOCOS)
+    _criar(api, "/api/grupos", GRUPO_UPSTREAM)
+    _criar(api, "/api/peers", CLIENTE)
+
+    texto = "\n\n".join(s["texto"] for s in api.get("/api/config").json()["secoes"])
+    definidos = set(re.findall(r"^xpl route-filter (\S+)", texto, re.M))
+    chamados = set(re.findall(r"^ +call route-filter (\S+)$", texto, re.M))
+    assert chamados
+    assert chamados <= definidos, sorted(chamados - definidos)
 
 
 def test_a_config_organizada_junta_tudo_por_tipo(api):
