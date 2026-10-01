@@ -627,3 +627,12 @@ def test_a_saida_nao_recusa_a_tabela_ignorada_do_membro(api, tmp_path):
                          origem=1100, pop=2001)], caminho_tenant(tmp_path))
     _grava(tmp_path, peer_cliente(tabela="", grupo_id=3))
     assert api.get("/api/peers/1/saida").status_code == 200
+
+
+def test_put_sem_tabela_preserva_a_do_cadastro(api, tmp_path):
+    # o cliente antigo recebe full; uma integracao que nao conhece o campo
+    # atualiza a descricao e nao pode tirar a tabela dele
+    _grava(tmp_path, peer_cliente(id=0, tabela="full"))
+    r = api.put("/api/peers/0", json=dict(CLIENTE, descricao="NOVA"))
+    assert r.status_code == 200, r.text
+    assert peers_mod.carregar(caminho_tenant(tmp_path))[0].tabela == "full"

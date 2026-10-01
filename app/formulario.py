@@ -342,6 +342,23 @@ def _anterior(peers, dados):
     return peers_mod.achar_id(peers, ident)
 
 
+def _tabela_do_formulario(dados, tipo, anterior):
+    """O kwarg da tabela, so no downstream.
+
+    O branco nao e uma escolha: na criacao vira "nenhuma", o padrao do
+    cadastro novo; na edicao de um downstream fica a do registro anterior.
+    Sem isso um PUT que nao conhece o campo tirava a tabela do cliente.
+    """
+    if tipo not in plan.TIPOS_DOWNSTREAM:
+        return {}
+    valor = _texto(dados, "tabela")
+    if valor:
+        return {"tabela": valor}
+    if anterior is not None and anterior.tipo in plan.TIPOS_DOWNSTREAM:
+        return {"tabela": anterior.tabela}
+    return {"tabela": "nenhuma"}
+
+
 def peer_do_formulario(dados, peers, anterior=None, grupos=()):
     """Formulario achatado -> Peer. Devolve (peer, erros_de_campo).
 
@@ -422,10 +439,7 @@ def peer_do_formulario(dados, peers, anterior=None, grupos=()):
         sessoes=_sessoes(dados),
         bh_upstream=_texto(dados, "bh_upstream"),
         default_route=dados.get("default_route") == "on",
-        # so o downstream le a tabela; nos outros tipos fica o default do
-        # dataclass. O branco e "nenhuma", o padrao do cadastro novo
-        **({"tabela": _texto(dados, "tabela") or "nenhuma"}
-           if tipo in plan.TIPOS_DOWNSTREAM else {}),
+        **_tabela_do_formulario(dados, tipo, anterior),
         # o grupo_id vale nos cinco tipos: o membro herda do grupo o mesmo
         # objeto em qualquer um deles. Quem recusa o par errado - grupo que
         # nao existe, de outro tipo, ou ASN divergente - e o validate, com
@@ -525,8 +539,7 @@ def grupo_do_formulario(dados, grupos, anterior=None, peers=()):
         prepend_base=valores.get("prepend_base") or 0,
         bh_upstream=_texto(dados, "bh_upstream"),
         default_route=dados.get("default_route") == "on",
-        **({"tabela": _texto(dados, "tabela") or "nenhuma"}
-           if tipo in plan.TIPOS_DOWNSTREAM else {}),
+        **_tabela_do_formulario(dados, tipo, anterior),
         bfd=dados.get("bfd") == "on",
         graceful_restart=dados.get("graceful_restart") == "on",
         timer_keepalive=valores.get("timer_keepalive"),

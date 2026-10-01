@@ -283,3 +283,14 @@ def test_a_saida_do_grupo_recusa_tabela_invalida(api, tmp_path):
     r = api.get("/api/grupos/3/saida")
     assert r.status_code == 422
     assert "tabela" in r.json()["erros"]
+
+
+def test_put_do_grupo_sem_tabela_preserva_a_do_cadastro(api, tmp_path):
+    peers_mod.gravar_grupos(
+        [peers_mod.Grupo(id=0, nome="PARCEIROS_CDN", tipo="parceiro",
+                         classe="transito", lp_base=300, origem=1100, pop=2001,
+                         tabela="parcial")],
+        caminho_tenant(tmp_path))
+    r = api.put("/api/grupos/0", json=GRUPO_PARCEIROS)
+    assert r.status_code == 200, r.text
+    assert peers_mod.carregar_grupos(caminho_tenant(tmp_path))[0].tabela == "parcial"

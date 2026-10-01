@@ -235,3 +235,25 @@ def test_o_peer_em_branco_de_downstream_recebe_so_a_default():
         assert (p.default_route, g.default_route) == (down, down), tipo
         if down:
             assert (p.tabela, g.tabela) == ("nenhuma", "nenhuma"), tipo
+
+
+def test_tabela_em_branco_na_edicao_preserva_a_anterior():
+    anterior = peer_cliente(tabela="full")
+    modelo = modelo_do_peer(anterior).model_copy(update={"tabela": ""})
+    peer, _ = peer_do_formulario(dados_do_formulario(modelo), [anterior], anterior, ())
+    assert peer.tabela == "full"
+
+
+def test_tabela_em_branco_vinda_de_upstream_vira_nenhuma():
+    anterior = peer_upstream()
+    modelo = modelo_do_peer(peer_cliente()).model_copy(update={"tabela": ""})
+    peer, _ = peer_do_formulario(dados_do_formulario(modelo), [anterior], anterior, ())
+    assert peer.tabela == "nenhuma"
+
+
+def test_tabela_em_branco_na_edicao_do_grupo_preserva_a_anterior():
+    anterior = grupo_do_tipo("cliente")
+    anterior.tabela = "parcial"
+    modelo = modelo_do_grupo(anterior).model_copy(update={"tabela": ""})
+    grupo, _ = grupo_do_formulario(dados_do_formulario(modelo), [anterior], anterior, ())
+    assert grupo.tabela == "parcial"
