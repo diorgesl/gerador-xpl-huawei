@@ -125,6 +125,11 @@ def _anuncio(rede):
             "pelo seu próprio AS no AS-path." % rede.c(204),
             "O segundo bloco faz o inverso: a rota sai somente para o destino "
             "indicado, e para mais nenhum.",
+            "Valem também as restrições padronizadas da RFC 1997: marcada com "
+            "`NO_EXPORT`, `NO_ADVERTISE` ou `NO_EXPORT_SUBCONFED`, a sua rota "
+            "não é anunciada em destino nenhum, inclusive para os outros "
+            "clientes. Ela continua valendo para o encaminhamento local aqui "
+            "dentro.",
         ),
         tabelas=(restringe, somente),
     )
@@ -271,6 +276,10 @@ def _blackhole(rede):
             "é o que você quer quando o ataque é local." % rede.BLACKHOLE_PROPAGATE,
             "O descarte não derruba a sessão e não afeta os outros prefixos: "
             "vale para o /32 anunciado.",
+            "A propagação respeita as mesmas restrições de destino do "
+            "controle de anúncio: um blackhole marcado com `%s:0:<ASN>` ou "
+            "com escopo de outro tipo não sai para aquele destino."
+            % rede.ns,
         ),
         tabelas=(),
     )

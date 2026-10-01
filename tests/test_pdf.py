@@ -47,6 +47,34 @@ def test_o_pdf_traz_o_as_e_a_data_de_emissao():
     assert DATA.encode("ascii") in dados
 
 
+def secao(titulo):
+    """Os textos de uma secao do documento, antes de virar folha."""
+    doc = politica.documento(REDE, emitido_em=DATA)
+    return " ".join(texto for s in doc.secoes if s.titulo == titulo
+                    for texto in s.textos)
+
+
+def test_o_pdf_diz_que_a_restricao_padronizada_e_honrada():
+    """A preservacao da restricao recebida muda o que o cliente ve: a rota
+    marcada com NO_EXPORT deixa de sair para os outros clientes. Isso e
+    promessa da folha, nao so do filtro."""
+    texto = secao("Controle de anúncio")
+    for marca in ("NO_EXPORT_SUBCONFED", "NO_ADVERTISE", "NO_EXPORT"):
+        assert marca in texto
+    # e o efeito tem que estar dito: nao sai para destino nenhum
+    assert "não é anunciada em destino nenhum" in texto
+    # na folha tambem, que e a ponta que o cliente le
+    assert b"NO_ADVERTISE" in gerado()
+
+
+def test_o_pdf_diz_que_a_propagacao_do_blackhole_respeita_o_destino():
+    """O achado 5 da auditoria: o ramo de RTBH terminava antes dos bloqueios,
+    e o pedido de propagacao atropelava o que o cliente tinha marcado."""
+    texto = secao("Blackhole")
+    assert "respeita as mesmas restrições de destino" in texto
+    assert "65532:0:<ASN>" in texto
+
+
 def test_o_cabecalho_da_tabela_sai_em_negrito():
     """A faixa cinza sozinha nao separa o cabecalho do corpo.
 
