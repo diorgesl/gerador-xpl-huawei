@@ -90,12 +90,18 @@ export function FormularioPeer({ form, plano, grupos, peers, erros, avisos, erro
    */
   function aoEditarCampo(campo: string, valor: unknown) {
     // entrar num grupo limpa a tabela e a default, para os campos sumirem;
-    // sair devolve o padrao do downstream, que e o do peer avulso ao nascer
+    // sair devolve o que o registro carregou, quando ele era um downstream
+    // avulso, e o padrao do peer novo nos outros casos. Sem isso escolher o
+    // grupo por engano e desfazer trocava o full do cliente por "nenhuma"
     if (campo === "grupo_id") {
       const downstream = plano.padroes.downstream.includes(String(valores.tipo ?? ""))
       const avulso = String(valor ?? "") === "" && downstream
-      form.setValue("tabela", avulso ? "nenhuma" : "", { shouldDirty: true })
-      form.setValue("default_route", avulso, { shouldDirty: true })
+      const carregado = form.formState.defaultValues
+      const tinha = avulso && String(carregado?.grupo_id ?? "") === "" && Boolean(carregado?.tabela)
+      form.setValue("tabela", !avulso ? "" : tinha ? String(carregado?.tabela) : "nenhuma",
+                    { shouldDirty: true })
+      form.setValue("default_route", !avulso ? false : tinha ? Boolean(carregado?.default_route) : true,
+                    { shouldDirty: true })
       return
     }
     if (campo !== "tipo" && campo !== "asn") return

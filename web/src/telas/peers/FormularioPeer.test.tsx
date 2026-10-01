@@ -75,17 +75,18 @@ const PEERS: PeerResumo[] = [
     nome: "Cliente ACME BKP", grupo_id: null, politica_de: 1 },
 ]
 
-function Montar({ iniciais = {}, erros = {}, avisos = [], plano = PLANO, peers = PEERS }: {
+function Montar({ iniciais = {}, erros = {}, avisos = [], plano = PLANO, peers = PEERS, grupos = [] }: {
   iniciais?: Partial<PeerForm>
   erros?: Record<string, string>
   avisos?: { campo: string; mensagem: string }[]
   plano?: Plano
   peers?: PeerResumo[]
+  grupos?: { valor: string; rotulo: string }[]
 }) {
   const form = useForm<PeerForm>({ defaultValues: { ...BRANCO, ...iniciais } })
   return (
     <Provedores>
-      <FormularioPeer form={form} plano={plano} grupos={[]} peers={peers} erros={erros} avisos={avisos} aoIrPara={vi.fn()} />
+      <FormularioPeer form={form} plano={plano} grupos={grupos} peers={peers} erros={erros} avisos={avisos} aoIrPara={vi.fn()} />
     </Provedores>
   )
 }
@@ -128,6 +129,20 @@ describe("o formulario do peer", () => {
   it("o upstream nao tem tabela recebida", () => {
     render(<Montar iniciais={{ tipo: "upstream", tabela: "" }} />)
     expect(screen.queryByLabelText(/Tabela recebida/)).not.toBeInTheDocument()
+  })
+
+  it("entrar num grupo por engano e voltar devolve a tabela e a default do peer", async () => {
+    // o cliente antigo com full: escolher o grupo e desfazer nao pode
+    // deixar o cadastro em "nenhuma", que no salvar tira as rotas dele
+    render(<Montar iniciais={{ tabela: "full", default_route: false }}
+                   grupos={[{ valor: "3", rotulo: "CLIENTES" }]} />)
+    await userEvent.click(screen.getByLabelText("Grupo"))
+    await userEvent.click(await screen.findByRole("option", { name: "CLIENTES" }))
+    expect(screen.queryByLabelText(/Tabela recebida/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText("Grupo"))
+    await userEvent.click(await screen.findByRole("option", { name: /sem grupo/ }))
+    expect(screen.getByLabelText(/Tabela recebida/)).toHaveTextContent("Full table")
+    expect(screen.getByRole("checkbox", { name: /Anuncia default route/ })).not.toBeChecked()
   })
 
   it("o membro de grupo nao ve a caixa da default", () => {
