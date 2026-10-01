@@ -158,12 +158,15 @@ ORIGEM_NOME = _origem_nome()
 # 1000 e 1900, as duas que o PLANO define sem depender de peer nenhum.
 # Nenhum tipo recebe a marca de cliente de outro, que seria a combinacao sem
 # sentido.
+# a origem anunciavel (1000 e 11xx) fica so no downstream: a tabela parcial e
+# o EXPORT-SANITY leem a marca, e um tipo externo com ela sairia como rota
+# propria ou de cliente para outro upstream e para o cliente da parcial
 ORIGENS_POR_TIPO = {
     "cliente": (1100, 1110, 1120, 1130),
     "parceiro": (1100, 1110, 1120, 1130),
-    "upstream": (1400, 1000, 1900),
-    "ix": (1300, 1200, 1000, 1900),
-    "pni": (1500, 1200, 1000, 1900),
+    "upstream": (1400, 1900),
+    "ix": (1300, 1200, 1900),
+    "pni": (1500, 1200, 1900),
 }
 
 # o par CL-PEER-<T> / APPLY-PEER-<T> existe so nestes tipos: e o que da

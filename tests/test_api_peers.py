@@ -275,7 +275,7 @@ def test_trocar_o_tipo_apaga_o_bloco_do_tipo_antigo(api, tmp_path):
     assert api.post("/api/peers", json=CLIENTE).status_code == 201
     assert (tmp_path / "out" / str(ASN_DE_TESTE) / "268127-cliente.txt").exists()
 
-    r = api.put("/api/peers/0", json=dict(CLIENTE, tipo="upstream",
+    r = api.put("/api/peers/0", json=dict(CLIENTE, tipo="upstream", origem="1400",
                                           aprendizado="3100", prefixos_v4=[]))
 
     assert r.status_code == 200, r.text

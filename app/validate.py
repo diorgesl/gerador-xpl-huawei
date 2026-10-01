@@ -799,6 +799,14 @@ def validar(peer, peers, anterior=None, grupos=None, rede=None):
                 "tabela", "tabela recebida: escolha entre %s"
                 % ", ".join(plan.TABELAS)))
     else:
+        # a parcial e o EXPORT-SANITY selecionam pela marca de origem: um
+        # tipo externo com origem anunciavel sairia como rota propria ou de
+        # cliente para outro upstream e para o cliente da parcial
+        anunciaveis = {int(c.split(":")[1]) for c in plan.ORIGEM_ANUNCIAVEL}
+        if peer.origem in anunciaveis:
+            erros.append(Erro(
+                "origem", "origem %d e de rota propria ou de cliente: o %s "
+                "nao pode usa-la" % (peer.origem, peer.tipo)))
         # a default route e servico de downstream, e o comando sai de um
         # macro que todos os tipos usam: sem esta checagem, um POST a mao
         # ligaria a flag em upstream, IX e PNI, e o bloco sairia anunciando

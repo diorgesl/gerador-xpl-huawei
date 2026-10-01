@@ -16,6 +16,11 @@ def um_peer(**kw):
         sessoes={"v4": {"local": "198.51.100.1", "remoto": "198.51.100.2"},
                  "v6": {}},
     )
+    # o peer externo valido carrega a origem do proprio tipo: a de cliente
+    # do base e recusada fora do downstream
+    if "origem" not in kw and kw.get("tipo") in plan.ORIGENS_POR_TIPO \
+            and kw["tipo"] not in plan.TIPOS_DOWNSTREAM:
+        base["origem"] = plan.ORIGENS_POR_TIPO[kw["tipo"]][0]
     base.update(kw)
     return Peer(**base)
 
@@ -882,7 +887,7 @@ def test_a_faixa_de_origem_do_grupo_depende_do_tipo():
     # de downstream so confere que a origem existe (ver o ruling da spec)
     g = um_grupo(tipo="upstream", origem=1110)
     erros = validar_grupo(g, [g], [], anterior=g)
-    assert ("origem", "origem do upstream tem que ser uma de 1400, 1000, 1900") in [
+    assert ("origem", "origem do upstream tem que ser uma de 1400, 1900") in [
         (e.campo, e.mensagem) for e in erros]
     assert validar_grupo(um_grupo(tipo="upstream", origem=1400),
                          [], [], anterior=None) == []
@@ -1125,9 +1130,9 @@ def test_origem_fora_da_tabela_do_tipo_e_aviso_nos_tipos_sem_conferencia():
     mudanca separada, e esta e ela: aviso, e nao erro, porque fechar trancaria
     cadastro que ja existe (tres upstreams do peers.yaml real).
     """
-    for tipo, permitidas in (("upstream", (1400, 1000, 1900)),
-                             ("ix", (1300, 1200, 1000, 1900)),
-                             ("pni", (1500, 1200, 1000, 1900))):
+    for tipo, permitidas in (("upstream", (1400, 1900)),
+                             ("ix", (1300, 1200, 1900)),
+                             ("pni", (1500, 1200, 1900))):
         # o route_limit do um_peer e o do cliente (50), e nao o da tabela do
         # tipo: sem alinhar, o aviso do route_limit entra na lista e o assert
         # de lista exata deixa de falar so da origem
@@ -1410,3 +1415,22 @@ def test_membro_e_quem_reaproveita_nao_avisam_sessao_sem_rota():
     copia = um_peer(default_route=False, tabela="nenhuma", politica_de=0)
     assert "tabela" not in campos(validate.avisos(membro, []))
     assert "tabela" not in campos(validate.avisos(copia, []))
+
+
+def test_peer_externo_nao_carimba_origem_anunciavel():
+    # a parcial e o EXPORT-SANITY selecionam pela marca de origem: um upstream
+    # carimbando 1000 ou 11xx sairia como rota propria ou de cliente
+    for tipo, extra in (("upstream", {}), ("ix", {"ix_id": 1}),
+                        ("pni", {"ap_allowed": ["64500"]})):
+        for origem in (1000, 1100, 1130):
+            peer = um_peer(tipo=tipo, classe=None, aprendizado=3000,
+                           origem=origem, **extra)
+            assert "origem" in campos(validar(peer, [])), (tipo, origem)
+
+
+def test_peer_externo_com_a_origem_do_tipo_passa():
+    for tipo, origem, extra in (("upstream", 1400, {}), ("ix", 1300, {"ix_id": 1}),
+                                ("pni", 1500, {"ap_allowed": ["64500"]})):
+        peer = um_peer(tipo=tipo, classe=None, aprendizado=3000,
+                       origem=origem, **extra)
+        assert "origem" not in campos(validar(peer, [])), tipo

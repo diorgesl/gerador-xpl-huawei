@@ -232,15 +232,22 @@ def test_o_namespace_fora_da_faixa_e_erro_de_campo(api, tmp_path):
 def test_o_aviso_de_origem_fora_da_tabela_chega_no_upstream(api, tmp_path):
     """O aviso de origem sai no envelope, e o peer grava assim mesmo.
 
-    O peer de upstream do cadastro real carrega origem de downstream; o que
-    esta leva faz e o operador ver isso, e nao impedir o salvar.
+    Vale para a origem fora da tabela do tipo que nao e anunciavel (aqui a do
+    PNI num upstream). A anunciavel, 1000 e 11xx, e erro fora do downstream:
+    a tabela parcial e o EXPORT-SANITY leem a marca.
     """
-    r = api.post("/api/peers", json=dict(UPSTREAM, origem="1100"))
+    r = api.post("/api/peers", json=dict(UPSTREAM, origem="1500"))
 
     assert r.status_code == 201, r.text
     assert [a["campo"] for a in r.json()["avisos"]] == ["origem"]
     assert "nao esta na tabela do upstream" in r.json()["avisos"][0]["mensagem"]
-    assert [p.origem for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [1100]
+    assert [p.origem for p in peers_mod.carregar(caminho_tenant(tmp_path))] == [1500]
+
+
+def test_upstream_com_origem_de_cliente_e_recusado(api):
+    r = api.post("/api/peers", json=dict(UPSTREAM, origem="1100"))
+    assert r.status_code == 422
+    assert "origem" in r.json()["erros"]
 
 
 def test_a_origem_da_tabela_nao_avisa(api):
