@@ -1408,13 +1408,28 @@ def test_sem_aviso_quando_a_sessao_recebe_alguma_coisa():
         um_peer(default_route=False, tabela="parcial"), []))
 
 
-def test_membro_e_quem_reaproveita_nao_avisam_sessao_sem_rota():
-    # a tabela deles vem do grupo ou da origem; a gravada no proprio peer
-    # nao chega a filtro nenhum
-    membro = um_peer(default_route=False, tabela="nenhuma", grupo_id=3)
-    copia = um_peer(default_route=False, tabela="nenhuma", politica_de=0)
-    assert "tabela" not in campos(validate.avisos(membro, []))
-    assert "tabela" not in campos(validate.avisos(copia, []))
+def test_o_membro_avisa_sessao_sem_rota_pela_politica_do_grupo():
+    # a tabela e a default do membro sao as do grupo; as gravadas no proprio
+    # peer nao chegam a filtro nenhum
+    vazio = um_grupo(id=3, tabela="nenhuma", default_route=False)
+    cheio = um_grupo(id=3, tabela="parcial", default_route=False)
+    membro = um_peer(default_route=False, tabela="full", grupo_id=3)
+    assert "tabela" in campos(validate.avisos(membro, [], grupos=[vazio]))
+    assert "tabela" not in campos(validate.avisos(membro, [], grupos=[cheio]))
+
+
+def test_quem_reaproveita_avisa_pela_tabela_da_origem_e_a_propria_default():
+    # o export e o da origem, mas a sessao e a dele: a default e a dele
+    origem = um_peer(id=0, default_route=True, tabela="nenhuma")
+    copia = um_peer(id=1, default_route=False, tabela="full", politica_de=0,
+                    sessoes={"v4": {"local": "198.51.100.5",
+                                    "remoto": "198.51.100.6"}, "v6": {}})
+    assert "tabela" in campos(validate.avisos(copia, [origem, copia]))
+    origem.tabela = "parcial"
+    assert "tabela" not in campos(validate.avisos(copia, [origem, copia]))
+    copia.default_route = True
+    origem.tabela = "nenhuma"
+    assert "tabela" not in campos(validate.avisos(copia, [origem, copia]))
 
 
 def test_peer_externo_nao_carimba_origem_anunciavel():

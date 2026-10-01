@@ -58,7 +58,7 @@ def erro_de_tabela(alvo):
     return None
 
 
-def avisos(peer, peers, rede=None, grupos=()):
+def avisos(peer, peers, rede=None, grupos=(), anterior=None):
     """Coisas que o usuario precisa saber mas que nao impedem gerar."""
     # o Rede so chega ate aqui e nao ate o validar: o que depende do
     # namespace sao os avisos das listas da CL-PEER, e a forma delas e
@@ -111,18 +111,32 @@ def avisos(peer, peers, rede=None, grupos=()):
                    ", ".join(str(o) for o in permitidas))))
     # sem default e sem tabela a sessao sobe e nao recebe rota nenhuma. E
     # legitimo para quem so anuncia, e por isso aviso, mas costuma ser a caixa
-    # da default desmarcada sem querer. Membro e quem reaproveita ficam de
-    # fora: a tabela deles e a do grupo ou a da origem.
-    if (peer.tipo in plan.TIPOS_DOWNSTREAM and peer.grupo_id is None
-            and peer.politica_de is None and not peer.default_route
-            and peer.tabela == "nenhuma"):
-        saida.append(Erro(
-            "tabela", "sem default route e sem tabela, a sessao nao recebe "
-            "rota nenhuma"))
+    # da default desmarcada sem querer. Vale a politica efetiva, e nao o que
+    # esta gravado no peer: o membro recebe a default e a tabela do grupo, e
+    # quem reaproveita recebe a tabela da origem com a default da propria
+    # sessao.
+    if peer.tipo in plan.TIPOS_DOWNSTREAM:
+        default, tabela = peer.default_route, peer.tabela
+        grupo = (achar_grupo_id(list(grupos), peer.grupo_id)
+                 if peer.grupo_id is not None else None)
+        origem = (next((o for o in peers if o.id == peer.politica_de), None)
+                  if peer.politica_de is not None else None)
+        if grupo is not None:
+            default, tabela = grupo.default_route, grupo.tabela
+        elif origem is not None:
+            tabela = origem.tabela
+        if not default and tabela == "nenhuma":
+            saida.append(Erro(
+                "tabela", "sem default route e sem tabela, a sessao nao "
+                "recebe rota nenhuma"))
     # a default do membro e a do grupo. A caixa gravada no membro vem de
     # antes desta regra; se o grupo nao anuncia, a sessao perde a default
-    # na proxima colagem, e o operador precisa saber antes
-    if peer.grupo_id is not None and peer.default_route:
+    # na proxima colagem, e o operador precisa saber antes. A tela carrega o
+    # membro com a caixa desmarcada, entao quem diz o que estava gravado e o
+    # registro anterior, e nao o formulario
+    gravada = peer.default_route or (anterior is not None
+                                     and anterior.default_route)
+    if peer.grupo_id is not None and gravada:
         grupo = achar_grupo_id(list(grupos), peer.grupo_id)
         if grupo is not None and not grupo.default_route:
             saida.append(Erro(

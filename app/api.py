@@ -439,7 +439,8 @@ def _sem_origem(peer, peers):
 def _salvar_peer(t, formulario, peers, anterior):
     grupos, rede = _grupos(t), _rede(t)
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior, rede)
-    avisos = validate.avisos(peer, peers, rede=rede, grupos=grupos)
+    avisos = validate.avisos(peer, peers, rede=rede, grupos=grupos,
+                             anterior=anterior)
     if erros:
         return _falha(422, erros, avisos)
     if anterior is None:
@@ -540,7 +541,8 @@ def previa_peer(formulario: PeerForm,
     peers, grupos, rede = _peers(t), _grupos(t), _rede(t)
     anterior = peers_mod.achar_id(peers, ident) if ident is not None else None
     peer, erros = _peer_do_pedido(formulario, peers, grupos, anterior, rede)
-    avisos = _avisos(validate.avisos(peer, peers, rede=rede, grupos=grupos))
+    avisos = _avisos(validate.avisos(peer, peers, rede=rede, grupos=grupos,
+                                     anterior=anterior))
     salvo = _ler(anterior.arquivo(t.saida)) if anterior is not None else None
     if erros:
         return Previa(erros=validate.erros_para_dict(erros), avisos=avisos,

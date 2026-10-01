@@ -636,3 +636,29 @@ def test_put_sem_tabela_preserva_a_do_cadastro(api, tmp_path):
     r = api.put("/api/peers/0", json=dict(CLIENTE, descricao="NOVA"))
     assert r.status_code == 200, r.text
     assert peers_mod.carregar(caminho_tenant(tmp_path))[0].tabela == "full"
+
+
+def _membro_com_default_num_grupo_sem(tmp_path):
+    # o caso da migracao: o membro tinha a default propria antes de a regra
+    # passar a ser a do grupo, e o grupo nao a anuncia
+    peers_mod.gravar_grupos(
+        [peers_mod.Grupo(id=3, nome="CLIENTES", tipo="cliente", classe="transito",
+                         origem=1100, pop=2001, default_route=False)],
+        caminho_tenant(tmp_path))
+    _grava(tmp_path, peer_cliente(grupo_id=3, default_route=True))
+
+
+def test_a_previa_do_membro_avisa_a_default_que_vai_sumir(api, tmp_path):
+    # o caminho da tela: o formulario carrega o membro, e a previa sai dele
+    _membro_com_default_num_grupo_sem(tmp_path)
+    formulario = api.get("/api/peers/1").json()["formulario"]
+    previa = api.post("/api/peers/previa", json=formulario, params={"id": 1}).json()
+    assert "default_route" in [a["campo"] for a in previa["avisos"]]
+
+
+def test_salvar_o_membro_avisa_a_default_que_vai_sumir(api, tmp_path):
+    _membro_com_default_num_grupo_sem(tmp_path)
+    formulario = api.get("/api/peers/1").json()["formulario"]
+    r = api.put("/api/peers/1", json=formulario)
+    assert r.status_code == 200, r.text
+    assert "default_route" in [a["campo"] for a in r.json()["avisos"]]
