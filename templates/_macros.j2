@@ -187,6 +187,14 @@ xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
 {% endfor %}
  endif
 {% endif %}
+{% if not confinar_prefixo %}
+ {#- sem confinamento nao ha whitelist nenhuma: o import aceitaria qualquer
+     prefixo que passasse pelo sanity e o carimbaria como de cliente, que e
+     rota anunciável no egress. Negar por padrao inverte isso, e e o que
+     protege o membro de grupo que nao trouxe prefixo proprio - o de hoje
+     todos trazem, mas o proximo so entra na internet depois de trazer. #}
+ refuse
+{% endif %}
  finish
 end-filter
 {%- endmacro %}
@@ -322,6 +330,19 @@ xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
   refuse
  endif
 {% endif %}
+{# O GSHUT do vizinho (RFC 8326) e o pedido de drenagem sem derrubar a sessao.
+    Ele sai num ramo proprio, ANTES do carimbo: a community so existe ate o
+    overwrite, que e quem a apaga. O ramo repete o carimbo e encerra o filtro
+    com LP 0 para as excecoes de TE e de prefixo proprio de baixo nao
+    escreverem preferencia por cima da drenagem. O carimbo repetido nao e
+    enfeite: sem ele a rota drenada fica sem classificacao, o EXPORT-SANITY a
+    recusa no egress, e o que era para ser ultimo recurso vira retirada. #}
+ if community matches-any CL-GSHUT then
+  apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
+  apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
+  apply local-preference 0
+  approve
+ endif
  apply local-preference {{ alvo.lp_base }}
  {# overwrite: nada do que o upstream escreveu em community sobrevive. e o que
     torna seguro o matches-any CL-ORIGEM-ANUNCIAVEL no export. 2000 marca
@@ -522,6 +543,20 @@ xpl route-filter IX-{{ alvo.token }}-IMPORT-{{ U }}
   refuse
  endif
 
+{# O GSHUT do membro (RFC 8326) e o pedido de drenagem sem derrubar a sessao.
+   Ele sai num ramo proprio, ANTES do carimbo: a community so existe ate o
+   overwrite, que e quem a apaga. O ramo repete o carimbo e encerra o filtro
+   com LP 0 para o LP do CDN preferido de baixo nao passar por cima da
+   drenagem. Sem o carimbo repetido a rota drenada fica sem classificacao e o
+   EXPORT-SANITY a recusa no egress, virando retirada em vez de ultimo
+   recurso. #}
+ if community matches-any CL-GSHUT then
+  apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
+  apply large-community {{ plan.conjunto(plan.c_large(1001, alvo.ix_id)) }} overwrite
+  apply local-preference 0
+  finish
+ endif
+
  {# overwrite: nada do que o membro do IX escreveu sobrevive. 1001:<ix_id> e a
     informativa de IX; o id e o do PeeringDB, nao o ASN do route server. #}
  apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
@@ -620,6 +655,19 @@ xpl route-filter PNI-{{ alvo.token }}-IMPORT-{{ U }}
  {# sessao bilateral: so entra o que a CDN pode anunciar #}
  if not as-path in AP-{{ alvo.token }}-ALLOWED then
   refuse
+ endif
+
+{# O GSHUT da CDN (RFC 8326) e o pedido de drenagem sem derrubar a sessao. Ele
+   sai num ramo proprio, ANTES do carimbo: a community so existe ate o
+   overwrite, que e quem a apaga. O ramo repete o carimbo e encerra o filtro
+   com LP 0 para o lp_base de baixo nao passar por cima da drenagem. Sem o
+   carimbo repetido a rota drenada fica sem classificacao e o EXPORT-SANITY a
+   recusa no egress, virando retirada em vez de ultimo recurso. #}
+ if community matches-any CL-GSHUT then
+  apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(plan.GEO_PNI), plan.c(2000)) }} overwrite
+  apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
+  apply local-preference 0
+  finish
  endif
 
  apply local-preference {{ alvo.lp_base }}

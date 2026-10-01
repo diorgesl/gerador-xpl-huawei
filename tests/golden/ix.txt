@@ -9,6 +9,13 @@ xpl route-filter IX-IX-SP-IMPORT-V4
   refuse
  endif
 
+ if community matches-any CL-GSHUT then
+  apply community {64512:1300, 64512:3010, 64512:2000} overwrite
+  apply large-community {64512:1001:9999} overwrite
+  apply local-preference 0
+  finish
+ endif
+
  apply community {64512:1300, 64512:3010, 64512:2000} overwrite
  apply large-community {64512:1001:9999} overwrite
 

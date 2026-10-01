@@ -357,6 +357,12 @@ só, e o `finish` do filtro chamado encerra o do membro, como no import. Num
 grupo **com `asn`** nada disso sai: o export do grupo já carrega os controles
 daquele ASN, que o validar exige ser o de todos os membros.
 
+Um grupo de `cliente` ou de `parceiro` **sem prefixo próprio** não tem
+whitelist para confinar, e o import dele nega por padrão. Sem isso, um membro
+sem override herdaria um import que aceita qualquer prefixo que passe pelo
+sanity e o carimba como de cliente, que é rota anunciável no egress. Quem tem
+prefixo traz o filtro de import do membro, e é ele que a sessão usa.
+
 A community do bloco de sessão (`CL-PEER-<G>`) segue a mesma diferença entre os
 tipos que a seção "Communities de peer: `CL-PEER-<T>` e `APPLY-PEER-<T>`", em
 "Route-filters reutilizáveis", descreve: num cliente ela descreve o link, e cada
@@ -1661,7 +1667,18 @@ Com o `overwrite` e o `2000`, o `EXPORT-SANITY` recusa essa rota em todo egress 
  endif
 ```
 
-**Ponto em aberto:** este bloco existe hoje só em `APPLY-CUSTOMER-LP`, ou seja, responde a GSHUT vindo de cliente. Sessão de upstream, IX e PNI não tem esse ramo em lugar nenhum: se o vizinho drenar a sessão dele com `65535:0`, as rotas continuam chegando com a preferência normal. O lugar mais barato para cobrir os três é o `IMPORT-SANITY`, que já roda em todas as sessões; o efeito colateral é aplicar LP 0 também em rota de cliente, que é o comportamento de hoje e não muda nada.
+Este bloco responde a GSHUT vindo de cliente pelo `APPLY-CUSTOMER-LP`. Nos
+outros três tipos ele sai num ramo próprio, no começo do import da sessão,
+**antes** do carimbo: a community só existe até o `overwrite`, que é quem a
+apaga. Por isso o ramo repete o carimbo e encerra o filtro com o LP 0: sem a
+repetição, a rota drenada fica sem classificação, o `EXPORT-SANITY` a recusa no
+egress e o que era para ser último recurso vira retirada; sem encerrar o
+filtro, as exceções de TE e de prefixo próprio escreveriam 250 e 500 por cima
+da drenagem que o vizinho pediu.
+
+O lugar sugerido antes para fechar os três, o `IMPORT-SANITY`, não serve: ele
+roda **antes** do import da sessão, e o `apply local-preference` de lá
+sobrescreveria o LP 0.
 
 ## RPKI, IRR e anti-leak
 

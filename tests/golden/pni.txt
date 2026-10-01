@@ -9,6 +9,13 @@ xpl route-filter PNI-CDN-A-IMPORT-V4
   refuse
  endif
 
+ if community matches-any CL-GSHUT then
+  apply community {64512:1500, 64512:1200, 64512:2000} overwrite
+  apply large-community {64512:1000:64510} overwrite
+  apply local-preference 0
+  finish
+ endif
+
  apply local-preference 200
  apply community {64512:1500, 64512:1200, 64512:2000} overwrite
  apply large-community {64512:1000:64510} overwrite

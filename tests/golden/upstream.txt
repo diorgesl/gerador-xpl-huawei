@@ -12,6 +12,12 @@ xpl route-filter UP-14840-IMPORT-V4
  if as-path in AP-BLOCK-14840 then
   refuse
  endif
+ if community matches-any CL-GSHUT then
+  apply community {64512:1400, 64512:3100, 64512:2000} overwrite
+  apply large-community {64512:1000:14840} overwrite
+  apply local-preference 0
+  approve
+ endif
  apply local-preference 100
  apply community {64512:1400, 64512:3100, 64512:2000} overwrite
  apply large-community {64512:1000:14840} overwrite

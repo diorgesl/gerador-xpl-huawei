@@ -919,6 +919,37 @@ def test_membro_de_grupo_de_ix_tambem_desliga_o_check_first_as():
     assert texto.count("check-first-as") == 2
 
 
+def test_o_import_de_cada_tipo_externo_responde_ao_gshut_do_vizinho():
+    """O GSHUT (RFC 8326) e o vizinho pedindo para sair da preferencia sem
+    derrubar a sessao. Duas coisas precisam estar na ordem certa: a leitura da
+    community, que so existe ate o overwrite, e o LP 0, que tem que ser a
+    ultima escrita de local-preference - antes das outras, a drenagem pedida
+    pelo vizinho seria sobrescrita. O ponto em aberto do PLANO fica fechado
+    nos tres tipos, que antes so o cliente respondia."""
+    for nome, peer, marca, fim in (
+            ("upstream", peer_upstream(), "UP-14840-IMPORT-V4", "approve"),
+            ("ix", peer_ix(), "IX-IX-SP-IMPORT-V4", "finish"),
+            ("pni", peer_pni(), "PNI-CDN-A-IMPORT-V4", "finish")):
+        texto = render.render_peer(peer)
+        filtro = texto[texto.index("xpl route-filter %s" % marca):]
+        filtro = filtro[:filtro.index("end-filter")]
+
+        assert "if community matches-any CL-GSHUT then" in filtro, nome
+        # o ramo vem antes do carimbo, que e quem apaga a community
+        assert (filtro.index("if community matches-any CL-GSHUT")
+                < filtro.index("apply community")), nome
+        ramo = filtro.split("if community matches-any CL-GSHUT then")[1]
+        linhas = [l.strip() for l in ramo.split("endif")[0].splitlines()
+                  if l.strip()]
+        # o ramo carimba (sem isso a rota drenada sai sem classificacao e o
+        # EXPORT-SANITY a recusa no egress), drena com LP 0 e encerra o
+        # filtro, para o 250, o 500 e o LP do CDN preferido nao passarem por
+        # cima da drenagem
+        assert any("overwrite" in l for l in linhas), (nome, linhas)
+        assert "apply local-preference 0" in linhas, (nome, linhas)
+        assert linhas[-1] == fim, (nome, linhas)
+
+
 def test_peer_sem_descricao_nao_emite_a_linha_do_description():
     """`peer X description` sem argumento e linha incompleta de CLI, e o campo
     e livre no cadastro. Sem descricao, o comando nao sai."""
@@ -1477,7 +1508,11 @@ def test_bloco_do_grupo_com_asn_confina_prefixo_e_as_path():
     assert "peer UP-REDUNDANTE route-filter CUST-UP-REDUNDANTE-EXPORT-V4 export" in texto
 
 
-def test_bloco_do_grupo_sem_asn_nao_confina_nada():
+def test_bloco_do_grupo_sem_asn_nao_confina_e_nega_por_padrao():
+    """O grupo sem prefixo proprio nao tem whitelist para confinar, e o import
+    dele e o que um membro sem override herda: sem a recusa final, esse membro
+    aceitaria qualquer prefixo que passasse pelo sanity e o carimbaria como de
+    cliente, que e rota anunciável. Quem precisa de import traz o dele."""
     texto = render.render_grupo(grupo_sem_asn())
     assert "group PARCEIROS_CDN external" in texto
     assert "as-number" not in texto
@@ -1486,6 +1521,11 @@ def test_bloco_do_grupo_sem_asn_nao_confina_nada():
     assert "AP-CUST-PARCEIROS_CDN" not in texto
     assert "apply large-community" not in texto
     assert "peer PARCEIROS_CDN route-filter CUST-PARCEIROS_CDN-IMPORT-V4 import" in texto
+    for fam in ("V4", "V6"):
+        filtro = texto[texto.index("xpl route-filter CUST-PARCEIROS_CDN-IMPORT-%s" % fam):]
+        filtro = filtro[:filtro.index("end-filter")]
+        assert [l.strip() for l in filtro.splitlines() if l.strip()][-2:] == [
+            "refuse", "finish"], filtro
 
 
 def test_bloco_do_grupo_com_default_route_avisa_e_anuncia():
