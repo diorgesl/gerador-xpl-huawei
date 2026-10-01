@@ -579,6 +579,19 @@ def noadv(tipo, peer_id, ns=ASN):
     return [c(um, ns), c(dois, ns), c5ppa(peer_id, 0, ns)]
 
 
+def bloqueio_do_destino(tipo, peer_id, ns=ASN):
+    """O "nao anunciar para ESTE destino", sem as proibicoes absolutas.
+
+    E o CL-NOADV-<T> do peer menos o 200, que e a marca de blackhole: no ramo
+    de RTBH do egress a rota carrega esse 200 de proposito, e usa-lo ali
+    barraria a propagacao inteira. O que sobra e o veto do tipo (201 no
+    upstream, 202 no PNI, 203 no IX) e o 5PPA do peer, que sao os dois que o
+    cliente escreve quando quer poupar aquele destino.
+    """
+    _, veto_do_tipo = NOADV[tipo]
+    return [c(veto_do_tipo, ns), c5ppa(peer_id, 0, ns)]
+
+
 def noadv_cust(ns=ASN):
     """O egress de cliente nao tem eixo por peer."""
     return [c(v, ns) for v in NOADV_CUST]
@@ -764,6 +777,8 @@ class Rede:
         self.c6ca = functools.partial(c6ca, ns=self.ns)
         self.c_large = functools.partial(c_large, ns=self.ns)
         self.noadv = functools.partial(noadv, ns=self.ns)
+        self.bloqueio_do_destino = functools.partial(bloqueio_do_destino,
+                                                     ns=self.ns)
         self.noadv_cust = functools.partial(noadv_cust, ns=self.ns)
         self.c_downstream = functools.partial(c_downstream, ns=self.ns)
         self.only_not = functools.partial(only_not, ns=self.ns)

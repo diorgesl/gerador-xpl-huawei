@@ -993,6 +993,32 @@ def test_os_imports_externos_chamam_o_filtro_do_bloco_proprio():
         assert "REJEITA-BLOCO-PROPRIO" not in render.render_peer(peer)
 
 
+def test_o_rtbh_do_export_de_upstream_respeita_bloqueio_e_escopo():
+    """O ramo de blackhole termina em finish, entao o bloqueio do proprio
+    destino e o escopo precisam ser checados dentro dele: sem isso um /32
+    marcado com "nao anunciar para este peer" ou "somente IX" sai para o
+    upstream assim mesmo. O 200 fica fora, e e o ponto delicado: ele e a marca
+    que todo blackhole importado carrega, e bani-lo ali mataria a propagacao
+    inteira em vez de so a do destino bloqueado."""
+    from app import plan
+    peer = peer_upstream()
+    texto = render.render_peer(peer)
+    filtro = texto[texto.index("xpl route-filter UP-14840-EXPORT-V4"):]
+    filtro = filtro[:filtro.index("end-filter")]
+    ramo = filtro.split("if community matches-any CL-BLACKHOLE-PROPAGATE then")[1]
+    ramo = ramo.split("else")[0]
+
+    for valor in plan.bloqueio_do_destino("upstream", peer.id):
+        assert valor in ramo, valor
+    assert plan.c_large(0, 14840) in ramo
+    assert "if community matches-any CL-ONLY-NOT-UP then" in ramo
+    # so o veto do destino e o escopo entram na checagem: nada de 200
+    checagem = ramo.split("if community matches-any")[1].split(" then")[0]
+    assert plan.c(200) not in checagem
+    # e as checagens vem antes do finish que aceita
+    assert ramo.index("CL-ONLY-NOT-UP") < ramo.index("finish")
+
+
 def test_peer_sem_descricao_nao_emite_a_linha_do_description():
     """`peer X description` sem argumento e linha incompleta de CLI, e o campo
     e livre no cadastro. Sem descricao, o comando nao sai."""

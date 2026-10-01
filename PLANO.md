@@ -1304,6 +1304,17 @@ xpl route-filter UP-EXPORT-14840($prepend_base)
  !- que nenhuma community escrita pelo cliente a neutralize.
  if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in {0.0.0.0 0 ge 32 le 32} then
   if community matches-any CL-BLACKHOLE-PROPAGATE then
+   !- O pedido de propagacao nao atropela o bloqueio do proprio destino nem
+   !- o escopo: este ramo termina em finish, entao as duas checagens tem que
+   !- estar aqui dentro. O 200 fica fora de proposito: e a marca que todo
+   !- blackhole importado carrega, e bani-lo aqui mataria a propagacao
+   !- inteira em vez de so a do destino bloqueado.
+   if community matches-any {64512:201, 64512:5010} or large-community matches-any {64512:0:14840} then
+    refuse
+   endif
+   if community matches-any CL-ONLY-NOT-UP then
+    refuse
+   endif
    apply community {14840:666} overwrite
    finish
   else
@@ -1653,6 +1664,15 @@ Cada upstream tem a própria community de blackhole. A tabela abaixo precisa ser
 | Upstream #3 | 64502 | a confirmar            |
 
 O ramo de propagação usa `finish`, não `approve`. Com `approve` a rota seguiria para o `EXPORT-SANITY`, que a recusaria: o `/32` tampouco carrega `CL-ORIGEM-ANUNCIAVEL`, porque o `overwrite` do ramo de blackhole deixou só a community do upstream.
+
+Como esse `finish` encerra a política ali, tudo o que o egress checa depois dele
+não vale para o blackhole. O bloqueio do próprio destino (`5PPA-<id>-0` na
+standard, `64512:0:<ASN>` na large) e o veto do tipo (`201`, "não anunciar para
+upstream") precisam estar **dentro** do ramo, antes da tradução: sem isso, um
+`/32` marcado com "não anunciar para este peer" ou "somente IX" seria propagado
+assim mesmo. O que **não** entra nessa checagem é o `200`: ele é a marca que
+todo blackhole importado carrega, e barrá-lo ali mataria a propagação inteira
+em vez de só a do destino bloqueado.
 
 ### Desvio para scrubbing center
 

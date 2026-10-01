@@ -393,6 +393,17 @@ xpl route-filter UP-{{ alvo.token }}-EXPORT-{{ U }}
     que nenhuma community escrita pelo cliente a neutralize. #}
  if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in {{ "{0.0.0.0 0 ge 32 le 32}" if fam == "v4" else "{:: 0 ge 128 le 128}" }} then
   if community matches-any CL-BLACKHOLE-PROPAGATE then
+   {# O pedido de propagacao nao atropela o bloqueio do proprio destino nem o
+      escopo: este ramo termina em finish, entao as duas checagens precisam
+      estar aqui dentro, e nao la embaixo. O 200 fica de fora de proposito -
+      ele e a marca que todo blackhole importado carrega, e bani-lo aqui
+      mataria a propagacao inteira. #}
+   if community matches-any {{ plan.conjunto(*plan.bloqueio_do_destino("upstream", alvo.id)) }} or large-community matches-any {{ plan.conjunto(plan.c_large(0, alvo.asn)) }} then
+    refuse
+   endif
+   if community matches-any CL-ONLY-NOT-UP then
+    refuse
+   endif
 {% if alvo.bh_upstream %}
    apply community {{ plan.conjunto(alvo.bh_upstream) }} overwrite
 {% endif %}
