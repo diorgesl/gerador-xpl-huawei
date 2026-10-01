@@ -96,6 +96,16 @@ def avisos(peer, peers, rede=None):
                 "origem %d nao esta na tabela do %s: o plano usa %s"
                 % (peer.origem, peer.tipo,
                    ", ".join(str(o) for o in permitidas))))
+    # sem default e sem tabela a sessao sobe e nao recebe rota nenhuma. E
+    # legitimo para quem so anuncia, e por isso aviso, mas costuma ser a caixa
+    # da default desmarcada sem querer. Membro e quem reaproveita ficam de
+    # fora: a tabela deles e a do grupo ou a da origem.
+    if (peer.tipo in plan.TIPOS_DOWNSTREAM and peer.grupo_id is None
+            and peer.politica_de is None and not peer.default_route
+            and peer.tabela == "nenhuma"):
+        saida.append(Erro(
+            "tabela", "sem default route e sem tabela, a sessao nao recebe "
+            "rota nenhuma"))
     _avisa_communities(peer, saida, rede)
     return saida
 
@@ -526,6 +536,10 @@ def validar_grupo(grupo, grupos, peers, anterior=None):
             erros.append(Erro("pop", "pop em branco: informe o POP do plano, de 2001 a 2999"))
         elif not (plan.POP_MIN <= grupo.pop <= plan.POP_MAX):
             erros.append(Erro("pop", "POP entre 2001 e 2999"))
+        if grupo.tabela not in plan.TABELAS:
+            erros.append(Erro(
+                "tabela", "tabela recebida: escolha entre %s"
+                % ", ".join(plan.TABELAS)))
     else:
         # a default route e servico de downstream, e o comando sai dos
         # macro que os cinco tipos usam: sem esta checagem um POST a mao
@@ -765,6 +779,12 @@ def validar(peer, peers, anterior=None, grupos=None, rede=None):
             erros.append(Erro("origem", "origem fora da faixa 1xxx"))
         if peer.pop is not None and not (plan.POP_MIN <= peer.pop <= plan.POP_MAX):
             erros.append(Erro("pop", "POP entre 2001 e 2999"))
+        # o portao do export escolhe o ramo pelo valor: fora da lista o
+        # filtro sairia sem portao, igual ao full, sem ninguem ter pedido
+        if peer.tabela not in plan.TABELAS:
+            erros.append(Erro(
+                "tabela", "tabela recebida: escolha entre %s"
+                % ", ".join(plan.TABELAS)))
     else:
         # a default route e servico de downstream, e o comando sai de um
         # macro que todos os tipos usam: sem esta checagem, um POST a mao

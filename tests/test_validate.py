@@ -1367,3 +1367,46 @@ def test_o_grupo_aceita_a_linha_marcada_pela_consulta():
     grupo = um_grupo(prefixos={
         "v4": ["45.169.240.0/24  !- nao veio na consulta ao IRR"], "v6": []})
     assert validar_grupo(grupo, [grupo], [], anterior=grupo) == []
+
+
+def test_tabela_fora_da_lista_e_erro_no_downstream():
+    for valor in ("", "PARCIAL", "transito"):
+        assert "tabela" in campos(validar(um_peer(tabela=valor), [])), valor
+    for valor in plan.TABELAS:
+        assert "tabela" not in campos(validar(um_peer(tabela=valor), [])), valor
+
+
+def test_tabela_fora_da_lista_e_erro_no_grupo_de_downstream():
+    g = um_grupo(tabela="tudo")
+    assert "tabela" in campos(validar_grupo(g, [g], [], anterior=g))
+    g = um_grupo(tabela="parcial")
+    assert "tabela" not in campos(validar_grupo(g, [g], [], anterior=g))
+
+
+def test_tabela_e_ignorada_fora_do_downstream():
+    # o campo so e lido no export de downstream; o formulario nem o grava
+    # nos outros tipos, mas um yaml editado a mao nao pode travar o upstream
+    peer = um_peer(tipo="upstream", classe=None, aprendizado=3000, tabela="xyz")
+    assert "tabela" not in campos(validar(peer, []))
+
+
+def test_sessao_sem_rota_nenhuma_e_aviso_e_nao_erro():
+    peer = um_peer(default_route=False, tabela="nenhuma")
+    assert "tabela" not in campos(validar(peer, []))
+    assert "tabela" in campos(validate.avisos(peer, []))
+
+
+def test_sem_aviso_quando_a_sessao_recebe_alguma_coisa():
+    assert "tabela" not in campos(validate.avisos(
+        um_peer(default_route=True, tabela="nenhuma"), []))
+    assert "tabela" not in campos(validate.avisos(
+        um_peer(default_route=False, tabela="parcial"), []))
+
+
+def test_membro_e_quem_reaproveita_nao_avisam_sessao_sem_rota():
+    # a tabela deles vem do grupo ou da origem; a gravada no proprio peer
+    # nao chega a filtro nenhum
+    membro = um_peer(default_route=False, tabela="nenhuma", grupo_id=3)
+    copia = um_peer(default_route=False, tabela="nenhuma", politica_de=0)
+    assert "tabela" not in campos(validate.avisos(membro, []))
+    assert "tabela" not in campos(validate.avisos(copia, []))
