@@ -10,9 +10,9 @@ const PLANO = {
   rede: { asn: "64512", politica: "65532" },
   padroes: {
     tipos: {
-      parceiro: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null },
-      upstream: { lp_base: 100, route_limit: 1500000, timer_keepalive: 10, timer_hold: 30 },
-      ix: { lp_base: 190, route_limit: 500000, timer_keepalive: null, timer_hold: null },
+      parceiro: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null, default_route: true, tabela: "nenhuma" },
+      upstream: { lp_base: 100, route_limit: 1500000, timer_keepalive: 10, timer_hold: 30, default_route: false, tabela: "" },
+      ix: { lp_base: 190, route_limit: 500000, timer_keepalive: null, timer_hold: null, default_route: false, tabela: "" },
     },
     origem_tipo: { parceiro: 1100, upstream: 1400, ix: 1300 },
     origem_classe: { transito: 1100, residencial: 1110 },
@@ -22,6 +22,7 @@ const PLANO = {
   tipos: ["cliente", "parceiro", "upstream", "ix", "pni"],
   tipos_com_criar_lista: ["cliente", "parceiro", "upstream"],
   classes_cliente: ["transito", "residencial"],
+  tabelas: ["nenhuma", "parcial", "parcial_ix", "full"],
   lp_base: { upstream: 100, ix: 190 }, route_limit: {}, route_limit_exemplo: {},
   prepend_max: 6, prepend_implementado: 3,
   pop_min: 2001, pop_max: 2999, aprendizado_min: 3000, aprendizado_max: 3999,
@@ -29,7 +30,8 @@ const PLANO = {
   campos_por_tipo: {},
   campos_por_tipo_grupo: {
     classe: ["cliente", "parceiro"], pop: ["cliente", "parceiro"],
-    default_route: ["cliente", "parceiro"], aprendizado: ["upstream"],
+    default_route: ["cliente", "parceiro"], tabela: ["cliente", "parceiro"],
+    aprendizado: ["upstream"],
     aprendizado_ix: ["ix"], prepend_base: ["upstream"], bh_upstream: ["upstream"],
     ap_block: ["upstream"], ap_te: ["upstream"], te_prefixos_v4: ["upstream"],
     te_prefixos_v6: ["upstream"], communities: ["upstream"], large_communities: ["upstream"],
@@ -48,6 +50,16 @@ function Montar({ iniciais = {}, erros = {} }: { iniciais?: Partial<GrupoForm>; 
 }
 
 describe("o formulario do grupo", () => {
+  it("o grupo de downstream escolhe a tabela recebida", () => {
+    render(<Montar />)
+    expect(screen.getByLabelText(/Tabela recebida/)).toBeInTheDocument()
+  })
+
+  it("o grupo de upstream nao tem tabela recebida", () => {
+    render(<Montar iniciais={{ tipo: "upstream", tabela: "" }} />)
+    expect(screen.queryByLabelText(/Tabela recebida/)).not.toBeInTheDocument()
+  })
+
   it("no tipo IX o aprendizado e o do bloco do IX, e o comum nao aparece", () => {
     render(<Montar iniciais={{ tipo: "ix" }} />)
     expect(screen.getByLabelText(/^Ponto de aprendizado do IX/)).toBeInTheDocument()

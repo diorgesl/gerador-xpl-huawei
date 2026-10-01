@@ -12,7 +12,8 @@ export type Valores = Record<string, Valor>
 export type Erros = Record<string, string>
 export type Padroes = {
   tipos: Record<string, { lp_base: number | null; route_limit: number | null;
-                          timer_keepalive: number | null; timer_hold: number | null }>
+                          timer_keepalive: number | null; timer_hold: number | null;
+                          default_route: boolean; tabela: string }>
   origem_tipo: Record<string, number>
   origem_classe: Record<string, number>
   downstream: string[]
@@ -24,6 +25,7 @@ export const CAMPOS_POR_TIPO: Record<string, string[]> = {
   classe: ["cliente", "parceiro"],
   pop: ["cliente", "parceiro"],
   default_route: ["cliente", "parceiro"],
+  tabela: ["cliente", "parceiro"],
   aprendizado: ["upstream", "ix"],
   prepend_base: ["upstream"],
   bh_upstream: ["upstream"],
@@ -46,8 +48,21 @@ export const CAMPOS_POR_TIPO_GRUPO: Record<string, string[]> = {
   large_communities: ["upstream"],
 }
 
-export const CASCATA_PEER = ["lp_base", "route_limit", "timer_keepalive", "timer_hold"]
-export const CASCATA_GRUPO = ["lp_base", "timer_keepalive", "timer_hold"]
+export const CASCATA_PEER = ["lp_base", "route_limit", "timer_keepalive", "timer_hold", "default_route", "tabela"]
+export const CASCATA_GRUPO = ["lp_base", "timer_keepalive", "timer_hold", "default_route", "tabela"]
+
+// os campos que so existem no downstream: sair dele os limpa mesmo com valor
+// escolhido a mao, que senao ficaria guardado (e visivel) num upstream
+export const CAMPOS_SO_DOWNSTREAM = ["default_route", "tabela"]
+
+// O rotulo de cada valor de plan.TABELAS. Os valores vem do /api/plano; um
+// valor novo no plano sem rotulo aqui aparece com o proprio nome
+export const ROTULO_TABELA: Record<string, string> = {
+  nenhuma: "Nenhuma (só a default, se marcada)",
+  parcial: "Parcial: rotas próprias e de clientes",
+  parcial_ix: "Parcial + IX",
+  full: "Full table",
+}
 
 // As opcoes de varios selects saem da tabela do plano e do que ja esta
 // cadastrado. Ficam aqui, e nao em cada tabela de tela, porque o peer e o
@@ -78,7 +93,7 @@ export type Opcao = { valor: string; rotulo: string }
 export const SECOES_PEER: Secao[] = [
   { id: "identificacao", rotulo: "Identificação", campos: ["id", "apelido", "nome", "tipo", "grupo_id", "asn", "descricao", "politica_de"] },
   { id: "politica", rotulo: "Política", campos: ["classe", "lp_base", "origem", "pop", "aprendizado", "ix_id"] },
-  { id: "limites", rotulo: "Limites e timers", campos: ["route_limit", "prepend_base", "timer_keepalive", "timer_hold", "bfd", "graceful_restart", "default_route", "bh_upstream"] },
+  { id: "limites", rotulo: "Limites e timers", campos: ["route_limit", "prepend_base", "timer_keepalive", "timer_hold", "bfd", "graceful_restart", "default_route", "tabela", "bh_upstream"] },
   { id: "prefixos", rotulo: "Prefixos anunciados", campos: ["prefixos_v4", "prefixos_v6"] },
   { id: "te", rotulo: "Exceção de TE", campos: ["te_prefixos_v4", "te_prefixos_v6"] },
   { id: "aspath", rotulo: "AS-path", campos: ["ap_block", "ap_te", "ap_allowed", "ap_prefer"] },
@@ -89,7 +104,7 @@ export const SECOES_PEER: Secao[] = [
 export const SECOES_GRUPO: Secao[] = [
   { id: "identificacao", rotulo: "Identificação", campos: ["nome", "tipo", "asn"] },
   { id: "downstream", rotulo: "Downstream", campos: ["classe", "pop"] },
-  { id: "politica", rotulo: "Política", campos: ["origem", "lp_base", "default_route"] },
+  { id: "politica", rotulo: "Política", campos: ["origem", "lp_base", "default_route", "tabela"] },
   { id: "limites", rotulo: "Limites e timers", campos: ["timer_keepalive", "timer_hold", "bfd", "graceful_restart"] },
   { id: "upstream", rotulo: "Upstream", campos: ["aprendizado", "bh_upstream", "prepend_base", "ap_block", "ap_te", "te_prefixos_v4", "te_prefixos_v6", "communities", "large_communities"] },
   { id: "ix", rotulo: "IX", campos: ["aprendizado_ix", "ix_id", "ap_prefer"] },
@@ -227,11 +242,18 @@ export function cascata(tipoAntes: string, tipo: string, valores: Valores,
   const agora = padroes.tipos[tipo]
 
   if (tipo !== tipoAntes && antes && agora) {
+    const saiuDoDownstream = !padroes.downstream.includes(tipo)
     for (const campo of campos) {
       const velho = (antes as Record<string, unknown>)[campo]
       const novoValor = (agora as Record<string, unknown>)[campo]
       if (velho === undefined || novoValor === undefined) continue
-      if (texto(valores[campo]) === texto(velho)) novo[campo] = texto(novoValor)
+      // a caixa da default e booleana: escrita como texto, o "false" viraria
+      // uma caixa marcada. Fora do downstream a default e a tabela nao
+      // existem, e a escolha feita a mao no cliente nao fica
+      if (texto(valores[campo]) === texto(velho)
+          || (saiuDoDownstream && CAMPOS_SO_DOWNSTREAM.includes(campo))) {
+        novo[campo] = typeof novoValor === "boolean" ? novoValor : texto(novoValor)
+      }
     }
   }
 

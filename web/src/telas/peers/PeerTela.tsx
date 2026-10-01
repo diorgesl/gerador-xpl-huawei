@@ -13,7 +13,7 @@ import { Falha } from "@/components/Falha"
 import { PainelSaida, type AbaSaida } from "@/components/PainelSaida"
 import { NaoEncontrado } from "@/telas/NaoEncontrado"
 import { chaves, lerRecusa, recusaComMarca, temRecusa, useGrupos, usePeers, usePlano, type PeerForm } from "@/api/consultas"
-import { camposDoErro } from "@/lib/campos"
+import { camposDoErro, ROTULO_TABELA } from "@/lib/campos"
 import { avisarFalhaDeRede, escrever, falhaDoServidor } from "@/lib/aviso"
 // o `consultas.ts` nao reexporta o cliente: ele e o dono do cliente e o importa
 // para os hooks, mas o export fica no cliente.ts
@@ -390,7 +390,10 @@ export function PeerTela() {
         <BadgeTipo tipo={valores.tipo} />
         <span className="dado text-xs text-muted-foreground">{inicial.data?.token || "sem token"}</span>
         <span className="dado text-xs text-muted-foreground">AS{valores.asn || "—"}</span>
-        {grupo && <span className="text-xs text-muted-foreground">grupo {grupo.nome}</span>}
+        {grupo && <span className="text-xs text-muted-foreground">
+          grupo {grupo.nome}{plano.data?.padroes.downstream.includes(grupo.tipo)
+            ? ` · tabela ${ROTULO_TABELA[grupo.tabela] ?? grupo.tabela}` : ""}
+        </span>}
 
         <div className="ml-auto flex items-center gap-2">
           {/* Sem o registro na mao o botao nao salva: a janela entre a montagem e

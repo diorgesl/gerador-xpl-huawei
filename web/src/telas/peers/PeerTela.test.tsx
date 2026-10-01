@@ -12,7 +12,7 @@ const PLANO = {
     origem_tipo: { cliente: 1100 }, origem_classe: { transito: 1100 },
     downstream: ["cliente", "parceiro"], origens_por_tipo: {}, origem_nome: {},
   },
-  tipos: ["cliente"], tipos_com_criar_lista: ["cliente"], classes_cliente: [],
+  tipos: ["cliente"], tipos_com_criar_lista: ["cliente"], classes_cliente: [], tabelas: ["nenhuma", "parcial", "parcial_ix", "full"],
   lp_base: {}, route_limit: {}, route_limit_exemplo: {}, prepend_max: 6, prepend_implementado: 3,
   pop_min: 2001, pop_max: 2999, aprendizado_min: 3000, aprendizado_max: 3999,
   pop_usados: [], aprendizado_usados: [], campos_por_tipo: {}, campos_por_tipo_grupo: {},

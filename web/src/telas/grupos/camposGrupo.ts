@@ -1,4 +1,4 @@
-import { opcoesPorTipo, opcoesUsadas } from "@/lib/campos"
+import { opcoesPorTipo, opcoesUsadas, ROTULO_TABELA } from "@/lib/campos"
 import type { Campo } from "@/telas/peers/camposPeer"
 import type { GrupoForm } from "@/api/consultas"
 
@@ -34,6 +34,9 @@ export const CAMPOS_GRUPO: Campo[] = [
   { nome: "lp_base", rotulo: "LP base", tipo: "combo", secao: "politica", mono: true,
     ajuda: "o membro sem LP próprio usa este", opcoes: (ctx) => opcoesPorTipo(ctx.plano.lp_base) },
   { nome: "default_route", rotulo: "Anuncia default route", tipo: "caixa", secao: "politica" },
+  { nome: "tabela", rotulo: "Tabela recebida", tipo: "select", secao: "politica",
+    ajuda: "a default route é a caixa acima e vai junto com qualquer tabela",
+    opcoes: (ctx) => ctx.plano.tabelas.map((t) => ({ valor: t, rotulo: ROTULO_TABELA[t] ?? t })) },
 
   { nome: "timer_keepalive", rotulo: "keepalive", tipo: "texto", secao: "limites", mono: true },
   { nome: "timer_hold", rotulo: "hold", tipo: "texto", secao: "limites", mono: true,
@@ -67,7 +70,7 @@ export const CAMPO_BRANCO_GRUPO: GrupoForm = {
   id: "", nome: "", tipo: "parceiro", asn: "", classe: "", lp_base: "300",
   origem: "1100", pop: "", aprendizado: "", aprendizado_ix: "", ix_id: "",
   prepend_base: "0", timer_keepalive: "", timer_hold: "", bfd: true,
-  graceful_restart: true, default_route: false, bh_upstream: "",
+  graceful_restart: true, default_route: true, tabela: "nenhuma", bh_upstream: "",
   prefixos_v4: [], prefixos_v6: [], te_prefixos_v4: [], te_prefixos_v6: [],
   ap_block: [], ap_te: [], ap_allowed: [], ap_prefer: [],
   communities: [], large_communities: [],

@@ -10,7 +10,7 @@ const PLANO = {
   rede: { asn: "64512", politica: "65532" },
   padroes: { tipos: { upstream: { lp_base: 100, route_limit: 1500000, timer_keepalive: 10, timer_hold: 30 } }, origem_tipo: { upstream: 1400 }, origem_classe: {}, downstream: ["cliente", "parceiro"], origens_por_tipo: {}, origem_nome: {} },
   tipos: ["cliente", "parceiro", "upstream", "ix", "pni"], tipos_com_criar_lista: ["cliente", "parceiro", "upstream"],
-  classes_cliente: [], lp_base: {}, route_limit: {}, route_limit_exemplo: {},
+  classes_cliente: [], tabelas: ["nenhuma", "parcial", "parcial_ix", "full"], lp_base: {}, route_limit: {}, route_limit_exemplo: {},
   prepend_max: 6, prepend_implementado: 3, pop_min: 2001, pop_max: 2999,
   aprendizado_min: 3000, aprendizado_max: 3999, pop_usados: [], aprendizado_usados: [],
   campos_por_tipo: {}, campos_por_tipo_grupo: {},

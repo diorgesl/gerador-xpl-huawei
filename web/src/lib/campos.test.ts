@@ -6,9 +6,10 @@ import {
 
 const PADROES = {
   tipos: {
-    cliente: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null },
-    upstream: { lp_base: 100, route_limit: 1500000, timer_keepalive: 10, timer_hold: 30 },
-    ix: { lp_base: 190, route_limit: 500000, timer_keepalive: null, timer_hold: null },
+    cliente: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null, default_route: true, tabela: "nenhuma" },
+    parceiro: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null, default_route: true, tabela: "nenhuma" },
+    upstream: { lp_base: 100, route_limit: 1500000, timer_keepalive: 10, timer_hold: 30, default_route: false, tabela: "" },
+    ix: { lp_base: 190, route_limit: 500000, timer_keepalive: null, timer_hold: null, default_route: false, tabela: "" },
   },
   origem_tipo: { cliente: 1100, upstream: 1400, ix: 1300 },
   origem_classe: { transito: 1100, residencial: 1110 },
@@ -136,6 +137,28 @@ describe("o indice de secoes", () => {
 })
 
 describe("a cascata de defaults ao trocar o tipo", () => {
+  it("a default e a tabela seguem o tipo, e a caixa continua booleana", () => {
+    const doCliente = { tipo: "cliente", default_route: true, tabela: "nenhuma", origem: "1100", classe: "" }
+    const novo = cascata("cliente", "upstream", doCliente, PADROES, ["default_route", "tabela"])
+    expect(novo.default_route).toBe(false)
+    expect(novo.tabela).toBe("")
+    const volta = cascata("upstream", "cliente", novo, PADROES, ["default_route", "tabela"])
+    expect(volta.default_route).toBe(true)
+    expect(volta.tabela).toBe("nenhuma")
+  })
+
+  it.each(["nenhuma", "parcial", "parcial_ix", "full"])("sair do downstream limpa a tabela %s", (tabela) => {
+    const doCliente = { tipo: "cliente", default_route: false, tabela, origem: "1100", classe: "" }
+    const novo = cascata("cliente", "upstream", doCliente, PADROES, ["default_route", "tabela"])
+    expect(novo.tabela).toBe("")
+    expect(novo.default_route).toBe(false)
+  })
+
+  it("a tabela escolhida a mao nao volta ao padrao na troca entre downstreams", () => {
+    const parcial = { tipo: "cliente", default_route: true, tabela: "parcial", origem: "1100", classe: "" }
+    expect(cascata("cliente", "parceiro", parcial, PADROES, ["tabela"]).tabela).toBe("parcial")
+  })
+
   const base = { lp_base: "100", route_limit: "1500000", timer_keepalive: "10", timer_hold: "30", origem: "1400" }
 
   it("reescreve o que ainda esta no default do tipo anterior", () => {

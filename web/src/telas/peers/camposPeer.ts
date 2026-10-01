@@ -1,4 +1,4 @@
-import { namespace, opcoesPorTipo, opcoesUsadas, type Opcao } from "@/lib/campos"
+import { namespace, opcoesPorTipo, opcoesUsadas, ROTULO_TABELA, type Opcao } from "@/lib/campos"
 import type { PeerForm, Plano } from "@/api/consultas"
 
 // O `Opcao` sai daqui junto dos tipos de campo: o `Formulario` e o
@@ -117,6 +117,9 @@ export const CAMPOS_PEER: Campo[] = [
   { nome: "bfd", rotulo: "BFD", tipo: "caixa", secao: "limites" },
   { nome: "graceful_restart", rotulo: "Graceful restart", tipo: "caixa", secao: "limites" },
   { nome: "default_route", rotulo: "Anuncia default route", tipo: "caixa", secao: "limites" },
+  { nome: "tabela", rotulo: "Tabela recebida", tipo: "select", secao: "limites",
+    ajuda: "a default route é a caixa acima e vai junto com qualquer tabela",
+    opcoes: (ctx) => ctx.plano.tabelas.map((t) => ({ valor: t, rotulo: ROTULO_TABELA[t] ?? t })) },
   { nome: "bh_upstream", rotulo: "Blackhole do upstream", tipo: "texto", secao: "limites", mono: true, largo: true },
 
   { nome: "prefixos_v4", rotulo: "IPv4", tipo: "area", secao: "prefixos", mono: true, linhas: 5,
@@ -150,7 +153,7 @@ export const CAMPO_BRANCO: PeerForm = {
   id: "", apelido: "", nome: "", tipo: "cliente", grupo_id: "", politica_de: "", asn: "", descricao: "",
   classe: "", lp_base: "300", origem: "1100", pop: "", aprendizado: "", ix_id: "",
   route_limit: "50", prepend_base: "0", timer_keepalive: "", timer_hold: "",
-  bfd: true, graceful_restart: true, default_route: false, bh_upstream: "",
+  bfd: true, graceful_restart: true, default_route: true, tabela: "nenhuma", bh_upstream: "",
   prefixos_v4: [], prefixos_v6: [], te_prefixos_v4: [], te_prefixos_v6: [],
   ap_block: [], ap_te: [], ap_allowed: [], ap_prefer: [],
   communities: [], large_communities: [],

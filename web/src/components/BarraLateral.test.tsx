@@ -10,7 +10,7 @@ const PEERS = [
   { id: 2, token: "BRDIGITAL", tipo: "upstream", asn: 14840, apelido: "BRDIGITAL", nome: "BRDIGITAL-20G", grupo_id: null },
   { id: 3, token: "IX-SP", tipo: "ix", asn: 26162, apelido: "IX-SP", nome: "IX.br Sao Paulo", grupo_id: 9 },
 ]
-const GRUPOS = [{ id: 9, nome: "PARCEIROS", tipo: "parceiro", membros: 4 }]
+const GRUPOS = [{ id: 9, nome: "PARCEIROS", tipo: "parceiro", tabela: "nenhuma", membros: 4 }]
 
 describe("o filtro da busca", () => {
   it("sem termo, devolve tudo", () => {

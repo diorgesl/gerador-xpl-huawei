@@ -9,7 +9,7 @@ const PEERS = [
   { id: 1, token: "268127", tipo: "cliente", asn: 268127, apelido: "", nome: "Cliente ACME", grupo_id: null },
   { id: 2, token: "BRDIGITAL", tipo: "upstream", asn: 14840, apelido: "BRDIGITAL", nome: "BRDIGITAL-20G", grupo_id: null },
 ]
-const GRUPOS = [{ id: 9, nome: "PARCEIROS", tipo: "parceiro", membros: 4 }]
+const GRUPOS = [{ id: 9, nome: "PARCEIROS", tipo: "parceiro", tabela: "nenhuma", membros: 4 }]
 
 // A paleta navega pelo `navigate`, e nao por <Link>: o CommandItem e do cmdk e
 // nao tem composicao. As rotas de destino existem aqui para o teste provar que

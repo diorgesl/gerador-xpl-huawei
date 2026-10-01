@@ -36,13 +36,18 @@ export function FormularioPeer({ form, plano, grupos, peers, erros, avisos, erro
   // API cairia como verdadeiro, o `pertenceAoTipo` responderia true para os
   // quinze campos com tipo, e toda a regra de visibilidade e a nota parariam
   // de valer em silencio
-  const camposPorTipo = Object.keys(plano.campos_por_tipo ?? {}).length > 0
+  const camposDaApi = Object.keys(plano.campos_por_tipo ?? {}).length > 0
     ? plano.campos_por_tipo
     : CAMPOS_POR_TIPO
 
   // O retrato do render: a lista de origens depende do tipo e do ASN que o
   // formulario tem AGORA, e quem os tem e o formulario
   const valores = useWatch({ control: form.control }) as unknown as PeerForm
+
+  // o membro de grupo nao escolhe tabela nem default: o export dele chama o
+  // do grupo, e a default e emitida pelo grupo
+  const membro = String(valores.grupo_id ?? "") !== ""
+  const camposPorTipo = membro ? { ...camposDaApi, tabela: [], default_route: [] } : camposDaApi
 
   // Number("") e 0, e o id 0 e um id como os outros: sem esta guarda o
   // formulario novo (id vazio) se veria como o peer de id 0, o esconderia da
@@ -84,6 +89,15 @@ export function FormularioPeer({ form, plano, grupos, peers, erros, avisos, erro
    * formulario por fora dele, e nao podem apagar a escolha que veio gravada.
    */
   function aoEditarCampo(campo: string, valor: unknown) {
+    // entrar num grupo limpa a tabela e a default, para os campos sumirem;
+    // sair devolve o padrao do downstream, que e o do peer avulso ao nascer
+    if (campo === "grupo_id") {
+      const downstream = plano.padroes.downstream.includes(String(valores.tipo ?? ""))
+      const avulso = String(valor ?? "") === "" && downstream
+      form.setValue("tabela", avulso ? "nenhuma" : "", { shouldDirty: true })
+      form.setValue("default_route", avulso, { shouldDirty: true })
+      return
+    }
     if (campo !== "tipo" && campo !== "asn") return
     const atual = String(valores.politica_de ?? "")
     if (atual === "") return

@@ -10,11 +10,11 @@ const PLANO = {
   rede: { asn: "64512", politica: "65532" },
   padroes: {
     tipos: {
-      cliente: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null },
-      upstream: { lp_base: 100, route_limit: 1500000, timer_keepalive: 10, timer_hold: 30 },
-      ix: { lp_base: 190, route_limit: 500000, timer_keepalive: null, timer_hold: null },
-      parceiro: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null },
-      pni: { lp_base: 200, route_limit: 10000, timer_keepalive: null, timer_hold: null },
+      cliente: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null, default_route: true, tabela: "nenhuma" },
+      upstream: { lp_base: 100, route_limit: 1500000, timer_keepalive: 10, timer_hold: 30, default_route: false, tabela: "" },
+      ix: { lp_base: 190, route_limit: 500000, timer_keepalive: null, timer_hold: null, default_route: false, tabela: "" },
+      parceiro: { lp_base: 300, route_limit: 50, timer_keepalive: null, timer_hold: null, default_route: true, tabela: "nenhuma" },
+      pni: { lp_base: 200, route_limit: 10000, timer_keepalive: null, timer_hold: null, default_route: false, tabela: "" },
     },
     origem_tipo: { cliente: 1100, parceiro: 1100, upstream: 1400, ix: 1300, pni: 1500 },
     origem_classe: { transito: 1100, residencial: 1110 },
@@ -25,6 +25,7 @@ const PLANO = {
   tipos: ["cliente", "parceiro", "upstream", "ix", "pni"],
   tipos_com_criar_lista: ["cliente", "parceiro", "upstream"],
   classes_cliente: ["transito", "residencial", "corporativo", "cgnat"],
+  tabelas: ["nenhuma", "parcial", "parcial_ix", "full"],
   lp_base: { cliente: 300, upstream: 100 },
   route_limit: { cliente: 50, upstream: 1500000 },
   route_limit_exemplo: { cliente: 100 },
@@ -34,7 +35,8 @@ const PLANO = {
   pop_usados: [2001, 2010], aprendizado_usados: [3100],
   campos_por_tipo: {
     classe: ["cliente", "parceiro"], pop: ["cliente", "parceiro"],
-    default_route: ["cliente", "parceiro"], aprendizado: ["upstream", "ix"],
+    default_route: ["cliente", "parceiro"], tabela: ["cliente", "parceiro"],
+    aprendizado: ["upstream", "ix"],
     prepend_base: ["upstream"], bh_upstream: ["upstream"], ap_block: ["upstream"],
     ap_te: ["upstream"], te_prefixos_v4: ["upstream"], te_prefixos_v6: ["upstream"],
     ix_id: ["ix"], ap_prefer: ["ix"], ap_allowed: ["pni"],
@@ -53,7 +55,7 @@ const BRANCO: PeerForm = {
   asn: "268127", descricao: "", classe: "residencial", lp_base: "300", origem: "1110",
   pop: "2001", aprendizado: "", ix_id: "", route_limit: "50", prepend_base: "0",
   timer_keepalive: "", timer_hold: "", bfd: true, graceful_restart: true,
-  default_route: false, bh_upstream: "", prefixos_v4: ["45.169.232.0/22"], prefixos_v6: [],
+  default_route: false, tabela: "nenhuma", bh_upstream: "", prefixos_v4: ["45.169.232.0/22"], prefixos_v6: [],
   te_prefixos_v4: [], te_prefixos_v6: [], ap_block: [], ap_te: [], ap_allowed: [],
   ap_prefer: [], communities: [], large_communities: [],
   sessao_v4_local: "198.51.100.1", sessao_v4_remoto: "198.51.100.2",
@@ -116,6 +118,26 @@ describe("o formulario do peer", () => {
     expect(campo).toHaveValue("45.169.232.0/22\n45.169.236.0/23")
     // e o array subiu com as duas, que e o que a contagem no rotulo mostra
     expect(screen.getByLabelText(/IPv4 \(2\)/)).toBeInTheDocument()
+  })
+
+  it("o cliente escolhe a tabela recebida", () => {
+    render(<Montar />)
+    expect(screen.getByLabelText(/Tabela recebida/)).toBeInTheDocument()
+  })
+
+  it("o upstream nao tem tabela recebida", () => {
+    render(<Montar iniciais={{ tipo: "upstream", tabela: "" }} />)
+    expect(screen.queryByLabelText(/Tabela recebida/)).not.toBeInTheDocument()
+  })
+
+  it("o membro de grupo nao ve a caixa da default", () => {
+    render(<Montar iniciais={{ grupo_id: "3", tabela: "", default_route: false }} />)
+    expect(screen.queryByLabelText(/Anuncia default route/)).not.toBeInTheDocument()
+  })
+
+  it("o membro de grupo nao escolhe tabela: ela e a do grupo", () => {
+    render(<Montar iniciais={{ grupo_id: "3", tabela: "" }} />)
+    expect(screen.queryByLabelText(/Tabela recebida/)).not.toBeInTheDocument()
   })
 
   it("esconde o campo que nao pertence ao tipo", () => {
