@@ -1490,6 +1490,19 @@ Há ainda uma consequência que não é do filtro e sim da sessão. Como o route
 
 ### PNI de CDN
 
+A lista `AP-<G>-ALLOWED` casa com `pass '<asn>'`, e não com `origin`, de
+propósito: há PNI que na prática é um IX privado, entregando rotas de vários
+ASNs que ficam atrás do peer. `origin` recusaria essas rotas, porque a origem é
+o ASN de trás, e não o do vizinho; `pass` aceita o que passa pelo peer, e é a
+única das duas formas que descreve esse contrato. O que esse PNI não pode
+entregar é o nosso próprio bloco, e para isso quem barra é o
+`REJEITA-BLOCO-PROPRIO-<U>` do import.
+
+Para um PNI estritamente bilateral, onde só os prefixos do próprio peer são
+contratados, o `origin '<asn>'` é mais apertado e é a forma a usar. O cadastro
+não distingue os dois hoje; quando distinguir, a lista sai de um lado ou do
+outro por sessão.
+
 Sessão bilateral, onde prepend por peer funciona normalmente.
 
 ```scss
