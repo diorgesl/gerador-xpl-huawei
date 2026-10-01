@@ -85,6 +85,15 @@ xpl community-list CL-ORIGEM-ANUNCIAVEL
  64512:1130
 end-list
 
+xpl community-list CL-ORIGEM-PARCIAL-IX
+ 64512:1000,
+ 64512:1100,
+ 64512:1110,
+ 64512:1120,
+ 64512:1130,
+ 64512:1300
+end-list
+
 xpl community-list CL-NOADV-CUST
  64512:200,
  64512:204

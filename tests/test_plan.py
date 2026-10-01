@@ -195,7 +195,8 @@ def test_cidr_para_xpl_recusa_entrada_sem_mascara():
 # os nomes que carregam o ASN. A lista existe para o teste de varredura
 # poder ser exaustivo em vez de citar dois ou tres.
 CAMPOS_DO_ASN = ("PARCEIRO", "ORIGEM_ANUNCIAVEL", "LP_CLIENTE", "BLACKHOLE",
-                 "BLACKHOLE_PROPAGATE", "BLACKHOLE_INFO", "ORIGEM_NOME")
+                 "BLACKHOLE_PROPAGATE", "BLACKHOLE_INFO", "ORIGEM_NOME",
+                 "ORIGEM_PARCIAL_IX")
 
 
 def test_a_rede_de_fabrica_e_a_de_sempre():
@@ -222,6 +223,7 @@ def test_a_rede_troca_o_prefixo_de_tudo_que_e_do_plano():
     assert r.PARCEIRO == "64500:2091"
     assert r.ORIGEM_ANUNCIAVEL == ("64500:1000", "64500:1100", "64500:1110",
                                    "64500:1120", "64500:1130")
+    assert r.ORIGEM_PARCIAL_IX == r.ORIGEM_ANUNCIAVEL + ("64500:1300",)
     assert r.LP_CLIENTE == (("64500:101", 50), ("64500:102", 80),
                             ("64500:103", 150), ("64500:104", 250),
                             ("64500:105", 350))
@@ -443,3 +445,12 @@ def test_a_poda_do_confinamento_em_v6():
     assert plan.linhas_do_confinamento(
         [("2804:36b4::/32", 48), ("2804:36b4:1000::/40", None)]) == [
         ("2804:36b4::/32", 48)]
+
+
+def test_a_parcial_com_ix_e_a_anunciavel_mais_a_origem_do_ix():
+    # o portao da parcial_ix e uma lista so: a anunciavel e a marca que o
+    # import do IX carimba. PNI (1500) e upstream (1400) ficam de fora
+    assert plan.TABELAS == ("nenhuma", "parcial", "parcial_ix", "full")
+    assert plan.ORIGEM_PARCIAL_IX == plan.ORIGEM_ANUNCIAVEL + ("64512:1300",)
+    assert "64512:1500" not in plan.ORIGEM_PARCIAL_IX
+    assert "64512:1400" not in plan.ORIGEM_PARCIAL_IX

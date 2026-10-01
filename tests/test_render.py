@@ -25,6 +25,7 @@ def test_base_tem_os_objetos_compartilhados():
         "xpl community-list CL-BLACKHOLE-PROPAGATE",
         "xpl community-list CL-GSHUT",
         "xpl community-list CL-ORIGEM-ANUNCIAVEL",
+        "xpl community-list CL-ORIGEM-PARCIAL-IX",
         "xpl community-list CL-NOADV-CUST",
         "xpl community-list CL-ONLY-NOT-UP",
         "xpl community-list CL-ONLY-NOT-IX",

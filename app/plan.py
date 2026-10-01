@@ -11,7 +11,7 @@ O prefixo dessas communities nao e constante de fabrica. O topo do
 peers.yaml declara o AS da rede, e o Rede, no fim do modulo, carrega o
 valor declarado: os templates recebem um Rede no lugar deste modulo e
 seguem escrevendo plan.c5ppa, sem saber que ha um objeto ali. O que
-depende do ASN sao sete valores e nove funcoes, e todos aparecem no Rede;
+depende do ASN sao nove valores e nove funcoes, e todos aparecem no Rede;
 o resto (TIPOS, LP_BASE, ORIGEM, as faixas) e tabela fixa do plano e o
 objeto delega de volta para o modulo.
 """
@@ -212,6 +212,20 @@ def _origem_anunciavel(ns=ASN):
 
 
 ORIGEM_ANUNCIAVEL = _origem_anunciavel()
+
+# o que a sessao de cliente e de parceiro recebe alem da default, que e o
+# outro campo (default_route). A ordem e a da tela, do menos para o mais.
+TABELAS = ("nenhuma", "parcial", "parcial_ix", "full")
+
+
+# a tabela parcial + IX: a anunciavel mais a origem que o import do IX
+# carimba. Uma lista so, e nao duas no mesmo if, para o portao do export de
+# cliente nao depender da precedencia de and/or (PLANO, armadilhas de fluxo).
+def _origem_parcial_ix(ns=ASN):
+    return _origem_anunciavel(ns) + (c(ORIGEM["ix"], ns),)
+
+
+ORIGEM_PARCIAL_IX = _origem_parcial_ix()
 
 # --- originacao dos prefixos proprios ---------------------------------
 
@@ -779,9 +793,10 @@ class Rede:
         # `apply as-path`
         self.ASN = str(asn)
 
-        # os sete valores que o modulo calcula no import, recalculados aqui
+        # os nove valores que o modulo calcula no import, recalculados aqui
         self.PARCEIRO = _parceiro(self.ns)
         self.ORIGEM_ANUNCIAVEL = _origem_anunciavel(self.ns)
+        self.ORIGEM_PARCIAL_IX = _origem_parcial_ix(self.ns)
         self.LP_CLIENTE = _lp_cliente(self.ns)
         self.ORIGEM_NOME = _origem_nome(self.ns, self.asn)
         self.BLACKHOLE = _blackhole(self.ns)
@@ -828,7 +843,7 @@ class Rede:
 
 
 # Os nomes do modulo cujo valor carrega o AS de fabrica. O Rede recalcula
-# todos os sete, e o __getattr__ usa esta lista para nao servir nenhum deles
+# todos os nove, e o __getattr__ usa esta lista para nao servir nenhum deles
 # pela delegacao. A varredura e do proprio modulo de proposito: uma constante
 # nova com "64512" dentro entra na lista sozinha, e quem acrescentar uma sem
 # expor no Rede descobre no primeiro acesso, e nao na sessao BGP com meio

@@ -96,6 +96,14 @@ xpl community-list CL-ORIGEM-ANUNCIAVEL
 {% endfor %}
 end-list
 
+{# o portao da tabela parcial + IX no egress de cliente: a anunciavel mais a
+   origem do IX. A parcial sem IX usa a CL-ORIGEM-ANUNCIAVEL de cima. #}
+xpl community-list CL-ORIGEM-PARCIAL-IX
+{% for c in plan.ORIGEM_PARCIAL_IX %}
+ {{ c }}{{ "," if not loop.last }}
+{% endfor %}
+end-list
+
 {# 2xx de proibicao absoluta, visao de egress para cliente. 201, 202 e 203
    ficam de fora: dizem "nao anunciar para aquele tipo", nao "nao anunciar
    para cliente", entao a rota segue para o cliente. #}
