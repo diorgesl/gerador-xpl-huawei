@@ -316,9 +316,29 @@ def _blackhole_info(ns=ASN):
     return c(9666, ns)
 
 
+# As tres restricoes padronizadas da RFC 1997 que dizem "nao anunciar": fora do
+# AS (NO_EXPORT), para vizinho nenhum (NO_ADVERTISE) e fora do AS sem
+# confederacao (NO_EXPORT_SUBCONFED). Sao bem conhecidas, nao seguem o AS da
+# rede, e o nosso tratamento das tres e o mesmo: nao anunciar em destino
+# nenhum.
+RESTRICOES = ("65535:65281", "65535:65282", "65535:65283")
+
+
+def _restricao(ns=ASN):
+    """A marca propria que substitui a restricao padronizada recebida.
+
+    O carimbo do import externo substitui a community recebida, e a restricao
+    iria junto: ela e relida antes do overwrite e volta como esta marca, que e
+    do nosso namespace. Ser nossa e o que impede o peer de forjar a restricao
+    de outro, e o egresso recusa rota que carregue ela em qualquer destino.
+    """
+    return c(9020, ns)
+
+
 BLACKHOLE = _blackhole()
 BLACKHOLE_PROPAGATE = _blackhole_propagate()
 BLACKHOLE_INFO = _blackhole_info()
+RESTRICAO = _restricao()
 
 # uma community e action (3 digitos, 100-699) ou informativa (4, 1000-9999)
 FAIXAS = ((100, 699), (1000, 9999))
@@ -763,6 +783,7 @@ class Rede:
         self.BLACKHOLE = _blackhole(self.ns)
         self.BLACKHOLE_PROPAGATE = _blackhole_propagate(self.ns)
         self.BLACKHOLE_INFO = _blackhole_info(self.ns)
+        self.RESTRICAO = _restricao(self.ns)
 
         # as dez funcoes com o namespace ja fixado: o template chama
         # plan.c5ppa(peer, 0) e recebe o que c5ppa(peer, 0, ns) devolveria.

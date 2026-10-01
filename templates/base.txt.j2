@@ -75,6 +75,20 @@ xpl community-list CL-GSHUT
  65535:0
 end-list
 
+{# PLANO.md / RPKI, IRR e anti-leak. As tres restricoes padronizadas da RFC
+   1997 que dizem "nao anunciar", e a marca propria que substitui a que vier
+   de fora: o carimbo do import externo apaga a community recebida, entao a
+   restricao e relida antes do overwrite e volta como `RESTRICAO`, que e do
+   nosso namespace. O egresso recusa as duas formas - a marca, da rota que
+   passou por import externo, e a padronizada, da rota de cliente, que o
+   import de downstream preserva inteira. #}
+xpl community-list CL-RESTRICAO
+{% for c in plan.RESTRICOES %}
+ {{ c }},
+{% endfor %}
+ {{ plan.RESTRICAO }}
+end-list
+
 {# so sai do AS o que carrega marca de origem propria ou de cliente #}
 xpl community-list CL-ORIGEM-ANUNCIAVEL
 {% for c in plan.ORIGEM_ANUNCIAVEL %}
@@ -171,6 +185,15 @@ end-filter
 
 {% endfor %}
 xpl route-filter EXPORT-SANITY
+ {# Restricao padronizada recebida (NO_EXPORT, NO_ADVERTISE ou
+    NO_EXPORT_SUBCONFED): a rota nao sai do AS, em destino nenhum. Vale a
+    marca propria, que e o que sobra da restricao depois do carimbo do import
+    externo, e vale a padronizada, que e o que uma rota de cliente carrega -
+    o import de downstream nao sobrescreve nada. Vem antes de tudo: e a
+    primeira coisa que a rota perde se a checagem ficar depois de um finish. #}
+ if community matches-any CL-RESTRICAO then
+  refuse
+ endif
  {# infra interna nunca sai do AS, nem como rota propria. A unica recusa
     que existia era a do export de cliente: os egress de upstream, IX e
     PNI nunca barraram esta marca, e neles quem a barrava era a ausencia

@@ -281,6 +281,12 @@ end-filter
 {% macro filtro_downstream_export(alvo, fam) -%}
 {% set U = fam|upper %}
 xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
+ {# Restricao padronizada recebida: a rota nao sai do AS, e isso vale tambem
+    para a entrega ao cliente, que e eBGP. Vem antes de tudo, e o egresso de
+    cliente e o unico caminho que nao passa pelo EXPORT-SANITY. #}
+ if community matches-any CL-RESTRICAO then
+  refuse
+ endif
  if community matches-any CL-NOADV-CUST then
   refuse
  endif
@@ -330,6 +336,22 @@ end-list
 {% endif %}
 {%- endmacro %}
 
+{#- O carimbo do import externo com a restricao padronizada preservada. O
+    carimbo substitui a community recebida, e a restricao iria junto, entao
+    ela e relida AQUI dentro do ramo que carimba - e a unica janela em que ela
+    ainda existe - e volta como a marca propria do CL-RESTRICAO. O `recuo` e
+    do chamador: o mesmo carimbo sai no corpo do filtro e um nivel adentro do
+    ramo de GSHUT. As duas restricoes juntas nao tem problema: o `matches-any`
+    do CL-RESTRICAO le as tres de uma vez e o carimbo sai uma vez so. #}
+{% macro carimbo_do_import(marcas, recuo) -%}
+{{ recuo }}if community matches-any CL-RESTRICAO then
+{{ recuo }} apply community {{ plan.conjunto_de(marcas + [plan.RESTRICAO]) }} overwrite
+{{ recuo }}else
+{{ recuo }} apply community {{ plan.conjunto_de(marcas) }} overwrite
+{{ recuo }}endif
+{%- endmacro %}
+
+
 {% macro filtro_upstream_import(alvo, fam) -%}
 {% set U = fam|upper %}
 xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
@@ -348,7 +370,7 @@ xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
     enfeite: sem ele a rota drenada fica sem classificacao, o EXPORT-SANITY a
     recusa no egress, e o que era para ser ultimo recurso vira retirada. #}
  if community matches-any CL-GSHUT then
-  apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
+{{ carimbo_do_import([plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)], "  ") }}
   apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
   apply local-preference 0
   {# finish, e nao approve: `approve` NAO encerra o processamento, so
@@ -360,7 +382,7 @@ xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
  {# overwrite: nada do que o upstream escreveu em community sobrevive. e o que
     torna seguro o matches-any CL-ORIGEM-ANUNCIAVEL no export. 2000 marca
     "aprendida de fora", e o export de outro upstream recusa. #}
- apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
+{{ carimbo_do_import([plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)], " ") }}
  apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
 {% if alvo.te_prefixos[fam] or alvo.ap_te %}
  {# excecoes de TE, aplicadas depois do carimbo base. Se a lista ficar vazia a
@@ -402,6 +424,11 @@ xpl route-filter UP-{{ alvo.token }}-EXPORT-{{ U }}
     refuse
    endif
    if community matches-any CL-ONLY-NOT-UP then
+    refuse
+   endif
+   {# e a restricao padronizada vale aqui tambem: o ramo termina em finish, e
+      o EXPORT-SANITY de baixo nao chega a ver esta rota. #}
+   if community matches-any CL-RESTRICAO then
     refuse
    endif
 {% if alvo.bh_upstream %}
@@ -575,7 +602,7 @@ xpl route-filter IX-{{ alvo.token }}-IMPORT-{{ U }}
    EXPORT-SANITY a recusa no egress, virando retirada em vez de ultimo
    recurso. #}
  if community matches-any CL-GSHUT then
-  apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
+{{ carimbo_do_import([plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)], "  ") }}
   apply large-community {{ plan.conjunto(plan.c_large(1001, alvo.ix_id)) }} overwrite
   apply local-preference 0
   finish
@@ -583,7 +610,7 @@ xpl route-filter IX-{{ alvo.token }}-IMPORT-{{ U }}
 
  {# overwrite: nada do que o membro do IX escreveu sobrevive. 1001:<ix_id> e a
     informativa de IX; o id e o do PeeringDB, nao o ASN do route server. #}
- apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)) }} overwrite
+{{ carimbo_do_import([plan.c(alvo.origem), plan.c(alvo.aprendizado), plan.c(2000)], " ") }}
  apply large-community {{ plan.conjunto(plan.c_large(1001, alvo.ix_id)) }} overwrite
 
 {% if alvo.ap_prefer %}
@@ -689,7 +716,7 @@ xpl route-filter PNI-{{ alvo.token }}-IMPORT-{{ U }}
    carimbo repetido a rota drenada fica sem classificacao e o EXPORT-SANITY a
    recusa no egress, virando retirada em vez de ultimo recurso. #}
  if community matches-any CL-GSHUT then
-  apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(plan.GEO_PNI), plan.c(2000)) }} overwrite
+{{ carimbo_do_import([plan.c(alvo.origem), plan.c(plan.GEO_PNI), plan.c(2000)], "  ") }}
   apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
   apply local-preference 0
   finish
@@ -699,7 +726,7 @@ xpl route-filter PNI-{{ alvo.token }}-IMPORT-{{ U }}
  {# overwrite: a CDN nao escreve no nosso namespace. plan.GEO_PNI e a
     geografia fixa do PNI. 2000 porque a rota vem de fora: nao e propria nem
     de cliente. #}
- apply community {{ plan.conjunto(plan.c(alvo.origem), plan.c(plan.GEO_PNI), plan.c(2000)) }} overwrite
+{{ carimbo_do_import([plan.c(alvo.origem), plan.c(plan.GEO_PNI), plan.c(2000)], " ") }}
  apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} overwrite
 
  finish
