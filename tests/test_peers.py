@@ -61,6 +61,30 @@ def test_default_route_ausente_no_yaml_antigo_e_false():
     assert mod.Peer.de_dict({"id": 0, "nome": "x", "asn": 1}).default_route is False
 
 
+def test_tabela_atravessa_o_yaml(tmp_path):
+    # o para_dict lista os campos um a um: um campo que ele esqueca some na
+    # gravacao sem erro nenhum
+    caminho = tmp_path / "peers.yaml"
+    mod.gravar([mod.Peer(id=0, nome="Cliente ACME", tipo="cliente",
+                         asn=268127, tabela="parcial")], caminho)
+    assert mod.carregar(caminho)[0].tabela == "parcial"
+
+
+def test_tabela_do_grupo_atravessa_o_yaml(tmp_path):
+    caminho = tmp_path / "peers.yaml"
+    g = mod.Grupo(id=0, nome="CLIENTES", tipo="cliente", classe="transito",
+                  origem=1100, pop=2001, tabela="parcial_ix")
+    mod.gravar_grupos([g], caminho)
+    assert mod.carregar_grupos(caminho)[0].tabela == "parcial_ix"
+
+
+def test_tabela_ausente_no_yaml_antigo_e_full():
+    # o campo nasceu depois: todo downstream recebia a full table, e o
+    # cadastro antigo tem que gerar o mesmo bloco de antes
+    assert mod.Peer.de_dict({"id": 0, "nome": "x", "asn": 1}).tabela == "full"
+    assert mod.Grupo.de_dict({"id": 0, "nome": "G"}).tabela == "full"
+
+
 def test_gravar_reescreve_a_lista_inteira(tmp_path):
     caminho = tmp_path / "peers.yaml"
     a = mod.Peer(id=0, nome="a", tipo="cliente", asn=1)

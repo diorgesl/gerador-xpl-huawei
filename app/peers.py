@@ -98,6 +98,11 @@ class Peer:
     bh_upstream: str = ""
     # cliente: anuncia a default route (0.0.0.0/0 e ::/0) a esta sessao
     default_route: bool = False
+    # cliente/parceiro: o que a sessao recebe alem da default (plan.TABELAS).
+    # Ausente no yaml e "full", que e o que todo downstream recebia antes de
+    # o campo existir. O peer novo nasce com "nenhuma" pelo peer_em_branco,
+    # e nao por aqui, para o cadastro antigo nao mudar de saida.
+    tabela: str = "full"
 
     # grupo BGP (VRP `group`) a que este peer pertence, ou None fora de
     # grupo. Vale nos cinco tipos - o membro herda do grupo o mesmo objeto em
@@ -232,7 +237,8 @@ class Peer:
             "timer_hold": self.timer_hold,
             "prepend_base": self.prepend_base, "route_limit": self.route_limit,
             "sessoes": self.sessoes, "bh_upstream": self.bh_upstream,
-            "default_route": self.default_route, "grupo_id": self.grupo_id,
+            "default_route": self.default_route, "tabela": self.tabela,
+            "grupo_id": self.grupo_id,
             "politica_de": self.politica_de,
         }
 
@@ -403,6 +409,9 @@ class Grupo:
     prepend_base: int = 0
     bh_upstream: str = ""
     default_route: bool = False
+    # o mesmo campo do peer, com o mesmo default pelo mesmo motivo. Vale para
+    # os membros: o export do membro termina chamando o do grupo
+    tabela: str = "full"
     bfd: bool = True
     graceful_restart: bool = True
     timer_keepalive: int | None = None
@@ -458,7 +467,8 @@ class Grupo:
             "ap_block": self.ap_block, "ap_te": self.ap_te,
             "ap_allowed": self.ap_allowed, "ap_prefer": self.ap_prefer,
             "prepend_base": self.prepend_base, "bh_upstream": self.bh_upstream,
-            "default_route": self.default_route, "bfd": self.bfd,
+            "default_route": self.default_route, "tabela": self.tabela,
+            "bfd": self.bfd,
             "graceful_restart": self.graceful_restart,
             "timer_keepalive": self.timer_keepalive,
             "timer_hold": self.timer_hold, "prefixos": self.prefixos,
