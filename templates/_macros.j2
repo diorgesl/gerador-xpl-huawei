@@ -159,6 +159,13 @@ xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
   apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} additive
   finish
  endif
+ {# o pedido de descarte que nao casou o ramo de cima e de prefixo maior que
+     o host, ou fora do bloco: sem este veto ele caia na whitelist normal, e o
+     additive levava o 65535:666 para upstream e IX pedindo o descarte do
+     bloco inteiro, sem o 667. #}
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
  if not ip route-destination in PL-CUST-{{ alvo.token }}-{{ U }} then
   refuse
  endif
@@ -285,6 +292,11 @@ xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
     para a entrega ao cliente, que e eBGP. Vem antes de tudo, e o egresso de
     cliente e o unico caminho que nao passa pelo EXPORT-SANITY. #}
  if community matches-any CL-RESTRICAO then
+  refuse
+ endif
+ {# pedido de descarte nao e rota para entregar: o host autorizado ja cai no
+    200 do CL-NOADV-CUST, e este veto pega o que escapar do import. #}
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
   refuse
  endif
  if community matches-any CL-NOADV-CUST then

@@ -162,6 +162,9 @@ xpl route-filter EXPORT-SANITY
  if community matches-any CL-RESTRICAO then
   refuse
  endif
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
  if community matches-any {64512:1900, 64512:1901} then
   refuse
  endif

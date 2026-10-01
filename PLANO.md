@@ -1017,6 +1017,13 @@ Sobrescrever no ingress de cliente apagaria junto as ações do cliente, que só
 
 ```scss
 xpl route-filter EXPORT-SANITY
+ !- pedido de descarte no caminho normal. O blackhole de host do upstream
+ !- ja terminou em finish no ramo proprio, antes desta chamada; o que
+ !- chega aqui e prefixo maior que o host, e o vizinho que honra a
+ !- RFC 7999 descartaria o bloco inteiro.
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
  !- infra interna nunca sai do AS, nem como rota propria. A unica recusa
  !- que existia era a do export de cliente: os egress de upstream, IX e
  !- PNI nunca barraram esta marca, e neles quem a barrava era a ausencia
@@ -1130,6 +1137,13 @@ xpl route-filter CUST-IMPORT-268127
   finish
  endif
 
+ !- pedido de descarte que nao casou o ramo de cima: prefixo maior que o
+ !- host, ou fora do bloco. Recusado, para nao seguir como rota normal
+ !- levando o 65535:666 para fora.
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
+
  !- anuncio normal: so o bloco autorizado
  if not ip route-destination in PL-CUST-268127-V4 then
   refuse
@@ -1161,7 +1175,7 @@ xpl route-filter CUST-IMPORT-268127
  end-filter
 ```
 
-A ordem importa em três pontos. O blackhole vem antes do teste de prefixo normal, porque um `/32` não passaria em `PL-CUST-268127-V4`. A escada de local preference vive em `APPLY-CUSTOMER-LP` (seção de route-filters reutilizáveis), chamada com `call`: qualquer cliente novo usa o mesmo filtro sem duplicar o `if/elseif`. E o `APPLY-PEER-268127` é a última linha do import, depois de tudo o que o documento aplica ao bloco deste cliente, porque ele marca o bloco já pronto.
+A ordem importa em três pontos. O blackhole vem antes do teste de prefixo normal, porque um `/32` não passaria em `PL-CUST-268127-V4`. Logo depois dele vem o veto ao pedido de descarte que sobrou: um `/24` ou `/22` marcado com `65535:666` não casa o ramo de host, passaria na whitelist normal, e o `additive` levaria a community até o upstream e o IX pedindo o descarte do bloco inteiro, sem o `667`. A escada de local preference vive em `APPLY-CUSTOMER-LP` (seção de route-filters reutilizáveis), chamada com `call`: qualquer cliente novo usa o mesmo filtro sem duplicar o `if/elseif`. E o `APPLY-PEER-268127` é a última linha do import, depois de tudo o que o documento aplica ao bloco deste cliente, porque ele marca o bloco já pronto.
 
 As ações do cliente (`101`–`105`, `2xx`, `6CA`, `5PPA`, `666`/`667`) **sobrevivem** ao ingress e isso é proposital. O prepend e o no-export só são consumidos no egress, então precisam atravessar a RIB. Elas também não desaparecem no egress: não há remoção seletiva em route-filter, e o `overwrite` de fecho que existia lá saiu do desenho. O que o cliente escreveu chega ao peer externo, e o `PL-CUST-268127-V4` é o que garante que chegue preso a prefixo do próprio cliente.
 
@@ -1187,6 +1201,12 @@ Três consequências valem registro:
 
 ```scss
 xpl route-filter CUST-EXPORT-268127
+ !- pedido de descarte nao e rota para entregar. O host autorizado ja
+ !- cai no 200 logo abaixo; este veto pega o que escapar do import.
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
+
  !- nao anunciar para ninguem nem para outros clientes: cobre 200 e 204.
 !- o 201/202/203 nao entram aqui: sao escopo relativo, nao proibicao
 !- de anunciar para cliente, entao a rota segue.
@@ -1647,6 +1667,7 @@ flowchart LR
 | Regra      | Valor                                 | Por quê                                               |
 | ---------- | ------------------------------------- | ----------------------------------------------------- |
 | Tamanho    | `/32` em v4, `/128` em v6             | RFC 7999; evita descartar bloco inteiro por engano    |
+| Fora disso | Anúncio recusado inteiro              | Não segue como rota normal levando o `65535:666`      |
 | Escopo     | Dentro do bloco autorizado do cliente | Impede blackhole de prefixo de terceiro               |
 | Gatilho    | `65535:666` ou `64512:666`            | O primeiro é o padrão; o segundo é alias              |
 | Propagação | Só com `64512:667`                    | Default é conter na própria rede                      |

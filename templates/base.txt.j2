@@ -194,6 +194,15 @@ xpl route-filter EXPORT-SANITY
  if community matches-any CL-RESTRICAO then
   refuse
  endif
+ {# Pedido de descarte no caminho normal. O blackhole de host do upstream ja
+    terminou em finish no ramo proprio, antes desta chamada, entao o que
+    chega aqui e prefixo maior que o host: sairia com o 65535:666 e o vizinho
+    que honra a RFC 7999 descartaria o bloco inteiro. O import de cliente ja
+    recusa esse anuncio; este veto e a segunda barreira, e pega tambem a
+    rota estatica de descarte (tag 666) que entrar no BGP. #}
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
  {# infra interna nunca sai do AS, nem como rota propria. A unica recusa
     que existia era a do export de cliente: os egress de upstream, IX e
     PNI nunca barraram esta marca, e neles quem a barrava era a ausencia

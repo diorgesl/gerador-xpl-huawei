@@ -375,8 +375,12 @@ def conjunto(*itens):
 
     Existe porque escrever "{" num template colado a "{{" faz o Jinja
     ler o delimitador de expressao e o texto sai truncado.
+
+    O item repetido sai uma vez so. Acontece quando dois campos do cadastro
+    caem no mesmo valor, como o PNI de origem 1200, que e tambem a geografia
+    fixa do PNI.
     """
-    return "{%s}" % ", ".join(str(i) for i in itens)
+    return "{%s}" % ", ".join(dict.fromkeys(str(i) for i in itens))
 
 
 def _rede_do_cidr(cidr):

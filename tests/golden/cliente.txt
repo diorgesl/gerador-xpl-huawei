@@ -20,6 +20,9 @@ xpl route-filter CUST-268127-IMPORT-V4
   apply large-community {64512:1000:268127} additive
   finish
  endif
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
+  refuse
+ endif
  if not ip route-destination in PL-CUST-268127-V4 then
   refuse
  endif
@@ -35,6 +38,9 @@ end-filter
 
 xpl route-filter CUST-268127-EXPORT-V4
  if community matches-any CL-RESTRICAO then
+  refuse
+ endif
+ if community matches-any CL-BLACKHOLE or tag eq 666 then
   refuse
  endif
  if community matches-any CL-NOADV-CUST then

@@ -75,6 +75,14 @@ def test_o_pdf_diz_que_a_propagacao_do_blackhole_respeita_o_destino():
     assert "65532:0:<ASN>" in texto
 
 
+def test_o_pdf_diz_que_blackhole_fora_do_host_e_recusado():
+    """A auditoria v5, secao 3: o pedido de descarte num prefixo maior que o
+    host caia no fluxo normal e saia com a community. Agora o import o recusa,
+    e o cliente precisa saber que o anuncio inteiro some, nao so o pedido."""
+    texto = secao("Blackhole")
+    assert "é recusado" in texto
+
+
 def test_o_cabecalho_da_tabela_sai_em_negrito():
     """A faixa cinza sozinha nao separa o cabecalho do corpo.
 

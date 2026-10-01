@@ -166,6 +166,8 @@ def test_5ppa_e_o_large_equivalente_andam_juntos():
 def test_conjunto():
     assert plan.conjunto("64512:200") == "{64512:200}"
     assert plan.conjunto("64512:1", "64512:2") == "{64512:1, 64512:2}"
+    # item repetido sai uma vez, na posicao da primeira ocorrencia
+    assert plan.conjunto("64512:1200", "64512:1200", "64512:2000") == "{64512:1200, 64512:2000}"
 
 
 def test_c4pp0_nao_colide_com_o_regex_de_informativa():

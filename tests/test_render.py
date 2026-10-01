@@ -1067,6 +1067,54 @@ def test_o_egresso_recusa_rota_com_restricao_padronizada():
     assert "if community matches-any CL-RESTRICAO then" in ramo
 
 
+# com a quebra e o recuo de antes: o veto tem que abrir linha propria, e um
+# comentario de template com `-` cola o `if` no `endif` de cima
+VETO_BH = ("\n if community matches-any CL-BLACKHOLE or tag eq 666 then\n"
+           "  refuse\n"
+           " endif\n")
+
+
+def test_o_import_de_cliente_recusa_blackhole_fora_do_ramo_de_host():
+    """A auditoria v5, secao 3: o ramo de blackhole so casa o /32 ou /128 do
+    PL-CUST-<T>-BH, e um /24 marcado com 65535:666 caia na whitelist normal.
+    O additive preservava a community, e o /24 saia para upstream e IX
+    pedindo descarte do bloco inteiro, sem o 667. O veto vem logo depois do
+    ramo valido, que ja terminou em finish, e antes da whitelist."""
+    for nome, texto, filtro in (
+            ("cliente", render.render_peer(peer_cliente()), "CUST-268127-IMPORT-V4"),
+            ("grupo", render.render_grupo(grupo_com_asn()), "CUST-UP-REDUNDANTE-IMPORT-V4")):
+        trecho = texto.split("xpl route-filter %s" % filtro)[1].split("end-filter")[0]
+        assert VETO_BH in trecho, nome
+        assert trecho.index("PL-%s-BH-V4" % filtro[:-10]) < trecho.index(VETO_BH), nome
+        assert trecho.index(VETO_BH) < trecho.index("if not ip route-destination in PL-"), nome
+
+
+def test_o_egresso_recusa_blackhole_que_chega_ao_caminho_normal():
+    """A segunda barreira do mesmo achado. No upstream o ramo de host ja
+    terminou em finish antes do EXPORT-SANITY, entao o veto ali so alcanca o
+    que nao e host. IX e PNI passam pelo EXPORT-SANITY; o egresso de cliente
+    nao, e leva o veto proprio."""
+    base = render.render_base()
+    sanity = base.split("xpl route-filter EXPORT-SANITY")[1].split("end-filter")[0]
+    assert VETO_BH in sanity
+    for peer in (peer_cliente(), peer_parceiro()):
+        texto = render.render_peer(peer)
+        export = texto.split("-EXPORT-V4")[1].split("end-filter")[0]
+        assert VETO_BH in export, peer.tipo
+
+    texto = render.render_peer(peer_upstream())
+    filtro = texto.split("xpl route-filter UP-14840-EXPORT-V4")[1].split("end-filter")[0]
+    assert filtro.index("CL-BLACKHOLE-PROPAGATE") < filtro.index("call route-filter EXPORT-SANITY")
+
+
+def test_o_carimbo_do_pni_nao_repete_a_origem_bilateral():
+    """O PNI cadastrado com origem 1200 carimbava `{..:1200, ..:1200, ..}`:
+    a origem e a geografia fixa do PNI tem o mesmo valor."""
+    texto = render.render_peer(peer_pni(origem=1200))
+    assert "64512:1200, 64512:1200" not in texto
+    assert "apply community {64512:1200, 64512:2000} overwrite" in texto
+
+
 def test_peer_sem_descricao_nao_emite_a_linha_do_description():
     """`peer X description` sem argumento e linha incompleta de CLI, e o campo
     e livre no cadastro. Sem descricao, o comando nao sai."""

@@ -271,6 +271,9 @@ def _blackhole(rede):
             "Envie `65535:666` (RFC 7999) num /32, ou num /128 em IPv6, "
             "dentro do seu bloco autorizado. O prefixo é descartado na nossa "
             "borda.",
+            "Um anúncio marcado com `65535:666` que não seja um host do seu "
+            "bloco autorizado, como um /24 ou um /22, é recusado inteiro: "
+            "não é descartado nem anunciado.",
             "Para que o descarte chegue também aos nossos upstreams, some "
             "`%s` ao anúncio. Sem ela o descarte fica só na nossa borda, que "
             "é o que você quer quando o ataque é local." % rede.BLACKHOLE_PROPAGATE,
