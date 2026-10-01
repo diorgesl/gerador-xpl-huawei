@@ -1778,14 +1778,20 @@ def peer_membro_com_override(grupo_id=1):
     return p
 
 
-def test_membro_sem_override_so_referencia_o_grupo():
+def test_membro_sem_override_referencia_o_grupo_e_leva_o_export_por_asn():
+    """A sessao do membro so referencia o group, e o que ele acrescenta e o
+    export com os controles do ASN dele: o grupo sem ASN nao tem como avaliar
+    `61785:0:<asn>`, que olha o ASN do destinatario."""
     grupo = grupo_sem_asn()
     texto = render.render_peer(peer_membro_sem_override(grupo.id), grupo=grupo)
     assert "peer 192.0.2.3 as-number 264130" in texto
     assert "peer 192.0.2.3 group PARCEIROS_CDN" in texto
-    assert "route-filter" not in texto
+    # sem filtro proprio nao ha import nem prefix-list do membro
+    assert "IMPORT" not in texto
     assert "PL-CUST" not in texto
     assert "default-route-advertise" not in texto
+    assert "xpl route-filter CUST-264130-EXPORT-V4" in texto
+    assert "call route-filter CUST-PARCEIROS_CDN-EXPORT-V4" in texto
 
 
 def test_membro_com_asn_no_grupo_nao_repete_as_number():
@@ -1803,8 +1809,66 @@ def test_membro_com_override_tem_filtro_proprio_ao_lado_do_grupo():
     assert "xpl route-filter CUST-264130-IMPORT-V4" in texto
     assert "peer 192.0.2.3 group PARCEIROS_CDN" in texto
     assert "peer 192.0.2.3 route-filter CUST-264130-IMPORT-V4 import" in texto
-    # export continua do grupo, nao vira filtro proprio (ver task, escopo)
-    assert "CUST-264130-EXPORT" not in texto
+    # o export do membro e fino: os controles do ASN dele e a chamada do
+    # export do grupo, que carrega a politica comum do downstream
+    assert "peer 192.0.2.3 route-filter CUST-264130-EXPORT-V4 export" in texto
+    assert "call route-filter CUST-PARCEIROS_CDN-EXPORT-V4" in texto
+
+
+def test_grupo_com_asn_nao_gera_export_por_membro():
+    """O grupo com ASN carrega os controles por ASN no proprio export, e o
+    validar recusa membro de ASN diferente: o membro nao tem o que
+    acrescentar. Os dois juntos prependariam duas vezes."""
+    grupo = grupo_com_asn()
+    membro = peer_membro_sem_override(grupo.id)
+    membro.asn = grupo.asn
+    texto = render.render_peer(membro, grupo=grupo)
+    assert "CUST-64500-EXPORT" not in texto
+    assert "call route-filter" not in texto
+    assert "large-community matches-any {64512:0:64500}" in render.render_grupo(grupo)
+
+
+def test_o_export_do_membro_do_grupo_sem_asn_leva_os_controles_do_asn_dele():
+    """`61785:0:<asn>` recusa o anuncio ao ASN e `1/2/3:<asn>` prependa para
+    ele. Os dois olham o ASN do destinatario, entao num grupo sem ASN eles so
+    existem no filtro do membro: sem ele, o pedido do cliente era ignorado em
+    silencio."""
+    from app import plan
+    grupo = grupo_sem_asn()
+    texto = render.render_peer(peer_membro_sem_override(grupo.id), grupo=grupo)
+    assert ("if large-community matches-any {%s} then"
+            % plan.c_large(0, 264130)) in texto
+    for prepends in (1, 2, 3):
+        assert ("apply as-path %s %d additive"
+                % (plan.ASN, prepends)) in texto
+
+
+def test_membro_com_asn_em_branco_no_yaml_nao_derruba_o_render():
+    """O cadastro editado a mao pode deixar o ASN do membro em branco. Sem a
+    guarda, o `c_large(0, None)` estourava no render e levava junto a pagina
+    da config inteira; com ela o filtro sai so com a chamada do grupo, que e
+    o que o membro herdaria de qualquer jeito."""
+    grupo = grupo_sem_asn()
+    membro = peer_membro_sem_override(grupo.id)
+    membro.asn = None
+    texto = render.render_peer(membro, grupo=grupo)
+    # o token sai do ASN, entao o nome do objeto carrega o None junto - o
+    # cadastro ja estava torto antes de chegar aqui
+    assert "xpl route-filter CUST-%s-EXPORT-V4" % membro.token in texto
+    assert "large-community matches-any" not in texto
+    assert "call route-filter CUST-PARCEIROS_CDN-EXPORT-V4" in texto
+
+
+def test_a_remocao_do_membro_derruba_o_export_por_asn():
+    """O que o bloco do membro cria, o bloco de remocao derruba: o filtro do
+    export por ASN sai no undo do grupo sem ASN, e nao sai no grupo com ASN,
+    onde ele nunca existiu."""
+    sem_asn = render.render_remove(peer_membro_sem_override(1),
+                                   grupo=grupo_sem_asn())
+    assert "undo xpl route-filter CUST-264130-EXPORT-V4" in sem_asn
+    com_asn = render.render_remove(peer_membro_sem_override(0),
+                                   grupo=grupo_com_asn())
+    assert "CUST-264130-EXPORT" not in com_asn
 
 
 def test_peer_sem_grupo_continua_igual_a_antes():
@@ -2136,7 +2200,12 @@ def test_todo_call_route_filter_tem_a_definicao_em_algum_texto_gerado():
     # um bloco que perdeu a definicao pelo caminho
     esperado = {"IMPORT-SANITY-V4", "IMPORT-SANITY-V6", "EXPORT-SANITY",
                 "APPLY-CUSTOMER-LP",
-                "APPLY-PEER-%s" % grupos["upstream"].token}
+                "APPLY-PEER-%s" % grupos["upstream"].token,
+                # o export do membro de grupo de downstream sem ASN chama o
+                # export do grupo, que mora no bloco do grupo - o mesmo caso
+                # do APPLY-PEER-<G> do upstream, um texto adiante
+                "CUST-%s-EXPORT-V4" % grupos["cliente"].token,
+                "CUST-%s-EXPORT-V4" % grupos["parceiro"].token}
     fora_do_esperado = set().union(*sem_definicao_aqui.values())
     assert fora_do_esperado == esperado, sorted(fora_do_esperado ^ esperado)
 

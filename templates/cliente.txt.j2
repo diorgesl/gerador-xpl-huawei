@@ -15,19 +15,31 @@
 {% if peer.tem_filtro_proprio() %}
 {% for fam in peer.familias() %}
 {{ m.prefix_lists_downstream(peer, fam) -}}
-# Filtro XPL Import (override deste membro - o export continua do grupo)
+# Filtro XPL Import (override deste membro)
 {{ m.filtro_downstream_import(peer, fam, true, true) }}
 {% endfor %}
 {{ m.ap_cust_downstream(peer) }}
 {{ m.apply_peer(peer) }}
 
 {% endif %}
+{#- o export por ASN so sai no grupo SEM asn: com asn, o export do grupo ja
+    carrega esses controles para todos os membros, e os dois juntos
+    prependariam duas vezes #}
+{% if not grupo.asn %}
+{% for fam in peer.familias() %}
+{{ m.export_por_asn_do_membro(peer, grupo, fam) }}
+
+{% endfor %}
+{% endif %}
 {# Este ramo nao chama m.sessao_do_peer/m.familia_bgp: essas macros sao do
    peer avulso e reemitiriam AS_ONLY/timers/graceful-restart/bfd/
    advertise-community por membro, coisa que so deve existir uma vez, no
-   arquivo do grupo (sessao_do_grupo/familia_grupo, task 5). O membro so
-   referencia o group aqui; quem "limpar a duplicacao aparente" reusando as
-   macros do peer quebra a heranca do grupo em silencio. #}
+   arquivo do grupo (sessao_do_grupo/familia_grupo, task 5). A sessao do
+   membro so referencia o group; o que ele acrescenta sao filtros proprios,
+   nomeados pelo token dele: o import do override e, no grupo sem ASN, o
+   export por ASN (m.export_por_asn_do_membro). Quem "limpar a duplicacao
+   aparente" reusando as macros do peer quebra a heranca do grupo em
+   silencio. #}
 bgp {{ plan.ASN }}
 {% for fam in peer.familias() %}
 {# cadastro sem descricao nao vira `peer X description` sem argumento; a
@@ -56,6 +68,9 @@ bgp {{ plan.ASN }}
   peer {{ s.remoto }} group {{ grupo.nome }}
 {% if peer.tem_filtro_proprio() %}
   peer {{ s.remoto }} route-filter CUST-{{ peer.token }}-IMPORT-{{ U }} import
+{% endif %}
+{% if not grupo.asn %}
+  peer {{ s.remoto }} route-filter CUST-{{ peer.token }}-EXPORT-{{ U }} export
 {% endif %}
 {% if peer.default_route %}
   peer {{ s.remoto }} default-route-advertise

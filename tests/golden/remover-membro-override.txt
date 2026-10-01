@@ -4,9 +4,11 @@
 
 undo peer 192.0.2.3
 undo peer 2001:db8:100::2
+undo xpl route-filter CUST-264130-EXPORT-V4
 undo xpl route-filter CUST-264130-IMPORT-V4
 undo xpl ip-prefix-list PL-CUST-264130-BH-V4
 undo xpl ip-prefix-list PL-CUST-264130-V4
+undo xpl route-filter CUST-264130-EXPORT-V6
 undo xpl route-filter CUST-264130-IMPORT-V6
 undo xpl ipv6-prefix-list PL-CUST-264130-BH-V6
 undo xpl ipv6-prefix-list PL-CUST-264130-V6

@@ -330,7 +330,7 @@ O que o grupo carrega e o membro herda:
 
 | Tipo | Objetos do grupo | O que o membro acrescenta |
 | --- | --- | --- |
-| `cliente`, `parceiro` | `CUST-<G>-IMPORT/EXPORT-<U>`, `PL-CUST-<G>-<U>`, `PL-CUST-<G>-BH-<U>`, `AP-CUST-<G>` | o `route-limit` e, se o link tiver prefixo próprio, o filtro de import dele |
+| `cliente`, `parceiro` | `CUST-<G>-IMPORT/EXPORT-<U>`, `PL-CUST-<G>-<U>`, `PL-CUST-<G>-BH-<U>`, `AP-CUST-<G>` | o `route-limit`, o export por ASN quando o grupo não tem ASN, e, se o link tiver prefixo próprio, o filtro de import dele |
 | `upstream` | `UP-<G>-IMPORT/EXPORT-<U>`, `PL-TE-PREFER-<G>-<U>`, `CL/LC-NOADV-<G>`, `CL-5PPA-<id>`, `LC-5PPA-<G>`, `LC-PREP1/2/3-<G>`, `AP-BLOCK-<G>`, `AP-TE-PREFER-<G>`, `APPLY-PEER-<G>` | idem |
 | `ix` | `IX-<G>-IMPORT/EXPORT-<U>`, `CL/LC-NOADV-<G>`, `AP-IX-<G>` | idem |
 | `pni` | `PNI-<G>-IMPORT/EXPORT-<U>`, `CL/LC-NOADV-<G>`, `AP-<G>-ALLOWED` | idem |
@@ -346,6 +346,16 @@ Duas regras que valem para os cinco:
 - O que é de sessão (AS-path confinado, timers, `bfd`, graceful-restart,
   `advertise-community`) sai uma vez, no bloco do grupo. O membro só referencia
   o `group`.
+
+Num grupo de `cliente` ou de `parceiro` **sem `asn`** cada membro tem o ASN
+dele, e o export do grupo, um só para todos, não tem como avaliar os controles
+que olham o ASN do destinatário: o `64512:0:<ASN>` (não anunciar) e o
+`64512:1/2/3:<ASN>` (prepend). Por isso o membro leva um `CUST-<T>-EXPORT-<U>`
+próprio com esses dois blocos para o ASN dele, e esse filtro chama o
+`CUST-<G>-EXPORT-<U>` do grupo pelo resto: a política comum continua num lugar
+só, e o `finish` do filtro chamado encerra o do membro, como no import. Num
+grupo **com `asn`** nada disso sai: o export do grupo já carrega os controles
+daquele ASN, que o validar exige ser o de todos os membros.
 
 A community do bloco de sessão (`CL-PEER-<G>`) segue a mesma diferença entre os
 tipos que a seção "Communities de peer: `CL-PEER-<T>` e `APPLY-PEER-<T>`", em

@@ -26,10 +26,18 @@ undo xpl route-filter CUST-{{ peer.token }}-EXPORT-{{ U }}
 undo xpl route-filter CUST-{{ peer.token }}-IMPORT-{{ U }}
 undo xpl {{ kw }} PL-CUST-{{ peer.token }}-BH-{{ U }}
 undo xpl {{ kw }} PL-CUST-{{ peer.token }}-{{ U }}
-{% elif peer.tipo in plan.TIPOS_DOWNSTREAM and grupo and peer.tem_filtro_proprio() %}
+{% elif peer.tipo in plan.TIPOS_DOWNSTREAM and grupo %}
+{#- o membro do grupo SEM asn carrega o export dele, com os controles do ASN
+    dele (m.export_por_asn_do_membro); o resto do bloco so existe quando o
+    membro tem filtro proprio. #}
+{% if not grupo.asn %}
+undo xpl route-filter CUST-{{ peer.token }}-EXPORT-{{ U }}
+{% endif %}
+{% if peer.tem_filtro_proprio() %}
 undo xpl route-filter CUST-{{ peer.token }}-IMPORT-{{ U }}
 undo xpl {{ kw }} PL-CUST-{{ peer.token }}-BH-{{ U }}
 undo xpl {{ kw }} PL-CUST-{{ peer.token }}-{{ U }}
+{% endif %}
 {% elif peer.tipo == "upstream" and (not grupo or peer.tem_filtro_proprio()) %}
 undo xpl route-filter UP-{{ peer.token }}-EXPORT-{{ U }}
 undo xpl route-filter UP-{{ peer.token }}-IMPORT-{{ U }}

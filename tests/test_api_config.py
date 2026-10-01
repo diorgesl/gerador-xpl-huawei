@@ -181,9 +181,12 @@ def test_a_config_organizada_junta_tudo_por_tipo(api):
     bgp = secoes["bgp"]["texto"]
     assert bgp.splitlines().count("bgp %d" % ASN_DE_TESTE) == 1
     assert bgp.splitlines().count(" ipv4-family unicast") == 1
-    # o membro nao tem filtro proprio, entao o bloco dele chega ao corte com o
-    # cabecalho colado no `bgp`: e ele que diz de quem sao as sessoes la embaixo
-    assert "# peer %d - parceiro - AS268127" % membro in bgp
+    # o cabecalho do membro viaja colado no primeiro objeto da secao dele, que
+    # e o export por ASN do grupo sem ASN: e ele que diz de quem sao os
+    # objetos, e a sessao do membro fica no `bgp` pelo `group`
+    assert "# peer %d - parceiro - AS268127" % membro in secoes["filtros"]["texto"]
+    assert "call route-filter CUST-PARCEIROS_CDN-EXPORT-V4" in secoes["filtros"]["texto"]
+    assert "peer 198.51.100.2 group PARCEIROS_CDN" in bgp
     # e o grupo vem antes de quem herda dele, como na ordem de colagem: sem
     # isso o `peer ... group` do membro referencia um grupo que ainda nao existe
     assert bgp.index("group PARCEIROS_CDN external") < bgp.index(

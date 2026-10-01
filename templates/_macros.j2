@@ -226,6 +226,41 @@ end-filter
   peer {{ grupo.nome }} advertise-large-community{{ linha_default }}
 {%- endmacro %}
 
+{% macro export_por_asn_do_membro(membro, grupo, fam) -%}
+{% set U = fam|upper %}
+{# O `64512:0:<asn>` recusa o anuncio ao ASN e o `1/2/3:<asn>` prependa para
+   ele: os dois olham o ASN do DESTINATARIO, e num grupo sem ASN quem tem o
+   ASN e o membro. O export do grupo, um so para todos, nao tem como
+   avalia-los, entao o membro leva esse pedaco e chama o export do grupo pelo
+   resto - a politica comum continua morando num lugar so. Num grupo com ASN
+   nada disto sai: o export do grupo ja carrega os controles daquele ASN, que
+   e o de todos os membros (o validar recusa membro com ASN diferente).
+
+   O ASN sai do membro, que sempre declara o dele, e o `or grupo.asn` cobre a
+   heranca. A guarda toda e para o yaml editado a mao com o ASN em branco: o
+   c_large de um ASN que nao existe e TypeError no render, e ele levaria a
+   pagina da config inteira junto. Sem ASN o filtro fica so com a chamada, e
+   o membro herda o grupo como se nao tivesse o override. #}
+{% set asn = membro.asn or grupo.asn %}
+xpl route-filter CUST-{{ membro.token }}-EXPORT-{{ U }}
+{% if asn %}
+ if large-community matches-any {{ plan.conjunto(plan.c_large(0, asn)) }} then
+  refuse
+ endif
+ if large-community matches-any {{ plan.conjunto(plan.c_large(3, asn)) }} then
+  apply as-path {{ plan.ASN }} 3 additive
+ elseif large-community matches-any {{ plan.conjunto(plan.c_large(2, asn)) }} then
+  apply as-path {{ plan.ASN }} 2 additive
+ elseif large-community matches-any {{ plan.conjunto(plan.c_large(1, asn)) }} then
+  apply as-path {{ plan.ASN }} 1 additive
+ endif
+{% endif %}
+{# o `finish` do filtro do grupo encerra este, e encerrar aqui e o aceite:
+   nao ha nada depois da chamada de proposito. #}
+ call route-filter CUST-{{ grupo.token }}-EXPORT-{{ U }}
+end-filter
+{%- endmacro %}
+
 {% macro filtro_downstream_export(alvo, fam) -%}
 {% set U = fam|upper %}
 xpl route-filter CUST-{{ alvo.token }}-EXPORT-{{ U }}
