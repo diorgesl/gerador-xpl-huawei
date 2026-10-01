@@ -93,7 +93,9 @@ Quem impede a full table de sair é o `EXPORT-SANITY`, que roda antes da checage
 
 O que o `2000` ainda faz é marcar a rota para diagnóstico, já que `display bgp routing-table` mostra de imediato o que veio de fora, e barrar o único caso que o `EXPORT-SANITY` deixa passar: rota de cliente que chega com marca de origem e com `64512:2000` escrito pelo próprio cliente. O import de cliente é `additive` e não apaga o que ele manda, então essa escrita é possível.
 
-Fora isso, o egress de cliente não tem gate nenhum: a full table sai para todo cliente que não peça o contrário. É o comportamento correto para cliente de trânsito, que é o caso do exemplo adiante. Se algum contrato não prevê full table, falta o ramo correspondente no filtro daquela sessão.
+Fora isso, o que o egress de cliente entrega depende da tabela contratada, que é um campo do cadastro de cada cliente e de cada parceiro. São quatro modos. Na `full`, o filtro termina em `finish` depois dos vetos e a full table sai inteira, que é o caso do cliente de trânsito do exemplo adiante. Na `parcial`, um portão depois dos vetos recusa o que não carrega `CL-ORIGEM-ANUNCIAVEL`, a mesma lista do `EXPORT-SANITY`: sai só a rota própria e a de cliente. Na `parcial_ix`, o portão usa a `CL-ORIGEM-PARCIAL-IX`, que é a anunciável mais o `64512:1300` que o import do IX carimba; rota de upstream e de PNI continuam fora. Na `nenhuma`, o filtro só tem `refuse`. A default route é outro campo, independente da tabela: o `peer <ip> default-route-advertise` da sessão. O cadastro novo nasce com a default e sem tabela; o cadastro gravado antes do campo existir é lido como `full`, para não mudar de saída. Um valor fora desses quatro não gera bloco nenhum: o gerador recusa, em vez de cair na full table.
+
+A parcial seleciona pela marca de origem da rota, com a mesma premissa do `EXPORT-SANITY`: upstream, IX e PNI nunca carimbam origem anunciável (`1000` ou `11xx`), e o app recusa esse cadastro. A parcial com IX leva a rota selecionada para o prefixo quando ela veio do IX: o export só vê o melhor caminho, e um prefixo que vence por upstream fica de fora mesmo havendo caminho pelo IX. Entregar todo prefixo disponível no IX exigiria outro desenho. Antes de pôr qualquer sessão em `parcial_ix`, reaplique o bloco base no equipamento, porque é ele que traz a `CL-ORIGEM-PARCIAL-IX`.
 
 ### Rota recebida de qual peer — `64512:4PP0`
 
@@ -1243,6 +1245,18 @@ xpl route-filter CUST-EXPORT-268127
  end-filter
 ```
 
+O exemplo é o modo `full`. Nos modos `parcial` e `parcial_ix`, o filtro ganha um portão entre o último veto e o prepend:
+
+```scss
+ !- tabela parcial: so rota propria e de cliente (na parcial_ix, a lista
+ !- e a CL-ORIGEM-PARCIAL-IX, que inclui a aprendida no IX)
+ if not community matches-any CL-ORIGEM-ANUNCIAVEL then
+  refuse
+ endif
+```
+
+No modo `nenhuma` o corpo do filtro é só `refuse`, e a sessão recebe apenas a default, se ela estiver ligada.
+
 Nenhum egress deste documento limpa o conjunto de communities, e o de cliente nunca limpou: ele precisa das informativas para tomar decisões próprias. É o que transforma o plano de communities em produto.
 
 ### Aplicação
@@ -1266,6 +1280,10 @@ bgp 64512
 ```
 
 O `public-as-only force` entra em toda sessão eBGP. Sem ele, o ASN privado que o cliente carrega no path, tipicamente o CPE de um assinante dele, sai intacto para o upstream, que na melhor das hipóteses filtra e na pior registra. O `force` remove o ASN privado em vez de reter a rota; confirme o efeito exato na sua release antes de escolher entre ele e a forma sem `force`, porque a diferença decide se a rota com ASN privado continua sendo anunciada ou some.
+
+A default route sai pela sessão, e não pelo filtro: `peer 198.51.100.2 default-route-advertise` dentro da família. O VRP origina `0.0.0.0/0` e `::/0` nessa sessão mesmo quando não há default na RIB nem na FIB, e o anúncio não passa pelo route-filter de export, então nenhum `refuse` do filtro a segura. Comportamento confirmado no equipamento. É por isso que o modo `nenhuma` pode recusar tudo no export e a sessão continua recebendo a default.
+
+Num grupo, a default é do grupo: o `peer <GRUPO> default-route-advertise` vale para todos os membros, e o membro não emite nem tira o dele. O gerador não emite `undo`: para tirar a default de uma sessão que já a tinha, aplique `undo peer <ip> default-route-advertise` (ou `undo peer <GRUPO> default-route-advertise`) à mão.
 
 ## Exemplo: upstream
 
@@ -2050,6 +2068,10 @@ Envie `65535:666` num `/32` (ou `/128` em IPv6) dentro do seu bloco autorizado. 
 **Manutenção**
 
 Envie `65535:0` (RFC 8326) para drenar suas rotas antes de manutenção programada, sem derrubar a sessão BGP.
+
+**O que você recebe de nós**
+
+A sessão BGP entrega uma destas tabelas, combinada na contratação: só a rota default; a tabela parcial, com os prefixos do AS64512 e dos nossos clientes; a parcial mais as rotas que selecionamos pelo IX (um prefixo que alcançamos melhor por trânsito fica de fora); ou a full table. A rota default (`0.0.0.0/0` e `::/0`) vai junto com qualquer uma delas quando contratada. Sem pedido em contrário, a sessão nova recebe só a default.
 
 **Informativas que você recebe de nós**
 
