@@ -1164,11 +1164,12 @@ def test_golden_da_remocao_do_pni():
 
 
 def peer_membro_com_override_remocao():
-    # o membro com override cria so o que e dele: IMPORT, PL-CUST, AP-CUST e
-    # APPLY-PEER. O EXPORT e do grupo, e derrubar o do grupo aqui levaria a
-    # sessao dos outros membros junto. Dual-stack como os outros goldens de
-    # remocao, para o laco de familia aparecer no arquivo (a fabrica do
-    # membro esta no fim deste arquivo).
+    # o membro com override cria so o que e dele: IMPORT, PL-CUST, AP-CUST,
+    # APPLY-PEER e, no grupo sem ASN, o export por ASN. O IMPORT e o EXPORT do
+    # GRUPO nao entram aqui: derrubar um objeto do grupo levaria a sessao dos
+    # outros membros junto. Dual-stack como os outros goldens de remocao, para
+    # o laco de familia aparecer no arquivo (a fabrica do membro esta no fim
+    # deste arquivo).
     membro = peer_membro_sem_override(1)
     membro.prefixos = {"v4": [Bloco(prefixo="198.51.100.0/24")],
                        "v6": [Bloco(prefixo="2001:db8:100::/48")]}
@@ -1245,8 +1246,9 @@ def test_a_remocao_do_membro_derruba_exatamente_o_que_o_membro_cria():
     # mesma varredura por definicao do peer avulso, agora do outro lado do
     # portao e nos cinco tipos: o membro com override derruba os objetos dele
     # e mais nada. Nem a mais (undo de objeto que nao existe e erro no
-    # equipamento), nem a menos (objeto orfao) - e o EXPORT, que e do grupo,
-    # nao pode aparecer.
+    # equipamento), nem a menos (objeto orfao). O export por ASN, que o membro
+    # do grupo sem ASN cria junto com os outros, entra na conta pelo lado dos
+    # criados; os objetos do grupo nao, que esses nao sao dele.
     for tipo in ("cliente", "parceiro", "upstream", "ix", "pni"):
         grupo = grupo_do_tipo(tipo)
         membro = membro_com_override_do_tipo(tipo, grupo)
@@ -1781,7 +1783,7 @@ def peer_membro_com_override(grupo_id=1):
 def test_membro_sem_override_referencia_o_grupo_e_leva_o_export_por_asn():
     """A sessao do membro so referencia o group, e o que ele acrescenta e o
     export com os controles do ASN dele: o grupo sem ASN nao tem como avaliar
-    `61785:0:<asn>`, que olha o ASN do destinatario."""
+    `64512:0:<asn>`, que olha o ASN do destinatario."""
     grupo = grupo_sem_asn()
     texto = render.render_peer(peer_membro_sem_override(grupo.id), grupo=grupo)
     assert "peer 192.0.2.3 as-number 264130" in texto
@@ -1792,6 +1794,9 @@ def test_membro_sem_override_referencia_o_grupo_e_leva_o_export_por_asn():
     assert "default-route-advertise" not in texto
     assert "xpl route-filter CUST-264130-EXPORT-V4" in texto
     assert "call route-filter CUST-PARCEIROS_CDN-EXPORT-V4" in texto
+    # e a sessao chama o filtro: sem esta linha o membro sem override fica com
+    # o export criado e nao aplicado, e o defeito auditado volta em silencio
+    assert "peer 192.0.2.3 route-filter CUST-264130-EXPORT-V4 export" in texto
 
 
 def test_membro_com_asn_no_grupo_nao_repete_as_number():
@@ -1829,7 +1834,7 @@ def test_grupo_com_asn_nao_gera_export_por_membro():
 
 
 def test_o_export_do_membro_do_grupo_sem_asn_leva_os_controles_do_asn_dele():
-    """`61785:0:<asn>` recusa o anuncio ao ASN e `1/2/3:<asn>` prependa para
+    """`64512:0:<asn>` recusa o anuncio ao ASN e `1/2/3:<asn>` prependa para
     ele. Os dois olham o ASN do destinatario, entao num grupo sem ASN eles so
     existem no filtro do membro: sem ele, o pedido do cliente era ignorado em
     silencio."""
