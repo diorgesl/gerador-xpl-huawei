@@ -151,7 +151,7 @@ end-list
    resto do filtro. #}
 {% for fam in ["v4", "v6"] %}
 xpl route-filter IMPORT-SANITY-{{ fam|upper }}
- if ip route-destination in PL-BOGONS-{{ fam|upper }} then
+ if {{ "ipv6" if fam == "v6" else "ip" }} route-destination in PL-BOGONS-{{ fam|upper }} then
   refuse
  endif
  if as-path in AP-BOGON-ASN then
@@ -184,7 +184,7 @@ end-filter
 {% set fim = 128 if fam == "v6" else 32 %}
 xpl route-filter REJEITA-BLOCO-PROPRIO-{{ fam|upper }}
 {% for b in plan.blocos_minimos(blocos.get(fam, []) | selectattr("ativo")) %}
- if ip route-destination in {{ plan.conjunto_do_prefixo(b.prefixo, fim) }} then
+ if {{ "ipv6" if fam == "v6" else "ip" }} route-destination in {{ plan.conjunto_do_prefixo(b.prefixo, fim) }} then
   refuse
  endif
 {% endfor %}

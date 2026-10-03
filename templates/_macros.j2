@@ -171,7 +171,7 @@ end-list
 xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
  call route-filter IMPORT-SANITY-{{ U }}
 {% if confinar_prefixo %}
- if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in PL-CUST-{{ alvo.token }}-BH-{{ U }} then
+ if (community matches-any CL-BLACKHOLE or tag eq 666) and {{ "ipv6" if fam == "v6" else "ip" }} route-destination in PL-CUST-{{ alvo.token }}-BH-{{ U }} then
   apply {{ "ipv6" if fam == "v6" else "ip" }} next-hop {{ nexthop }}
   apply local-preference {{ plan.LP_BLACKHOLE }}
   apply community {{ plan.conjunto(plan.BLACKHOLE_INFO, plan.c(200)) }} additive
@@ -185,7 +185,7 @@ xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
  if community matches-any CL-BLACKHOLE or tag eq 666 then
   refuse
  endif
- if not ip route-destination in PL-CUST-{{ alvo.token }}-{{ U }} then
+ if not {{ "ipv6" if fam == "v6" else "ip" }} route-destination in PL-CUST-{{ alvo.token }}-{{ U }} then
   refuse
  endif
 {% endif %}
@@ -210,7 +210,7 @@ xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
  !- tratamento por prefixo do cadastro, do mais especifico para o menos
 {% for prefixo, ate, communities in tratamentos %}
 {% set std, lg = plan.separa_communities(communities) %}
- {{ "if" if loop.first else "elseif" }} ip route-destination in {{ plan.conjunto_do_prefixo(prefixo, ate) }} then
+ {{ "if" if loop.first else "elseif" }} {{ "ipv6" if fam == "v6" else "ip" }} route-destination in {{ plan.conjunto_do_prefixo(prefixo, ate) }} then
 {% if std %}
   apply community {{ plan.conjunto_de(std) }} additive
 {% endif %}
@@ -441,7 +441,7 @@ xpl route-filter UP-{{ alvo.token }}-IMPORT-{{ U }}
  {# excecoes de TE, aplicadas depois do carimbo base. Se a lista ficar vazia a
     excecao simplesmente nao existe; o risco e o oposto, prefixo errado faz o
     trafego sair e voltar. #}
- if{% if alvo.te_prefixos[fam] %} ip route-destination in PL-TE-PREFER-{{ alvo.token }}-{{ U }}{% endif %}{% if alvo.te_prefixos[fam] and alvo.ap_te %} or{% endif %}{% if alvo.ap_te %} as-path in AP-TE-PREFER-{{ alvo.token }}{% endif %} then
+ if{% if alvo.te_prefixos[fam] %} {{ "ipv6" if fam == "v6" else "ip" }} route-destination in PL-TE-PREFER-{{ alvo.token }}-{{ U }}{% endif %}{% if alvo.te_prefixos[fam] and alvo.ap_te %} or{% endif %}{% if alvo.ap_te %} as-path in AP-TE-PREFER-{{ alvo.token }}{% endif %} then
   apply local-preference {{ plan.LP_TE_PREFER }}
  endif
 {% endif %}
@@ -466,7 +466,7 @@ xpl route-filter UP-{{ alvo.token }}-EXPORT-{{ U }}
     aqui nao e limpeza: e a definicao do anuncio de blackhole. Durante ataque
     o host sai com a community de blackhole deste upstream e nada mais, para
     que nenhuma community escrita pelo cliente a neutralize. #}
- if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in {{ "{0.0.0.0 0 ge 32 le 32}" if fam == "v4" else "{:: 0 ge 128 le 128}" }} then
+ if (community matches-any CL-BLACKHOLE or tag eq 666) and {{ "ipv6" if fam == "v6" else "ip" }} route-destination in {{ "{0.0.0.0 0 ge 32 le 32}" if fam == "v4" else "{:: 0 ge 128 le 128}" }} then
   if community matches-any CL-BLACKHOLE-PROPAGATE then
    {# O pedido de propagacao nao atropela o bloqueio do proprio destino nem o
       escopo: este ramo termina em finish, entao as duas checagens precisam
