@@ -1077,7 +1077,7 @@ def test_o_base_recusa_o_prefixo_proprio_vindo_de_fora():
     # e o filtro roda no import de toda sessao externa
     assert "45.169.237.0" not in v4
     v6 = texto.split("xpl route-filter REJEITA-BLOCO-PROPRIO-V6")[1].split("end-filter")[0]
-    assert "if ip route-destination in {2804:3300:: 32 le 128} then" in v6
+    assert "if ipv6 route-destination in {2804:3300:: 32 le 128} then" in v6
 
 
 def test_o_filtro_do_bloco_proprio_sai_vazio_sem_bloco_cadastrado():
@@ -3033,7 +3033,7 @@ def test_o_intervalo_em_v6_usa_o_comprimento_da_linha():
                   communities=["64512:210"])]},
         sessoes={"v4": {"local": "198.51.100.1", "remoto": "198.51.100.2"},
                  "v6": {"local": "2001:db8::1", "remoto": "2001:db8::2"}}))
-    assert "if ip route-destination in {2804:3300:: 32 le 48} then" in texto
+    assert "if ipv6 route-destination in {2804:3300:: 32 le 48} then" in texto
 
 
 def test_o_parceiro_ganha_a_cadeia_depois_do_carimbo_do_tipo():

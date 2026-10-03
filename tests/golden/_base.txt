@@ -144,7 +144,7 @@ xpl route-filter IMPORT-SANITY-V4
 end-filter
 
 xpl route-filter IMPORT-SANITY-V6
- if ip route-destination in PL-BOGONS-V6 then
+ if ipv6 route-destination in PL-BOGONS-V6 then
   refuse
  endif
  if as-path in AP-BOGON-ASN then

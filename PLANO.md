@@ -636,7 +636,9 @@ A linha do cadastro escreve esse conjunto sem o `le` quando quer o prefixo exato
 
 A entrada de uma prefix-list nomeada segue a mesma convenção, e é a forma que o `PL-CUST` usa: `45.169.232.0 22` é o prefixo exato e `45.169.232.0 22 le 24` alcança os mais específicos até `/24`.
 
-**Ponto em aberto:** que a forma inline aceite `le` sem `ge`, e que ela valha no v6 com o mesmo `ip route-destination` que os exemplos usam nas duas famílias. O desenho do tratamento por prefixo assume as duas coisas, e a entrada exata da prefix-list (sem `ge`/`le`) assume a leitura clássica: casa aquele prefixo e nada mais.
+A condição muda de nome com a família: `ip route-destination` no v4 e `ipv6 route-destination` no v6, como o `apply ip next-hop` e o `apply ipv6 next-hop`. Os exemplos deste documento são v4. No filtro v6 a mesma linha fica `if ipv6 route-destination in {2804:194c:: 32 le 128} then`, e vale também quando a condição aponta para uma `ipv6-prefix-list` nomeada. Um `ip route-destination` dentro de filtro v6 está errado: na melhor hipótese o equipamento rejeita a linha ao colar, na pior a condição não casa rota v6 nenhuma e o `refuse` dela nunca roda.
+
+**Ponto em aberto:** que a forma inline aceite `le` sem `ge`. O desenho do tratamento por prefixo assume isso, e a entrada exata da prefix-list (sem `ge`/`le`) assume a leitura clássica: casa aquele prefixo e nada mais.
 
 ### Condição em uma linha
 
