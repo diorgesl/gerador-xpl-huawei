@@ -3,7 +3,11 @@
 !- cole so isto para excluir a sessao do equipamento
 
 undo peer 198.51.100.2
+y
 undo peer 2001:db8:500::2
+y
+quit
+
 undo xpl route-filter CUST-64500-EXPORT-V4
 undo xpl route-filter CUST-64500-IMPORT-V4
 undo xpl ip-prefix-list PL-CUST-64500-BH-V4

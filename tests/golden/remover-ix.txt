@@ -3,7 +3,11 @@
 !- cole so isto para excluir a sessao do equipamento
 
 undo peer 187.16.192.2
+y
 undo peer 2001:db8:300::2
+y
+quit
+
 undo xpl route-filter IX-IX-SP-EXPORT-V4
 undo xpl route-filter IX-IX-SP-IMPORT-V4
 undo xpl route-filter IX-IX-SP-EXPORT-V6

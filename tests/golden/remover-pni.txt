@@ -3,7 +3,11 @@
 !- cole so isto para excluir a sessao do equipamento
 
 undo peer 10.0.0.2
+y
 undo peer 2001:db8:400::2
+y
+quit
+
 undo xpl route-filter PNI-CDN-A-EXPORT-V4
 undo xpl route-filter PNI-CDN-A-IMPORT-V4
 undo xpl route-filter PNI-CDN-A-EXPORT-V6

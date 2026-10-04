@@ -3,7 +3,11 @@
 !- cole so isto para excluir a sessao do equipamento
 
 undo peer 203.0.113.1
+y
 undo peer 2001:db8:200::1
+y
+quit
+
 undo xpl route-filter UP-14840-EXPORT-V4
 undo xpl route-filter UP-14840-IMPORT-V4
 undo xpl ip-prefix-list PL-TE-PREFER-14840-V4

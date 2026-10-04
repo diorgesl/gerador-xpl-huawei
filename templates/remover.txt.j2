@@ -9,7 +9,9 @@ y
 {% endfor %}
 quit
 
-{#- quem reaproveita nao criou objeto nenhum, entao nao tem o que derrubar
+{# sem o `-` aqui: ele comia a quebra de linha do quit e colava o undo
+   seguinte nele ("quitundo xpl ...").
+   quem reaproveita nao criou objeto nenhum, entao nao tem o que derrubar
     alem da propria sessao. Quem carrega os filtros e o bloco da origem, e
     tirar os dele apagaria a politica dos dois links. #}
 {#- `is none`, e nao a negacao do valor: o id 0 e uma origem legitima, e no

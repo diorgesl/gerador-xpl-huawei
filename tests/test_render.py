@@ -1497,6 +1497,17 @@ def peer_membro_com_override_remocao():
     return membro
 
 
+@pytest.mark.parametrize("monta", [peer_cliente_remocao, peer_parceiro_remocao,
+                                   peer_upstream_remocao, peer_ix_remocao,
+                                   peer_pni_remocao])
+def test_o_quit_da_remocao_fica_em_linha_propria(monta):
+    """Um `{#-` logo depois do laco comia a quebra do quit, e o bloco saia
+    com "quitundo xpl route-filter ..." numa linha so."""
+    texto = render.render_remove(monta())
+    assert "\nquit\n" in texto
+    assert "quitundo" not in texto
+
+
 def test_golden_da_remocao_do_membro_com_override():
     assert render.render_remove(peer_membro_com_override_remocao(),
                                 grupo=grupo_sem_asn()) == (
