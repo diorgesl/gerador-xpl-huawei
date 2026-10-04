@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 import { BarraLateral } from "./BarraLateral"
-import { filtrarGrupos, filtrarPeers } from "@/lib/busca"
+import { filtrarGrupos, filtrarPeers, ordenarPeers } from "@/lib/busca"
 import { montarRota, mockFetch, peticoes } from "@/teste/roteador"
 
 const PEERS = [
@@ -26,6 +26,20 @@ describe("o filtro da busca", () => {
 
   it("sem resultado devolve vazio, e nao tudo", () => {
     expect(filtrarPeers(PEERS, "nao existe")).toEqual([])
+  })
+
+  it("ordena por tipo e mantem a ordem do cadastro dentro do tipo", () => {
+    const peers = [
+      { ...PEERS[0], id: 1, tipo: "cliente" },
+      { ...PEERS[0], id: 2, tipo: "parceiro" },
+      { ...PEERS[0], id: 3, tipo: "upstream" },
+      { ...PEERS[0], id: 4, tipo: "pni" },
+      { ...PEERS[0], id: 5, tipo: "cliente" },
+      { ...PEERS[0], id: 6, tipo: "ix" },
+      { ...PEERS[0], id: 7, tipo: "upstream" },
+    ]
+    expect(ordenarPeers(peers).map((p) => p.id)).toEqual([3, 7, 6, 4, 2, 1, 5])
+    expect(peers.map((p) => p.id)).toEqual([1, 2, 3, 4, 5, 6, 7])
   })
 
   it("vale para o grupo pelo nome e pelo tipo", () => {

@@ -7,7 +7,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { BadgeTipo } from "@/components/BadgeTipo"
 import { SeletorAsn } from "@/components/SeletorAsn"
-import { filtrarGrupos, filtrarPeers } from "@/lib/busca"
+import { filtrarGrupos, filtrarPeers, ordenarPeers } from "@/lib/busca"
 import type { GrupoResumo, PeerResumo } from "@/api/consultas"
 import { sessaoVencida } from "@/api/cliente"
 import { useSair } from "@/api/sessao"
@@ -39,7 +39,7 @@ export function BarraLateral({ peers, grupos, aoNovo }: Props) {
   const { pathname } = useLocation()
   const asn = useAsn()
   const sair = useSair()
-  const peersVisiveis = filtrarPeers(peers, busca)
+  const peersVisiveis = ordenarPeers(filtrarPeers(peers, busca))
   const gruposVisiveis = filtrarGrupos(grupos, busca)
 
   // `startsWith(para)` acendia /peers/1 em /peers/12 (e em /peers/123): dois
