@@ -14,12 +14,14 @@ end-list
 # Filtro XPL Import
 xpl route-filter CUST-64500-IMPORT-V4
  call route-filter IMPORT-SANITY-V4
- if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in PL-CUST-64500-BH-V4 then
-  apply ip next-hop 192.0.2.1
-  apply local-preference 400
-  apply community {64512:9666, 64512:200} additive
-  apply large-community {64512:1000:64500} additive
-  finish
+ if ip route-destination in PL-CUST-64500-BH-V4 then
+  if community matches-any CL-BLACKHOLE or tag eq 666 then
+   apply ip next-hop 192.0.2.1
+   apply local-preference 400
+   apply community {64512:9666, 64512:200} additive
+   apply large-community {64512:1000:64500} additive
+   finish
+  endif
  endif
  if community matches-any CL-BLACKHOLE or tag eq 666 then
   refuse

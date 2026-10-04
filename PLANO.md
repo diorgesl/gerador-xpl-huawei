@@ -476,6 +476,7 @@ Para listas de bogon, `whole-match` seria errado — ali se quer OU, que já é 
 6. **`apply as-path` em XPL recebe ASN + contador, não uma lista de ASNs repetidos.** `apply as-path 64512 3 additive` prepende o AS64512 três vezes. É diferente do `route-policy` clássico do VRP, onde `apply as-path 64512 64512 64512 additive` lista os ASNs a prepender um por um. Confirmado via `?` no equipamento. O campo aceita **asplain de 32 bits**: `apply as-path ?` oferece `INTEGER<1-4294967295>`, e `apply as-path 264130 3 additive` foi aceito em `rt-tecmais-ne8k`. É o que permite um plano de ASN de 32 bits prependar sem passá-lo pelo namespace das standard.
 7. **`advertise-community` não é default no VRP**, inclusive em iBGP. Sem ele a community simplesmente não sai.
 8. **Coringa `*` substitui campo inteiro.** `64512:*` funciona, `64512:1*` não.
+9. **Condição com parênteses depois de um `call` derruba o commit.** Verificado no NE40 (`rt-tecmais-ne40-downstream`): um `if (A or B) and C then` que vem depois de qualquer `call route-filter` no mesmo filtro entra sem erro como objeto solto, mas o `commit` falha com `Error: Failed to commit configuration.` assim que o filtro é pendurado num peer. A mensagem não diz o motivo. A mesma condição como primeira linha do filtro, antes do `call`, passa. `A or B` sem parênteses depois do `call` também passa. A saída é o `if` aninhado: `if C then` por fora e `if A or B then` por dentro. Os imports de cliente e de parceiro usam essa forma no ramo de blackhole. O export de upstream mantém o `(A or B) and C` porque ali ele é a primeira linha; se algum dia entrar um `call` antes dele, vale a mesma troca. Ainda não testado: `(A or B)` sozinho, sem o `and`, depois de um `call`.
 
 ### `finish`, `break` e `refuse` num filtro chamado
 
@@ -1132,13 +1133,17 @@ Sessão com o AS268127, prefixo `45.169.232.0/22`, IP de peering `198.51.100.2`.
 xpl route-filter CUST-IMPORT-268127
  call route-filter IMPORT-SANITY
 
- !- blackhole: /32 dentro do bloco do cliente, com a community certa
- if (community matches-any CL-BLACKHOLE or tag eq 666) and ip route-destination in PL-CUST-268127-BH-V4 then
-  apply ip next-hop 192.0.2.1
-  apply local-preference 400
-  apply community {64512:9666, 64512:200} additive
-  apply large-community {64512:1000:268127} additive
-  finish
+ !- blackhole: /32 dentro do bloco do cliente, com a community certa.
+ !- if aninhado, e nao "(A or B) and C": depois de um call essa forma
+ !- derruba o commit (armadilha 9).
+ if ip route-destination in PL-CUST-268127-BH-V4 then
+  if community matches-any CL-BLACKHOLE or tag eq 666 then
+   apply ip next-hop 192.0.2.1
+   apply local-preference 400
+   apply community {64512:9666, 64512:200} additive
+   apply large-community {64512:1000:268127} additive
+   finish
+  endif
  endif
 
  !- pedido de descarte que nao casou o ramo de cima: prefixo maior que o

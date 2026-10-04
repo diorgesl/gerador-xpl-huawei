@@ -479,7 +479,9 @@ xpl route-filter UP-{{ alvo.token }}-EXPORT-{{ U }}
  {# 1. blackhole primeiro: finish para nao cair no EXPORT-SANITY. O overwrite
     aqui nao e limpeza: e a definicao do anuncio de blackhole. Durante ataque
     o host sai com a community de blackhole deste upstream e nada mais, para
-    que nenhuma community escrita pelo cliente a neutralize. #}
+    que nenhuma community escrita pelo cliente a neutralize. O `(A or B) and C`
+    so passa no commit porque e a primeira linha: com um call antes dele, vira
+    if aninhado, como no import de downstream. #}
  if (community matches-any CL-BLACKHOLE or tag eq 666) and {{ "ipv6" if fam == "v6" else "ip" }} route-destination in {{ "{0.0.0.0 0 ge 32 le 32}" if fam == "v4" else "{:: 0 ge 128 le 128}" }} then
   if community matches-any CL-BLACKHOLE-PROPAGATE then
    {# O pedido de propagacao nao atropela o bloqueio do proprio destino nem o
