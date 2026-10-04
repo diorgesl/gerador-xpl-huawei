@@ -180,12 +180,16 @@ end-list
 xpl route-filter CUST-{{ alvo.token }}-IMPORT-{{ U }}
  call route-filter IMPORT-SANITY-{{ U }}
 {% if confinar_prefixo %}
- if (community matches-any CL-BLACKHOLE or tag eq 666) and {{ "ipv6" if fam == "v6" else "ip" }} route-destination in PL-CUST-{{ alvo.token }}-BH-{{ U }} then
-  apply {{ "ipv6" if fam == "v6" else "ip" }} next-hop {{ nexthop }}
-  apply local-preference {{ plan.LP_BLACKHOLE }}
-  apply community {{ plan.conjunto(plan.BLACKHOLE_INFO, plan.c(200)) }} additive
-  apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} additive
-  finish
+ {# if aninhado, e nao `if (A or B) and C`: no NE40 essa condicao depois de
+    um call faz o commit falhar quando o filtro e pendurado no peer. #}
+ if {{ "ipv6" if fam == "v6" else "ip" }} route-destination in PL-CUST-{{ alvo.token }}-BH-{{ U }} then
+  if community matches-any CL-BLACKHOLE or tag eq 666 then
+   apply {{ "ipv6" if fam == "v6" else "ip" }} next-hop {{ nexthop }}
+   apply local-preference {{ plan.LP_BLACKHOLE }}
+   apply community {{ plan.conjunto(plan.BLACKHOLE_INFO, plan.c(200)) }} additive
+   apply large-community {{ plan.conjunto(plan.c_large(1000, alvo.asn)) }} additive
+   finish
+  endif
  endif
  {# o pedido de descarte que nao casou o ramo de cima e de prefixo maior que
      o host, ou fora do bloco: sem este veto ele caia na whitelist normal, e o

@@ -1188,6 +1188,25 @@ def test_o_import_de_cliente_recusa_blackhole_fora_do_ramo_de_host():
         assert trecho.index(VETO_BH) < trecho.index("if not ip route-destination in PL-"), nome
 
 
+def test_nenhum_filtro_tem_condicao_com_parenteses_depois_de_call():
+    """No NE40 (rt-tecmais-ne40-downstream), um `if (A or B) and C` depois de
+    qualquer `call route-filter` faz o commit falhar quando o filtro e
+    pendurado num peer; o objeto solto entra sem erro. A mesma condicao antes
+    do call passa, e o if aninhado depois dele tambem."""
+    textos = [render.render_peer(p()) for p in
+              (peer_cliente, peer_parceiro, peer_upstream, peer_ix, peer_pni)]
+    textos += [render.render_grupo(g) for g in
+               (grupo_com_asn(), grupo_upstream(), grupo_ix(), grupo_pni())]
+    textos.append(render.render_base())
+    for texto in textos:
+        for filtro in texto.split("xpl route-filter ")[1:]:
+            corpo = filtro.split("end-filter")[0]
+            if "call route-filter" not in corpo:
+                continue
+            depois = corpo[corpo.index("call route-filter"):]
+            assert not re.search(r"^\s*(if|elseif) \(", depois, re.M), filtro.split("\n")[0]
+
+
 def test_o_egresso_recusa_blackhole_que_chega_ao_caminho_normal():
     """A segunda barreira do mesmo achado. No upstream o ramo de host ja
     terminou em finish antes do EXPORT-SANITY, entao o veto ali so alcanca o
