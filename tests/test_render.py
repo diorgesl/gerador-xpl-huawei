@@ -3235,6 +3235,7 @@ def test_route_limit_e_public_as_only_saem_dentro_da_familia(monta):
                          ("ipv6-family", "2001:db8:100::2")):
         familia = _familia(familias, nome)
         assert ("  peer %s enable\n"
+                "  y\n"
                 "  peer %s route-limit %d %s\n"
                 "  peer %s %s\n" % (remoto, remoto, peer.route_limit,
                                       plan.ACAO_LIMITE, remoto, plan.AS_ONLY)
@@ -3260,7 +3261,7 @@ def test_public_as_only_do_grupo_sai_dentro_da_familia():
     sessao, familias = _sessao_e_familias(render.render_grupo(grupo))
     assert "public-as-only" not in sessao
     for nome in ("ipv4-family", "ipv6-family"):
-        assert ("  peer %s enable\n  peer %s %s\n" % (
+        assert ("  peer %s enable\n  y\n  peer %s %s\n" % (
             grupo.nome, grupo.nome, plan.AS_ONLY)) in _familia(familias, nome)
 
 

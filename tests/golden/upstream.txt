@@ -154,6 +154,7 @@ bgp 64512
 
  ipv4-family unicast
   peer 203.0.113.1 enable
+  y
   peer 203.0.113.1 route-limit 1500000 alert-only
   peer 203.0.113.1 public-as-only force
   peer 203.0.113.1 route-filter UP-14840-IMPORT-V4 import

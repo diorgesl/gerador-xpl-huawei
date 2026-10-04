@@ -97,6 +97,9 @@ end-filter
 
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ s.remoto }} enable
+  {# o y responde ao "This operation will reset the peer session. Continue?
+     [Y/N]" que o VRP pergunta no enable; sem ele o resto do bloco colado
+     cai no prompt. #}
   y
   peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
   peer {{ s.remoto }} {{ plan.AS_ONLY }}
@@ -278,6 +281,9 @@ end-filter
 {% set linha_default = "\n  peer " ~ grupo.nome ~ " default-route-advertise" if grupo.default_route else "" %}
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ grupo.nome }} enable
+  {# o y responde ao "This operation will reset the peer session. Continue?
+     [Y/N]" que o VRP pergunta no enable; sem ele o resto do bloco colado
+     cai no prompt. #}
   y
   peer {{ grupo.nome }} {{ plan.AS_ONLY }}
   peer {{ grupo.nome }} route-filter {{ import_nome }} import

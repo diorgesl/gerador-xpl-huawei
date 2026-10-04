@@ -89,6 +89,7 @@ bgp 64512
 
  ipv4-family unicast
   peer 198.51.100.2 enable
+  y
   peer 198.51.100.2 route-limit 50 alert-only
   peer 198.51.100.2 public-as-only force
   peer 198.51.100.2 route-filter CUST-268127-IMPORT-V4 import

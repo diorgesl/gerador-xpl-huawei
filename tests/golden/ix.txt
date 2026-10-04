@@ -82,6 +82,7 @@ bgp 64512
 
  ipv4-family unicast
   peer 187.16.192.2 enable
+  y
   peer 187.16.192.2 route-limit 500000 alert-only
   peer 187.16.192.2 public-as-only force
   peer 187.16.192.2 route-filter IX-IX-SP-IMPORT-V4 import

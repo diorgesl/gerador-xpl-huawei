@@ -80,6 +80,7 @@ bgp 64512
 
  ipv4-family unicast
   peer 10.0.0.2 enable
+  y
   peer 10.0.0.2 route-limit 10000 alert-only
   peer 10.0.0.2 public-as-only force
   peer 10.0.0.2 route-filter PNI-CDN-A-IMPORT-V4 import
