@@ -263,3 +263,11 @@ def test_o_modelo_do_membro_nao_mostra_a_default():
     # a default do membro e a do grupo: a caixa dele nao decide nada
     assert modelo_do_peer(peer_cliente(default_route=True, grupo_id=3)).default_route is False
     assert modelo_do_peer(peer_cliente(default_route=True)).default_route is True
+
+
+@pytest.mark.parametrize("marcado", [True, False])
+def test_o_multihop_vai_e_volta_pelo_formulario(marcado):
+    modelo = modelo_do_peer(peer_cliente(multihop=marcado))
+    assert modelo.multihop is marcado
+    peer, _ = peer_do_formulario(dados_do_formulario(modelo), [], None, ())
+    assert peer.multihop is marcado

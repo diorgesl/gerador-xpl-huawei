@@ -50,15 +50,10 @@ bgp {{ plan.ASN }}
 {% if not grupo.asn %}
  peer {{ peer.sessoes[fam].remoto }} as-number {{ peer.asn }}
 {% endif %}
-{# o limite e da sessao, nao do grupo, e por isso ele sai aqui e nao no arquivo
-   do grupo: a spec o deixa no Peer mesmo dentro de um grupo, o PLANO manda
-   route-limit em toda sessao, sem excecao, inclusive cliente pequeno - e no
-   grupo o limite seria um so para todos os membros, e o do membro sumiria.
-   A linha tambem nao tem guarda de tipo: o plan.ROUTE_LIMIT tem valor nos
-   cinco, e condicionar a "cliente" deixava um membro parceiro sem limite
-   nenhum, porque o ramo de membro nao chama sessao_do_peer. #}
- peer {{ peer.sessoes[fam].remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
  peer {{ peer.sessoes[fam].remoto }} group {{ grupo.nome }}
+{% if peer.multihop %}
+ peer {{ peer.sessoes[fam].remoto }} ebgp-max-hop {{ plan.MULTIHOP_TTL }}
+{% endif %}
 {% endfor %}
 {% for fam in peer.familias() %}
 {% set U = fam|upper %}
@@ -66,6 +61,14 @@ bgp {{ plan.ASN }}
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ s.remoto }} enable
   peer {{ s.remoto }} group {{ grupo.nome }}
+{# o limite e da sessao, nao do grupo, e por isso ele sai aqui e nao no arquivo
+   do grupo - dentro da familia, que e onde o VRP o aceita: a spec o deixa no Peer mesmo dentro de um grupo, o PLANO manda
+   route-limit em toda sessao, sem excecao, inclusive cliente pequeno - e no
+   grupo o limite seria um so para todos os membros, e o do membro sumiria.
+   A linha tambem nao tem guarda de tipo: o plan.ROUTE_LIMIT tem valor nos
+   cinco, e condicionar a "cliente" deixava um membro parceiro sem limite
+   nenhum, porque o ramo de membro nao chama sessao_do_peer. #}
+  peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
 {% if peer.tem_filtro_proprio() %}
   peer {{ s.remoto }} route-filter CUST-{{ peer.token }}-IMPORT-{{ U }} import
 {% endif %}

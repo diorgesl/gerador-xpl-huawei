@@ -59,8 +59,14 @@ end-filter
 {% if peer.descricao %}
  peer {{ s.remoto }} description {{ peer.descricao }}
 {% endif %}
- peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
- peer {{ s.remoto }} {{ plan.AS_ONLY }}
+{# route-limit e public-as-only nao saem aqui: os dois sao da familia no VRP,
+   e ficam no familia_bgp. O multihop e da sessao; o TTL e fixo
+   (plan.MULTIHOP_TTL), o cadastro so diz se a sessao e multihop. Os ramos de
+   membro dos quatro templates de tipo repetem esta linha: o grupo nao a
+   carrega. #}
+{% if peer.multihop %}
+ peer {{ s.remoto }} ebgp-max-hop {{ plan.MULTIHOP_TTL }}
+{% endif %}
 {% if peer.tipo == "ix" %}
 {# motivo: o route server e transparente e nao insere o proprio ASN no path,
    entao o ASN na frente do path e o de quem anunciou, nao o do vizinho, e o
@@ -91,6 +97,8 @@ end-filter
 
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ s.remoto }} enable
+  peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
+  peer {{ s.remoto }} {{ plan.AS_ONLY }}
   peer {{ s.remoto }} route-filter {{ import_nome }} import
   peer {{ s.remoto }} route-filter {{ export_nome }} export
   peer {{ s.remoto }} advertise-community
@@ -250,7 +258,6 @@ end-filter
 {% if grupo.asn %}
  peer {{ grupo.nome }} as-number {{ grupo.asn }}
 {% endif %}
- peer {{ grupo.nome }} {{ plan.AS_ONLY }}
 {% if grupo.timer_keepalive and grupo.timer_hold %}
  peer {{ grupo.nome }} timer keepalive {{ grupo.timer_keepalive }} hold {{ grupo.timer_hold }}
 {% endif %}
@@ -266,6 +273,7 @@ end-filter
 {% set linha_default = "\n  peer " ~ grupo.nome ~ " default-route-advertise" if grupo.default_route else "" %}
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ grupo.nome }} enable
+  peer {{ grupo.nome }} {{ plan.AS_ONLY }}
   peer {{ grupo.nome }} route-filter {{ import_nome }} import
   peer {{ grupo.nome }} route-filter {{ export_nome }} export
   peer {{ grupo.nome }} advertise-community

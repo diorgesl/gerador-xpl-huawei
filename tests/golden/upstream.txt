@@ -148,14 +148,14 @@ end-filter
 bgp 64512
  peer 203.0.113.1 as-number 14840
  peer 203.0.113.1 description UPSTREAM-01-AS14840
- peer 203.0.113.1 route-limit 1500000 alert-only
- peer 203.0.113.1 public-as-only force
  peer 203.0.113.1 timer keepalive 10 hold 30
  peer 203.0.113.1 capability-advertise graceful-restart
  peer 203.0.113.1 bfd enable
 
  ipv4-family unicast
   peer 203.0.113.1 enable
+  peer 203.0.113.1 route-limit 1500000 alert-only
+  peer 203.0.113.1 public-as-only force
   peer 203.0.113.1 route-filter UP-14840-IMPORT-V4 import
   peer 203.0.113.1 route-filter UP-14840-EXPORT-V4 export
   peer 203.0.113.1 advertise-community

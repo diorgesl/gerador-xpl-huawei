@@ -984,11 +984,11 @@ def test_bloco_bgp_do_ix_tem_uma_linha_em_branco_antes_da_familia():
 
 def test_ix_desliga_o_check_first_as():
     # a forma e a positiva depois do undo, como o VRP escreve, e a linha fica
-    # colada na do public-as-only: as duas sao os controles de AS-path da
-    # sessao. A assercao e de vizinhanca, entao pega tambem a linha em branco
-    # que um comentario mal fechado no template deixaria entre as duas.
+    # colada na da descricao. A assercao e de vizinhanca, entao pega tambem a
+    # linha em branco que um comentario mal fechado no template deixaria
+    # entre as duas.
     texto = render.render_peer(peer_ix())
-    assert (" peer 187.16.192.2 public-as-only force\n"
+    assert (" peer 187.16.192.2 description IX-SP-AS26162\n"
             " undo peer 187.16.192.2 check-first-as enable\n") in texto
 
 
@@ -3179,3 +3179,106 @@ def test_o_cabecalho_do_membro_mostra_a_default_do_grupo():
     cabecalho = render.render_peer(membro, grupo=grupo).splitlines()[:8]
     assert any(l.startswith("# default route: a do grupo %s" % grupo.nome)
                for l in cabecalho)
+
+
+# route-limit e public-as-only sao da familia no VRP: na sessao, o equipamento
+# os poe na ipv4-family, e no peer IPv6 a linha nem e aceita. O multihop e o
+# contrario, da sessao, com o TTL fixo do plano.
+
+def _sessao_e_familias(texto):
+    bgp = texto[texto.index("bgp %s\n" % plan.ASN):]
+    corte = bgp.index("-family unicast")
+    corte = bgp.rindex("\n", 0, corte) + 1
+    return bgp[:corte], bgp[corte:]
+
+
+def _familia(familias, nome):
+    bloco = familias[familias.index(" %s unicast" % nome):]
+    fim = bloco.find("-family unicast", len(nome) + 2)
+    return bloco if fim < 0 else bloco[:bloco.rindex("\n", 0, fim)]
+
+
+def _dual_stack(peer):
+    peer.sessoes = {
+        "v4": {"local": "192.0.2.2", "remoto": "192.0.2.3"},
+        "v6": {"local": "2001:db8:100::1", "remoto": "2001:db8:100::2"},
+    }
+    return peer
+
+
+@pytest.mark.parametrize("monta", [peer_cliente, peer_upstream, peer_ix, peer_pni])
+def test_route_limit_e_public_as_only_saem_dentro_da_familia(monta):
+    peer = _dual_stack(monta())
+    sessao, familias = _sessao_e_familias(render.render_peer(peer))
+    assert "route-limit" not in sessao
+    assert "public-as-only" not in sessao
+    for nome, remoto in (("ipv4-family", "192.0.2.3"),
+                         ("ipv6-family", "2001:db8:100::2")):
+        familia = _familia(familias, nome)
+        assert ("  peer %s enable\n"
+                "  peer %s route-limit %d %s\n"
+                "  peer %s %s\n" % (remoto, remoto, peer.route_limit,
+                                      plan.ACAO_LIMITE, remoto, plan.AS_ONLY)
+                ) in familia
+
+
+@pytest.mark.parametrize("tipo", ["cliente", "parceiro", "upstream", "ix", "pni"])
+def test_route_limit_do_membro_sai_dentro_da_familia(tipo):
+    grupo = grupo_do_tipo(tipo)
+    membro = membro_com_override_do_tipo(tipo, grupo)
+    sessao, familias = _sessao_e_familias(render.render_peer(membro, grupo=grupo))
+    assert "route-limit" not in sessao
+    for nome, remoto in (("ipv4-family", "192.0.2.3"),
+                         ("ipv6-family", "2001:db8:100::2")):
+        assert ("  peer %s group %s\n"
+                "  peer %s route-limit %d %s\n" % (
+                    remoto, grupo.nome, remoto, membro.route_limit,
+                    plan.ACAO_LIMITE)) in _familia(familias, nome)
+
+
+def test_public_as_only_do_grupo_sai_dentro_da_familia():
+    grupo = grupo_cliente_sem_asn()
+    sessao, familias = _sessao_e_familias(render.render_grupo(grupo))
+    assert "public-as-only" not in sessao
+    for nome in ("ipv4-family", "ipv6-family"):
+        assert ("  peer %s enable\n  peer %s %s\n" % (
+            grupo.nome, grupo.nome, plan.AS_ONLY)) in _familia(familias, nome)
+
+
+@pytest.mark.parametrize("monta", [peer_cliente, peer_upstream, peer_ix, peer_pni])
+def test_multihop_sai_na_sessao_com_o_ttl_do_plano(monta):
+    peer = _dual_stack(monta(multihop=True))
+    sessao, familias = _sessao_e_familias(render.render_peer(peer))
+    for remoto in ("192.0.2.3", "2001:db8:100::2"):
+        assert " peer %s ebgp-max-hop %d\n" % (remoto, plan.MULTIHOP_TTL) in sessao
+    assert "ebgp-max-hop" not in familias
+    assert plan.MULTIHOP_TTL == 64
+
+
+@pytest.mark.parametrize("monta", [peer_cliente, peer_upstream, peer_ix, peer_pni])
+def test_sem_multihop_nao_sai_ebgp_max_hop(monta):
+    assert "ebgp-max-hop" not in render.render_peer(monta())
+
+
+@pytest.mark.parametrize("tipo", ["cliente", "parceiro", "upstream", "ix", "pni"])
+def test_multihop_do_membro_sai_na_sessao_dele(tipo):
+    # o grupo nao carrega o multihop: e do peer, e o ramo de membro nao passa
+    # pelo sessao_do_peer
+    grupo = grupo_do_tipo(tipo)
+    membro = membro_com_override_do_tipo(tipo, grupo)
+    membro.multihop = True
+    sessao, _ = _sessao_e_familias(render.render_peer(membro, grupo=grupo))
+    for remoto in ("192.0.2.3", "2001:db8:100::2"):
+        assert " peer %s ebgp-max-hop %d\n" % (remoto, plan.MULTIHOP_TTL) in sessao
+    membro.multihop = False
+    assert "ebgp-max-hop" not in render.render_peer(membro, grupo=grupo)
+
+
+def test_reaproveita_leva_o_multihop_do_proprio_peer():
+    origem = peer_cliente()
+    alvo = peer_cliente(id=7, apelido="BKP", nome="BKP", politica_de=0,
+                        multihop=True,
+                        sessoes={"v4": {"local": "198.51.100.9",
+                                        "remoto": "198.51.100.10"}})
+    texto = render.render_peer(alvo, origem=origem)
+    assert " peer 198.51.100.10 ebgp-max-hop 64\n" in texto

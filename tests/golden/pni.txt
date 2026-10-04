@@ -75,13 +75,13 @@ xpl large-community-list LC-NOADV-CDN-A
 bgp 64512
  peer 10.0.0.2 as-number 64510
  peer 10.0.0.2 description PNI-CDN-A-AS64510
- peer 10.0.0.2 route-limit 10000 alert-only
- peer 10.0.0.2 public-as-only force
  peer 10.0.0.2 capability-advertise graceful-restart
  peer 10.0.0.2 bfd enable
 
  ipv4-family unicast
   peer 10.0.0.2 enable
+  peer 10.0.0.2 route-limit 10000 alert-only
+  peer 10.0.0.2 public-as-only force
   peer 10.0.0.2 route-filter PNI-CDN-A-IMPORT-V4 import
   peer 10.0.0.2 route-filter PNI-CDN-A-EXPORT-V4 export
   peer 10.0.0.2 advertise-community

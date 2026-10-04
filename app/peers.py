@@ -89,6 +89,9 @@ class Peer:
     graceful_restart: bool = True
     timer_keepalive: int | None = None
     timer_hold: int | None = None
+    # sessao eBGP fora do enlace direto: sai `ebgp-max-hop` com o
+    # plan.MULTIHOP_TTL, sem valor escolhido por peer
+    multihop: bool = False
 
     prepend_base: int = 0
     route_limit: int = 50
@@ -233,6 +236,7 @@ class Peer:
             "communities": self.communities,
             "large_communities": self.large_communities,
             "bfd": self.bfd, "graceful_restart": self.graceful_restart,
+            "multihop": self.multihop,
             "timer_keepalive": self.timer_keepalive,
             "timer_hold": self.timer_hold,
             "prepend_base": self.prepend_base, "route_limit": self.route_limit,

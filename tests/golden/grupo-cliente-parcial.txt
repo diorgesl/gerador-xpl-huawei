@@ -65,18 +65,19 @@ end-filter
 
 bgp 64512
  group CLIENTES_REDUNDANTES external
- peer CLIENTES_REDUNDANTES public-as-only force
  peer CLIENTES_REDUNDANTES capability-advertise graceful-restart
  peer CLIENTES_REDUNDANTES bfd enable
 
  ipv4-family unicast
   peer CLIENTES_REDUNDANTES enable
+  peer CLIENTES_REDUNDANTES public-as-only force
   peer CLIENTES_REDUNDANTES route-filter CUST-CLIENTES_REDUNDANTES-IMPORT-V4 import
   peer CLIENTES_REDUNDANTES route-filter CUST-CLIENTES_REDUNDANTES-EXPORT-V4 export
   peer CLIENTES_REDUNDANTES advertise-community
   peer CLIENTES_REDUNDANTES advertise-large-community
  ipv6-family unicast
   peer CLIENTES_REDUNDANTES enable
+  peer CLIENTES_REDUNDANTES public-as-only force
   peer CLIENTES_REDUNDANTES route-filter CUST-CLIENTES_REDUNDANTES-IMPORT-V6 import
   peer CLIENTES_REDUNDANTES route-filter CUST-CLIENTES_REDUNDANTES-EXPORT-V6 export
   peer CLIENTES_REDUNDANTES advertise-community

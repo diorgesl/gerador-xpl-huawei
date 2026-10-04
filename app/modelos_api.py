@@ -37,6 +37,7 @@ class PeerForm(Modelo):
     timer_hold: str = ""
     bfd: bool = True
     graceful_restart: bool = True
+    multihop: bool = False
     default_route: bool = False
     # em branco num downstream vira "nenhuma" no peer_do_formulario; nos
     # outros tipos o campo nao e lido

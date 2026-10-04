@@ -283,6 +283,9 @@ ROUTE_LIMIT_EXEMPLO = {"cliente": 50, "parceiro": 50, "upstream": 1100000,
 
 ACAO_LIMITE = "alert-only"
 AS_ONLY = "public-as-only force"
+# o TTL do `ebgp-max-hop` da sessao multihop. O formulario so liga e desliga:
+# nenhum peer precisa de um valor menor, e 64 cobre qualquer caminho interno
+MULTIHOP_TTL = 64
 
 # keepalive e hold. O PLANO so poe timer explicito no upstream; nos
 # outros tipos o equipamento usa o default. None = nao emitir a linha.

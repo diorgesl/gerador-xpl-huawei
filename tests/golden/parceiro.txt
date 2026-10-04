@@ -78,13 +78,13 @@ end-filter
 bgp 64512
  peer 198.51.100.2 as-number 64500
  peer 198.51.100.2 description PARCEIRO-AS64500
- peer 198.51.100.2 route-limit 50 alert-only
- peer 198.51.100.2 public-as-only force
  peer 198.51.100.2 capability-advertise graceful-restart
  peer 198.51.100.2 bfd enable
 
  ipv4-family unicast
   peer 198.51.100.2 enable
+  peer 198.51.100.2 route-limit 50 alert-only
+  peer 198.51.100.2 public-as-only force
   peer 198.51.100.2 route-filter CUST-64500-IMPORT-V4 import
   peer 198.51.100.2 route-filter CUST-64500-EXPORT-V4 export
   peer 198.51.100.2 advertise-community

@@ -37,8 +37,10 @@ bgp {{ plan.ASN }}
 {% if not grupo.asn %}
  peer {{ peer.sessoes[fam].remoto }} as-number {{ peer.asn }}
 {% endif %}
- peer {{ peer.sessoes[fam].remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
  peer {{ peer.sessoes[fam].remoto }} group {{ grupo.nome }}
+{% if peer.multihop %}
+ peer {{ peer.sessoes[fam].remoto }} ebgp-max-hop {{ plan.MULTIHOP_TTL }}
+{% endif %}
 {% endfor %}
 {% for fam in peer.familias() %}
 {% set U = fam|upper %}
@@ -46,6 +48,7 @@ bgp {{ plan.ASN }}
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ s.remoto }} enable
   peer {{ s.remoto }} group {{ grupo.nome }}
+  peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
 {% if peer.tem_filtro_proprio() %}
   peer {{ s.remoto }} route-filter UP-{{ peer.token }}-IMPORT-{{ U }} import
   peer {{ s.remoto }} route-filter UP-{{ peer.token }}-EXPORT-{{ U }} export

@@ -76,14 +76,14 @@ xpl as-path-list AP-IX-IX-SP
 bgp 64512
  peer 187.16.192.2 as-number 26162
  peer 187.16.192.2 description IX-SP-AS26162
- peer 187.16.192.2 route-limit 500000 alert-only
- peer 187.16.192.2 public-as-only force
  undo peer 187.16.192.2 check-first-as enable
  peer 187.16.192.2 capability-advertise graceful-restart
  peer 187.16.192.2 bfd enable
 
  ipv4-family unicast
   peer 187.16.192.2 enable
+  peer 187.16.192.2 route-limit 500000 alert-only
+  peer 187.16.192.2 public-as-only force
   peer 187.16.192.2 route-filter IX-IX-SP-IMPORT-V4 import
   peer 187.16.192.2 route-filter IX-IX-SP-EXPORT-V4 export
   peer 187.16.192.2 advertise-community

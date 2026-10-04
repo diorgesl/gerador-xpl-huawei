@@ -699,3 +699,13 @@ def test_o_prefixo_em_branco_no_yaml_carrega_sem_estourar(tmp_path):
         encoding="utf-8")
     (peer,) = mod.carregar(caminho)
     assert peer.prefixos["v4"][0].prefixo == ""
+
+
+def test_o_multihop_nasce_desligado_e_sobrevive_ao_yaml():
+    assert mod.Peer().multihop is False
+    p = mod.Peer(id=1, nome="a", tipo="cliente", asn=264130, multihop=True)
+    assert mod.Peer.de_dict(p.para_dict()).multihop is True
+    # o yaml gravado antes do campo existir carrega sem ele
+    d = p.para_dict()
+    del d["multihop"]
+    assert mod.Peer.de_dict(d).multihop is False

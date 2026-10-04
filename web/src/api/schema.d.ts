@@ -1063,6 +1063,11 @@ export interface components {
              */
             graceful_restart: boolean;
             /**
+             * Multihop
+             * @default false
+             */
+            multihop: boolean;
+            /**
              * Default Route
              * @default false
              */

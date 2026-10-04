@@ -395,10 +395,10 @@ nome dele.
 bgp 64512
  peer 198.51.100.10 as-number 270620
  peer 198.51.100.10 description NETMAC-BKP
- peer 198.51.100.10 route-limit 50 alert-only
- peer 198.51.100.10 public-as-only force
  ipv4-family unicast
   peer 198.51.100.10 enable
+  peer 198.51.100.10 route-limit 50 alert-only
+  peer 198.51.100.10 public-as-only force
   peer 198.51.100.10 route-filter CUST-NETMAC-IMPORT-V4 import
   peer 198.51.100.10 route-filter CUST-NETMAC-EXPORT-V4 export
   peer 198.51.100.10 advertise-community
@@ -1267,13 +1267,13 @@ Nenhum egress deste documento limpa o conjunto de communities, e o de cliente nu
 bgp 64512
  peer 198.51.100.2 as-number 268127
  peer 198.51.100.2 description CLIENTE-AS268127
- peer 198.51.100.2 route-limit 50 alert-only
- peer 198.51.100.2 public-as-only force
  peer 198.51.100.2 bfd enable
  peer 198.51.100.2 capability-advertise graceful-restart
 
  ipv4-family unicast
   peer 198.51.100.2 enable
+  peer 198.51.100.2 route-limit 50 alert-only
+  peer 198.51.100.2 public-as-only force
   peer 198.51.100.2 route-filter CUST-IMPORT-268127 import
   peer 198.51.100.2 route-filter CUST-EXPORT-268127 export
   peer 198.51.100.2 advertise-community
@@ -1281,9 +1281,11 @@ bgp 64512
 
 ```
 
-O `public-as-only force` entra em toda sessão eBGP. Sem ele, o ASN privado que o cliente carrega no path, tipicamente o CPE de um assinante dele, sai intacto para o upstream, que na melhor das hipóteses filtra e na pior registra. O `force` remove o ASN privado em vez de reter a rota; confirme o efeito exato na sua release antes de escolher entre ele e a forma sem `force`, porque a diferença decide se a rota com ASN privado continua sendo anunciada ou some.
+O `route-limit` e o `public-as-only force` saem dentro da família, e não na sessão: no VRP os dois são configuração da address family, e cada família leva o seu. O `public-as-only force` entra em toda sessão eBGP. Sem ele, o ASN privado que o cliente carrega no path, tipicamente o CPE de um assinante dele, sai intacto para o upstream, que na melhor das hipóteses filtra e na pior registra. O `force` remove o ASN privado em vez de reter a rota; confirme o efeito exato na sua release antes de escolher entre ele e a forma sem `force`, porque a diferença decide se a rota com ASN privado continua sendo anunciada ou some.
 
 A default route sai pela sessão, e não pelo filtro: `peer 198.51.100.2 default-route-advertise` dentro da família. O VRP origina `0.0.0.0/0` e `::/0` nessa sessão mesmo quando não há default na RIB nem na FIB, e o anúncio não passa pelo route-filter de export, então nenhum `refuse` do filtro a segura. Comportamento confirmado no equipamento. É por isso que o modo `nenhuma` pode recusar tudo no export e a sessão continua recebendo a default.
+
+A sessão que não é de enlace direto (loopback a loopback, ou um salto no meio) é marcada como multihop no cadastro, e o gerador emite `peer <ip> ebgp-max-hop 64` na sessão. O TTL é fixo: o formulário só liga e desliga. No membro de grupo a linha sai no bloco do membro, porque o grupo não a carrega.
 
 Num grupo, a default é do grupo: o `peer <GRUPO> default-route-advertise` vale para todos os membros, e o membro não emite nem tira o dele. O gerador não emite `undo`: para tirar a default de uma sessão que já a tinha, aplique `undo peer <ip> default-route-advertise` (ou `undo peer <GRUPO> default-route-advertise`) à mão.
 
@@ -1453,14 +1455,14 @@ Dos dois erros de digitação, o `{64512:14840:4}` da tabela é o único que se 
 bgp 64512
  peer 203.0.113.1 as-number 14840
  peer 203.0.113.1 description UPSTREAM-01-AS14840
- peer 203.0.113.1 route-limit 1100000 alert-only
- peer 203.0.113.1 public-as-only force
  peer 203.0.113.1 timer keepalive 10 hold 30
  peer 203.0.113.1 capability-advertise graceful-restart
  peer 203.0.113.1 bfd enable
 
  ipv4-family unicast
   peer 203.0.113.1 enable
+  peer 203.0.113.1 route-limit 1100000 alert-only
+  peer 203.0.113.1 public-as-only force
   peer 203.0.113.1 route-filter UP-IMPORT-14840(100) import
   peer 203.0.113.1 route-filter UP-EXPORT-14840(1) export
   peer 203.0.113.1 advertise-community

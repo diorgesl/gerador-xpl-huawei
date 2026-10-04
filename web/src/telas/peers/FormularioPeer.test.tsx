@@ -54,7 +54,7 @@ const BRANCO: PeerForm = {
   id: "7", apelido: "", nome: "Cliente ACME", tipo: "cliente", grupo_id: "", politica_de: "",
   asn: "268127", descricao: "", classe: "residencial", lp_base: "300", origem: "1110",
   pop: "2001", aprendizado: "", ix_id: "", route_limit: "50", prepend_base: "0",
-  timer_keepalive: "", timer_hold: "", bfd: true, graceful_restart: true,
+  timer_keepalive: "", timer_hold: "", bfd: true, graceful_restart: true, multihop: false,
   default_route: false, tabela: "nenhuma", bh_upstream: "", prefixos_v4: ["45.169.232.0/22"], prefixos_v6: [],
   te_prefixos_v4: [], te_prefixos_v6: [], ap_block: [], ap_te: [], ap_allowed: [],
   ap_prefer: [], communities: [], large_communities: [],
@@ -143,6 +143,16 @@ describe("o formulario do peer", () => {
     await userEvent.click(await screen.findByRole("option", { name: /sem grupo/ }))
     expect(screen.getByLabelText(/Tabela recebida/)).toHaveTextContent("Full table")
     expect(screen.getByRole("checkbox", { name: /Anuncia default route/ })).not.toBeChecked()
+  })
+
+  it("a caixa do multihop nasce desmarcada e vale tambem para o membro de grupo", () => {
+    const { unmount } = render(<Montar />)
+    expect(screen.getByRole("checkbox", { name: /Multihop/ })).not.toBeChecked()
+    expect(screen.getByText("marcada, sai ebgp-max-hop 64 na sessão")).toBeInTheDocument()
+    unmount()
+    // o grupo nao carrega o multihop: o membro marca o dele
+    render(<Montar iniciais={{ grupo_id: "3", tabela: "", multihop: true }} />)
+    expect(screen.getByRole("checkbox", { name: /Multihop/ })).toBeChecked()
   })
 
   it("o membro de grupo nao ve a caixa da default", () => {
