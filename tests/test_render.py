@@ -1621,7 +1621,8 @@ def test_nenhum_undo_sai_duas_vezes():
     # no nome viraria dois undos identicos na config
     for peer in (peer_cliente_remocao(), peer_parceiro_remocao(),
                  peer_upstream_remocao(), peer_ix_remocao(), peer_pni_remocao()):
-        linhas = [l for l in render.render_remove(peer).splitlines() if l.strip()]
+        # o y responde ao prompt de cada undo peer, e repete por natureza
+        linhas = [l for l in render.render_remove(peer).splitlines() if l.startswith("undo ")]
         repetidas = sorted({l for l in linhas if linhas.count(l) > 1})
         assert not repetidas, "%s: %s" % (peer.tipo, ", ".join(repetidas))
 

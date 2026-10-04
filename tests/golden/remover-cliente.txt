@@ -7,7 +7,6 @@ y
 undo peer 2001:db8:100::2
 y
 quit
-
 undo xpl route-filter CUST-268127-EXPORT-V4
 undo xpl route-filter CUST-268127-IMPORT-V4
 undo xpl ip-prefix-list PL-CUST-268127-BH-V4
