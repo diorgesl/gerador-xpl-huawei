@@ -266,6 +266,14 @@ def test_o_modelo_do_membro_nao_mostra_a_default():
 
 
 @pytest.mark.parametrize("marcado", [True, False])
+def test_o_preserva_nexthop_vai_e_volta_pelo_formulario(marcado):
+    modelo = modelo_do_peer(peer_cliente(preserva_nexthop=marcado))
+    assert modelo.preserva_nexthop is marcado
+    peer, _ = peer_do_formulario(dados_do_formulario(modelo), [], None, ())
+    assert peer.preserva_nexthop is marcado
+
+
+@pytest.mark.parametrize("marcado", [True, False])
 def test_o_multihop_vai_e_volta_pelo_formulario(marcado):
     modelo = modelo_do_peer(peer_cliente(multihop=marcado))
     assert modelo.multihop is marcado

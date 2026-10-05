@@ -1292,6 +1292,8 @@ A default route sai pela sessão, e não pelo filtro: `peer 198.51.100.2 default
 
 A sessão que não é de enlace direto (loopback a loopback, ou um salto no meio) é marcada como multihop no cadastro, e o gerador emite `peer <ip> ebgp-max-hop 64` na sessão. O TTL é fixo: o formulário só liga e desliga. No membro de grupo a linha sai no bloco do membro, porque o grupo não a carrega.
 
+A opção "Preservar next-hop" do cadastro emite `peer <ip> next-hop-invariable include-unicast-route` dentro de cada família (`ipv4-family` e `ipv6-family`), não na sessão: a rota sai para esse peer com o next-hop que veio. Vem desligada, e no membro de grupo ela também sai no bloco do membro.
+
 Num grupo, a default é do grupo: o `peer <GRUPO> default-route-advertise` vale para todos os membros, e o membro não emite nem tira o dele. O gerador não emite `undo`: para tirar a default de uma sessão que já a tinha, aplique `undo peer <ip> default-route-advertise` (ou `undo peer <GRUPO> default-route-advertise`) à mão.
 
 ## Exemplo: upstream

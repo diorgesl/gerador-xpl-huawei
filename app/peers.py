@@ -92,6 +92,9 @@ class Peer:
     # sessao eBGP fora do enlace direto: sai `ebgp-max-hop` com o
     # plan.MULTIHOP_TTL, sem valor escolhido por peer
     multihop: bool = False
+    # `next-hop-invariable include-unicast-route` em cada familia: a rota sai
+    # para este peer com o next-hop que veio, sem o self do eBGP
+    preserva_nexthop: bool = False
 
     prepend_base: int = 0
     route_limit: int = 50
@@ -237,6 +240,7 @@ class Peer:
             "large_communities": self.large_communities,
             "bfd": self.bfd, "graceful_restart": self.graceful_restart,
             "multihop": self.multihop,
+            "preserva_nexthop": self.preserva_nexthop,
             "timer_keepalive": self.timer_keepalive,
             "timer_hold": self.timer_hold,
             "prepend_base": self.prepend_base, "route_limit": self.route_limit,

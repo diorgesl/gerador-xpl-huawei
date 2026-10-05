@@ -74,6 +74,7 @@ def modelo_do_peer(peer):
         timer_hold=_texto(peer.timer_hold),
         bfd=peer.bfd, graceful_restart=peer.graceful_restart,
         multihop=peer.multihop,
+        preserva_nexthop=peer.preserva_nexthop,
         # o membro nao decide a default: quem a emite e o grupo
         default_route=peer.default_route and peer.grupo_id is None,
         bh_upstream=peer.bh_upstream,

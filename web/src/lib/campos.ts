@@ -93,7 +93,7 @@ export type Opcao = { valor: string; rotulo: string }
 export const SECOES_PEER: Secao[] = [
   { id: "identificacao", rotulo: "Identificação", campos: ["id", "apelido", "nome", "tipo", "grupo_id", "asn", "descricao", "politica_de"] },
   { id: "politica", rotulo: "Política", campos: ["classe", "lp_base", "origem", "pop", "aprendizado", "ix_id"] },
-  { id: "limites", rotulo: "Limites e timers", campos: ["route_limit", "prepend_base", "timer_keepalive", "timer_hold", "bfd", "graceful_restart", "multihop", "default_route", "tabela", "bh_upstream"] },
+  { id: "limites", rotulo: "Limites e timers", campos: ["route_limit", "prepend_base", "timer_keepalive", "timer_hold", "bfd", "graceful_restart", "multihop", "preserva_nexthop", "default_route", "tabela", "bh_upstream"] },
   { id: "prefixos", rotulo: "Prefixos anunciados", campos: ["prefixos_v4", "prefixos_v6"] },
   { id: "te", rotulo: "Exceção de TE", campos: ["te_prefixos_v4", "te_prefixos_v6"] },
   { id: "aspath", rotulo: "AS-path", campos: ["ap_block", "ap_te", "ap_allowed", "ap_prefer"] },

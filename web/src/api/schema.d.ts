@@ -1068,6 +1068,11 @@ export interface components {
              */
             multihop: boolean;
             /**
+             * Preserva Nexthop
+             * @default false
+             */
+            preserva_nexthop: boolean;
+            /**
              * Default Route
              * @default false
              */

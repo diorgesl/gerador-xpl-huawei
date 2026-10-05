@@ -105,6 +105,12 @@ end-filter
   peer {{ s.remoto }} {{ plan.AS_ONLY }}
   peer {{ s.remoto }} route-filter {{ import_nome }} import
   peer {{ s.remoto }} route-filter {{ export_nome }} export
+{# o preserva_nexthop e da familia no VRP, ao contrario do multihop, que e da
+   sessao. Os ramos de membro dos quatro templates de tipo repetem esta
+   linha: o grupo nao a carrega. #}
+{% if peer.preserva_nexthop %}
+  peer {{ s.remoto }} next-hop-invariable include-unicast-route
+{% endif %}
   peer {{ s.remoto }} advertise-community
   peer {{ s.remoto }} advertise-large-community{{ linha_default }}
 {%- endmacro %}

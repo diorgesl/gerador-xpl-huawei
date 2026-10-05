@@ -433,6 +433,7 @@ def peer_do_formulario(dados, peers, anterior=None, grupos=()):
         bfd=dados.get("bfd") == "on",
         graceful_restart=dados.get("graceful_restart") == "on",
         multihop=dados.get("multihop") == "on",
+        preserva_nexthop=dados.get("preserva_nexthop") == "on",
         timer_keepalive=valores.get("timer_keepalive") or k,
         timer_hold=valores.get("timer_hold") or h,
         prepend_base=valores.get("prepend_base") or 0,

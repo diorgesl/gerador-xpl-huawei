@@ -3306,6 +3306,49 @@ def test_multihop_do_membro_sai_na_sessao_dele(tipo):
     assert "ebgp-max-hop" not in render.render_peer(membro, grupo=grupo)
 
 
+NEXTHOP = "next-hop-invariable include-unicast-route"
+
+
+@pytest.mark.parametrize("monta", [peer_cliente, peer_upstream, peer_ix, peer_pni])
+def test_preserva_nexthop_sai_dentro_de_cada_familia(monta):
+    peer = _dual_stack(monta(preserva_nexthop=True))
+    sessao, familias = _sessao_e_familias(render.render_peer(peer))
+    assert "next-hop-invariable" not in sessao
+    for nome, remoto in (("ipv4-family", "192.0.2.3"),
+                         ("ipv6-family", "2001:db8:100::2")):
+        assert "  peer %s %s\n" % (remoto, NEXTHOP) in _familia(familias, nome)
+
+
+@pytest.mark.parametrize("monta", [peer_cliente, peer_upstream, peer_ix, peer_pni])
+def test_sem_preserva_nexthop_nao_sai_next_hop_invariable(monta):
+    assert "next-hop-invariable" not in render.render_peer(monta())
+
+
+@pytest.mark.parametrize("tipo", ["cliente", "parceiro", "upstream", "ix", "pni"])
+def test_preserva_nexthop_do_membro_sai_na_familia_dele(tipo):
+    # como o multihop, o grupo nao carrega a opcao: e do peer, e o ramo de
+    # membro nao passa pelo familia_bgp
+    grupo = grupo_do_tipo(tipo)
+    membro = membro_com_override_do_tipo(tipo, grupo)
+    membro.preserva_nexthop = True
+    _, familias = _sessao_e_familias(render.render_peer(membro, grupo=grupo))
+    for nome, remoto in (("ipv4-family", "192.0.2.3"),
+                         ("ipv6-family", "2001:db8:100::2")):
+        assert "  peer %s %s\n" % (remoto, NEXTHOP) in _familia(familias, nome)
+    membro.preserva_nexthop = False
+    assert "next-hop-invariable" not in render.render_peer(membro, grupo=grupo)
+
+
+def test_reaproveita_leva_o_preserva_nexthop_do_proprio_peer():
+    origem = peer_cliente()
+    alvo = peer_cliente(id=7, apelido="BKP", nome="BKP", politica_de=0,
+                        preserva_nexthop=True,
+                        sessoes={"v4": {"local": "198.51.100.9",
+                                        "remoto": "198.51.100.10"}})
+    texto = render.render_peer(alvo, origem=origem)
+    assert "  peer 198.51.100.10 %s\n" % NEXTHOP in texto
+
+
 def test_reaproveita_leva_o_multihop_do_proprio_peer():
     origem = peer_cliente()
     alvo = peer_cliente(id=7, apelido="BKP", nome="BKP", politica_de=0,

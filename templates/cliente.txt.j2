@@ -69,6 +69,9 @@ bgp {{ plan.ASN }}
    cinco, e condicionar a "cliente" deixava um membro parceiro sem limite
    nenhum, porque o ramo de membro nao chama sessao_do_peer. #}
   peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
+{% if peer.preserva_nexthop %}
+  peer {{ s.remoto }} next-hop-invariable include-unicast-route
+{% endif %}
 {% if peer.tem_filtro_proprio() %}
   peer {{ s.remoto }} route-filter CUST-{{ peer.token }}-IMPORT-{{ U }} import
 {% endif %}
