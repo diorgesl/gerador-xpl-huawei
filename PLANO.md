@@ -522,7 +522,7 @@ Isso muda onde a aritmética "P1 é zero prepends, P2 é um prepend..." acontece
 
 `0` não é aceito: `apply as-path <asn> 0 additive` dá erro no equipamento, e o mínimo da cláusula é 1. Verificado em `rt-tecmais-ne8k-bgp-ddos`. A sessão que não quer prepend de engenharia simplesmente não recebe o argumento, então a escala do parâmetro é 1 a 6 e o caso zero não existe.
 
-Isso deixa uma pergunta em aberto, que vale resolver com `?` antes de escolher a forma: se a assinatura declara `($prepend_base)`, chamar o filtro sem os parênteses é aceito? Se não for, o caso sem prepend exige uma segunda variante do filtro, sem o parâmetro na assinatura.
+Verificado no equipamento em 2026-10-07: um filtro cuja assinatura declara `($prepend_base)` é aceito sem os parênteses. Isso resolve a configuração, mas não o comportamento. Ainda não se sabe o que a linha `apply as-path 64512 $prepend_base additive` faz quando o parâmetro não vem: se é pulada, se recusa a rota ou se aplica algum padrão. Até alguém olhar, o caso sem prepend continua com uma segunda variante do filtro, sem o parâmetro na assinatura.
 
 ### `call route-filter` para eliminar duplicação
 
@@ -1478,7 +1478,7 @@ bgp 64512
 
 A parametrização é o principal ganho do XPL sobre `route-policy`, e o `$lp_base` é o que varia por sessão. O `$prepend_base` já vai como número de prepends, na escala de 1 a 6; não existe o caso zero, porque `apply as-path <asn> 0 additive` é rejeitado pelo equipamento. A sessão que não prependa fica sem a linha 8, e isso pesa contra a ideia de um filtro único servindo os três upstreams — ver a seção de parâmetros.
 
-Confirme na sua release se a substituição de parâmetro funciona dentro de set literal — se `{64512:1:$peer_asn}` for aceito, os filtros per-peer colapsam num único filtro genérico.
+A substituição de parâmetro não funciona dentro de set literal. Verificado no equipamento em 2026-10-07: `apply large-community {64512:1:$peer_asn}` é recusado com `Error: Unrecognized command found at '^' position.` Os filtros per-peer não colapsam num único filtro genérico, e cada um continua com o ASN do peer escrito por extenso.
 
 ## Exemplo: IX e PNI
 
@@ -1942,13 +1942,15 @@ Um cuidado que custa tempo: `permit` e `deny` só se movem para filtro **armado*
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `apply as-path` em XPL vs. `route-policy` | Em XPL é ASN + contador (`64512 3` = três prepends), diferente do `route-policy` clássico, onde os ASNs são listados um a um                                                                     |
 | `call` + `finish` interno                 | `finish` no filtro chamado encerra o filtro de fora; quem devolve o controle é `break`. Os filtros compartilhados deste documento fecham em `break`                                              |
+| Parâmetro em set literal                  | Recusado: `apply large-community {64512:1:$peer_asn}` dá `Unrecognized command`. Os filtros per-peer não colapsam num só                                                                         |
+| Filtro com parâmetro sem os parênteses    | Aceito na configuração. O efeito da linha que usa o parâmetro sem valor continua em aberto, na tabela abaixo                                                                                     |
 | `regular` em community-list               | A cláusula existe e aceita regex. Mas `64512:4:*` **não** é coringa: é regex, casa a string `64512:4` seguida de dois-pontos repetidos, e nunca casa `64512:4:14840`. Escreva `^64512:4:[0-9]+$` |
 
 ### O que falta confirmar antes de subir
 
 | Item                                | Pergunta                                                                                                 | Como resolver                                                                                                                                                                                                                                                                                              |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parâmetro em set literal            | `{64512:1:$peer_asn}` é aceito?                                                                          | `xpl simulate` numa cópia sem parâmetro, com o valor literal. Se for aceito, os filtros per-peer colapsam num só                                                                                                                                                                                           |
+| Parâmetro ausente                   | Num filtro referenciado sem o parâmetro, a linha que usa `$prepend_base` é pulada, recusa a rota ou aplica algum padrão? | `advertised-routes` de uma sessão de baixo risco. Filtro com parâmetro não simula; se um `call` sem os parênteses for aceito, um filtro de fora sem parâmetro chamando o parametrizado pode ser simulado. Se a linha for pulada, a variante sem prepend deixa de ser necessária |
 | Ações de desvio em `route-filter`   | `apply preference` e `apply preferred-value` existem na view do `route-filter`?                          | `?` na view; hoje só aparecem em `route-policy`, na seção de scrubbing center                                                                                                                                                                                                                              |
 | `apply community` com lista vazia   | Lista sem nenhum membro é aceita, e a rota segue sem alteração?                                          | `xpl simulate`. Se recusar, a lista nasce com um valor inerte que o peer ignore, e o teste passa a ser obrigatório antes de pendurar a sessão                                                                                                                                                              |
 | `undo network` com `route-filter`   | A linha remove a entrada que tem `route-filter` junto, ou é preciso reemitir a linha sem o filtro antes? | `display this` na view da família depois do `undo`. O desenho assume que remove, que é o que o comando significa, mas é um `display this` de distância                                                                                                                                                     |
