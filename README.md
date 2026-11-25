@@ -203,9 +203,11 @@ que ainda não está em `out/<ASN>/`, que é a parte que provavelmente não subi
 Os blocos saem com as linhas `y` que respondem às perguntas do VRP: a do
 `peer ... enable`, a do `peer ... group` (que reseta a sessão ao recolocá-la no
 grupo) e as três dos knobs de sessão (`timer keepalive ... hold ...`,
-`capability-advertise graceful-restart` e `bfd enable`). Elas fazem parte do
-bloco colado — sem elas o resto da colagem cai no prompt. Quando a pergunta não
-acontece, a linha `y` é recusada como comando inexistente e a colagem segue.
+`capability-advertise graceful-restart` e `bfd enable`). O
+`peer ... ebgp-max-hop`, que só sai com "multihop" marcado, leva o `y` pela
+mesma regra, por precaução. Elas fazem parte do bloco colado — sem elas o resto
+da colagem cai no prompt. Quando a pergunta não acontece, a linha `y` é
+recusada como comando inexistente e a colagem segue.
 
 1. **O bloco base, uma vez, antes de tudo.** A tela serve em `GET /base.txt`,
    no botão "baixar bloco base". O corpo é montado na hora do download, então o
