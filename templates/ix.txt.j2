@@ -29,7 +29,9 @@ bgp {{ plan.ASN }}
  peer {{ peer.sessoes[fam].remoto }} group {{ grupo.nome }}
  y
 {% if peer.multihop %}
+{# o ebgp-max-hop e da sessao e tambem pergunta: o y responde #}
  peer {{ peer.sessoes[fam].remoto }} ebgp-max-hop {{ plan.MULTIHOP_TTL }}
+ y
 {% endif %}
 {# o membro nao passa pelo sessao_do_peer, entao o undo do check-first-as sai
    aqui: dentro do grupo o route server continua transparente, e sem ele a

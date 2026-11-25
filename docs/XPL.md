@@ -426,6 +426,7 @@ bgp 64512
 - **A default de `default-route-advertise` não passa pelo filtro de export.** O VRP origina `0.0.0.0/0` e `::/0` na sessão mesmo sem default na RIB, e por fora do route-filter. Nenhum `refuse` do export a segura. `[F1A]`
 - **Ao habilitar o peer**, o VRP pergunta `This operation will reset the peer session. Continue? [Y/N]`. Num bloco colado, inclua a linha `y` logo depois, senão o resto do bloco cai no prompt. `[gerado]`
 - **Os knobs de sessão e o `peer ... group`** — `peer <ip> timer keepalive <k> hold <h>`, `peer <ip> capability-advertise graceful-restart`, `peer <ip> bfd enable` e `peer <ip> group <nome>` — também pedem confirmação. São perguntas separadas, então cada linha leva o seu `y` logo abaixo; um `y` só no fim responderia a uma e deixaria as outras presas. Vale para o peer avulso, para o grupo (`peer <grupo> ...`) e para o membro de grupo, que recoloca a sessão no grupo dentro de cada família — é aí que a linha do `group` aparece duas vezes, no nível do `bgp` e dentro da família. O `y` sai sempre, inclusive quando não há pergunta: aí ele é só recusado como comando inexistente, o equipamento acusa e segue. `[F1A]`
+- **O `peer ... ebgp-max-hop`** entra na mesma regra por precaução: é um knob de sessão como os outros, e o `y` logo abaixo não atrapalha quando não há pergunta — vira comando inexistente, que o equipamento acusa e segue. Se algum dia aparecer a pergunta nele, o bloco já está pronto. `[aberto]`
 
 ## Testar antes de colar
 
