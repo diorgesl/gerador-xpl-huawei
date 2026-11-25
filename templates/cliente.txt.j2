@@ -60,6 +60,8 @@ bgp {{ plan.ASN }}
 {% set s = peer.sessoes[fam] %}
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ s.remoto }} enable
+  {# o y do "Continue? [Y/N]" do enable, como no familia_bgp #}
+  y
   peer {{ s.remoto }} group {{ grupo.nome }}
 {# o limite e da sessao, nao do grupo, e por isso ele sai aqui e nao no arquivo
    do grupo - dentro da familia, que e onde o VRP o aceita: a spec o deixa no Peer mesmo dentro de um grupo, o PLANO manda

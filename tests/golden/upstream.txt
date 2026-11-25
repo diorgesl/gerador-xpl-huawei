@@ -149,8 +149,11 @@ bgp 64512
  peer 203.0.113.1 as-number 14840
  peer 203.0.113.1 description UPSTREAM-01-AS14840
  peer 203.0.113.1 timer keepalive 10 hold 30
+ y
  peer 203.0.113.1 capability-advertise graceful-restart
+ y
  peer 203.0.113.1 bfd enable
+ y
 
  ipv4-family unicast
   peer 203.0.113.1 enable

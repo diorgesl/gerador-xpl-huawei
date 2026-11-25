@@ -76,7 +76,9 @@ bgp 64512
  peer 10.0.0.2 as-number 64510
  peer 10.0.0.2 description PNI-CDN-A-AS64510
  peer 10.0.0.2 capability-advertise graceful-restart
+ y
  peer 10.0.0.2 bfd enable
+ y
 
  ipv4-family unicast
   peer 10.0.0.2 enable

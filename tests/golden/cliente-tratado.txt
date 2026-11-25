@@ -89,7 +89,9 @@ bgp 64512
  peer 198.51.100.2 as-number 268127
  peer 198.51.100.2 description CLIENTE-AS268127
  peer 198.51.100.2 capability-advertise graceful-restart
+ y
  peer 198.51.100.2 bfd enable
+ y
 
  ipv4-family unicast
   peer 198.51.100.2 enable

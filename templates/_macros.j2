@@ -76,14 +76,22 @@ end-filter
    nao tem comentario renderizado em tipo nenhum. #}
  undo peer {{ s.remoto }} check-first-as enable
 {% endif %}
+{# Os tres knobs de sessao tambem perguntam antes de aplicar, e sao tres
+   perguntas separadas: cada um leva o `y` logo abaixo, senao o resto do
+   bloco colado cai no prompt. O `y` sai sempre, inclusive quando nao ha
+   pergunta - ai ele vira comando inexistente, o VRP acusa e segue, e e o
+   preco de nunca parar no meio. #}
 {% if peer.timer_keepalive and peer.timer_hold %}
  peer {{ s.remoto }} timer keepalive {{ peer.timer_keepalive }} hold {{ peer.timer_hold }}
+ y
 {% endif %}
 {% if peer.graceful_restart %}
  peer {{ s.remoto }} capability-advertise graceful-restart
+ y
 {% endif %}
 {% if peer.bfd %}
  peer {{ s.remoto }} bfd enable
+ y
 {% endif %}
 {%- endmacro %}
 
@@ -272,14 +280,18 @@ end-filter
 {% if grupo.asn %}
  peer {{ grupo.nome }} as-number {{ grupo.asn }}
 {% endif %}
+{# os mesmos tres knobs do peer, cada um com o seu `y`. #}
 {% if grupo.timer_keepalive and grupo.timer_hold %}
  peer {{ grupo.nome }} timer keepalive {{ grupo.timer_keepalive }} hold {{ grupo.timer_hold }}
+ y
 {% endif %}
 {% if grupo.graceful_restart %}
  peer {{ grupo.nome }} capability-advertise graceful-restart
+ y
 {% endif %}
 {% if grupo.bfd %}
  peer {{ grupo.nome }} bfd enable
+ y
 {% endif %}
 {%- endmacro %}
 
