@@ -3367,6 +3367,7 @@ def test_reaproveita_leva_o_multihop_do_proprio_peer():
 PERGUNTAM = re.compile(
     r"^ +peer \S+ (?:enable"
     r"|group \S+"
+    r"|ebgp-max-hop \d+"
     r"|timer keepalive \d+ hold \d+"
     r"|capability-advertise graceful-restart"
     r"|bfd enable)$")
@@ -3395,3 +3396,18 @@ def test_o_bloco_do_membro_responde_as_perguntas_do_vrp(tipo):
     texto = render.render_peer(membro_com_override_do_tipo(tipo, grupo),
                                grupo=grupo)
     assert _sem_y_logo_abaixo(texto) == []
+
+
+@pytest.mark.parametrize("monta", [peer_cliente, peer_upstream, peer_ix, peer_pni])
+def test_o_multihop_do_peer_responde_as_perguntas_do_vrp(monta):
+    # o parametro so sai com "multihop" marcado no cadastro, e e uma linha de
+    # sessao como as outras: o y vai junto, mesmo sem pergunta
+    assert _sem_y_logo_abaixo(render.render_peer(monta(multihop=True))) == []
+
+
+@pytest.mark.parametrize("tipo", ["cliente", "parceiro", "upstream", "ix", "pni"])
+def test_o_multihop_do_membro_responde_as_perguntas_do_vrp(tipo):
+    grupo = grupo_do_tipo(tipo)
+    membro = membro_com_override_do_tipo(tipo, grupo)
+    membro.multihop = True
+    assert _sem_y_logo_abaixo(render.render_peer(membro, grupo=grupo)) == []

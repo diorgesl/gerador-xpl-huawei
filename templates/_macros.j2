@@ -64,8 +64,14 @@ end-filter
    (plan.MULTIHOP_TTL), o cadastro so diz se a sessao e multihop. Os ramos de
    membro dos quatro templates de tipo repetem esta linha: o grupo nao a
    carrega. #}
+{# Os knobs de sessao tambem perguntam antes de aplicar, e sao perguntas
+   separadas: cada um leva o `y` logo abaixo, senao o resto do bloco colado
+   cai no prompt. O `y` sai sempre, inclusive quando nao ha pergunta - ai ele
+   vira comando inexistente, o VRP acusa e segue, e e o preco de nunca parar
+   no meio. #}
 {% if peer.multihop %}
  peer {{ s.remoto }} ebgp-max-hop {{ plan.MULTIHOP_TTL }}
+ y
 {% endif %}
 {% if peer.tipo == "ix" %}
 {# motivo: o route server e transparente e nao insere o proprio ASN no path,
@@ -76,11 +82,6 @@ end-filter
    nao tem comentario renderizado em tipo nenhum. #}
  undo peer {{ s.remoto }} check-first-as enable
 {% endif %}
-{# Os tres knobs de sessao tambem perguntam antes de aplicar, e sao tres
-   perguntas separadas: cada um leva o `y` logo abaixo, senao o resto do
-   bloco colado cai no prompt. O `y` sai sempre, inclusive quando nao ha
-   pergunta - ai ele vira comando inexistente, o VRP acusa e segue, e e o
-   preco de nunca parar no meio. #}
 {% if peer.timer_keepalive and peer.timer_hold %}
  peer {{ s.remoto }} timer keepalive {{ peer.timer_keepalive }} hold {{ peer.timer_hold }}
  y
