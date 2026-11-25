@@ -3263,6 +3263,7 @@ def test_route_limit_do_membro_sai_dentro_da_familia(tipo):
     for nome, remoto in (("ipv4-family", "192.0.2.3"),
                          ("ipv6-family", "2001:db8:100::2")):
         assert ("  peer %s group %s\n"
+                "  y\n"
                 "  peer %s route-limit %d %s\n" % (
                     remoto, grupo.nome, remoto, membro.route_limit,
                     plan.ACAO_LIMITE)) in _familia(familias, nome)
@@ -3365,6 +3366,7 @@ def test_reaproveita_leva_o_multihop_do_proprio_peer():
 # o resto do bloco colado cair no prompt.
 PERGUNTAM = re.compile(
     r"^ +peer \S+ (?:enable"
+    r"|group \S+"
     r"|timer keepalive \d+ hold \d+"
     r"|capability-advertise graceful-restart"
     r"|bfd enable)$")

@@ -201,7 +201,8 @@ ordem, para conferir antes de colar e para copiar tudo de uma vez. Ela marca o
 que ainda não está em `out/<ASN>/`, que é a parte que provavelmente não subiu.
 
 Os blocos saem com as linhas `y` que respondem às perguntas do VRP: a do
-`peer ... enable` e as três dos knobs de sessão (`timer keepalive ... hold ...`,
+`peer ... enable`, a do `peer ... group` (que reseta a sessão ao recolocá-la no
+grupo) e as três dos knobs de sessão (`timer keepalive ... hold ...`,
 `capability-advertise graceful-restart` e `bfd enable`). Elas fazem parte do
 bloco colado — sem elas o resto da colagem cai no prompt. Quando a pergunta não
 acontece, a linha `y` é recusada como comando inexistente e a colagem segue.

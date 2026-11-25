@@ -37,7 +37,10 @@ bgp {{ plan.ASN }}
 {% if not grupo.asn %}
  peer {{ peer.sessoes[fam].remoto }} as-number {{ peer.asn }}
 {% endif %}
+{# o `peer ... group` tambem reseta a sessao e pergunta "Continue?
+   [Y/N]": o y responde, como no enable. #}
  peer {{ peer.sessoes[fam].remoto }} group {{ grupo.nome }}
+ y
 {% if peer.multihop %}
  peer {{ peer.sessoes[fam].remoto }} ebgp-max-hop {{ plan.MULTIHOP_TTL }}
 {% endif %}
@@ -47,9 +50,11 @@ bgp {{ plan.ASN }}
 {% set s = peer.sessoes[fam] %}
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ s.remoto }} enable
-  {# o y do "Continue? [Y/N]" do enable, como no familia_bgp #}
+  {# o enable e o `peer ... group` da linha de baixo resetam a sessao e
+     perguntam "Continue? [Y/N]": cada um leva o seu y. #}
   y
   peer {{ s.remoto }} group {{ grupo.nome }}
+  y
   peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
 {% if peer.preserva_nexthop %}
   peer {{ s.remoto }} next-hop-invariable include-unicast-route

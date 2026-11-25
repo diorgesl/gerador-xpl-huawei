@@ -50,7 +50,10 @@ bgp {{ plan.ASN }}
 {% if not grupo.asn %}
  peer {{ peer.sessoes[fam].remoto }} as-number {{ peer.asn }}
 {% endif %}
+{# o `peer ... group` tambem reseta a sessao e pergunta "Continue?
+   [Y/N]": o y responde, como no enable. #}
  peer {{ peer.sessoes[fam].remoto }} group {{ grupo.nome }}
+ y
 {% if peer.multihop %}
  peer {{ peer.sessoes[fam].remoto }} ebgp-max-hop {{ plan.MULTIHOP_TTL }}
 {% endif %}
@@ -60,9 +63,11 @@ bgp {{ plan.ASN }}
 {% set s = peer.sessoes[fam] %}
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ s.remoto }} enable
-  {# o y do "Continue? [Y/N]" do enable, como no familia_bgp #}
+  {# o enable e o `peer ... group` da linha de baixo resetam a sessao e
+     perguntam "Continue? [Y/N]": cada um leva o seu y. #}
   y
   peer {{ s.remoto }} group {{ grupo.nome }}
+  y
 {# o limite e da sessao, nao do grupo, e por isso ele sai aqui e nao no arquivo
    do grupo - dentro da familia, que e onde o VRP o aceita: a spec o deixa no Peer mesmo dentro de um grupo, o PLANO manda
    route-limit em toda sessao, sem excecao, inclusive cliente pequeno - e no
