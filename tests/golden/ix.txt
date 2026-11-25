@@ -78,7 +78,9 @@ bgp 64512
  peer 187.16.192.2 description IX-SP-AS26162
  undo peer 187.16.192.2 check-first-as enable
  peer 187.16.192.2 capability-advertise graceful-restart
+ y
  peer 187.16.192.2 bfd enable
+ y
 
  ipv4-family unicast
   peer 187.16.192.2 enable

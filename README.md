@@ -200,6 +200,12 @@ A tela "Config completa" (`/config-completa`) monta a config inteira nesta
 ordem, para conferir antes de colar e para copiar tudo de uma vez. Ela marca o
 que ainda não está em `out/<ASN>/`, que é a parte que provavelmente não subiu.
 
+Os blocos saem com as linhas `y` que respondem às perguntas do VRP: a do
+`peer ... enable` e as três dos knobs de sessão (`timer keepalive ... hold ...`,
+`capability-advertise graceful-restart` e `bfd enable`). Elas fazem parte do
+bloco colado — sem elas o resto da colagem cai no prompt. Quando a pergunta não
+acontece, a linha `y` é recusada como comando inexistente e a colagem segue.
+
 1. **O bloco base, uma vez, antes de tudo.** A tela serve em `GET /base.txt`,
    no botão "baixar bloco base". O corpo é montado na hora do download, então o
    que o navegador salva é sempre o que o `plan.py` diz agora: não há arquivo em

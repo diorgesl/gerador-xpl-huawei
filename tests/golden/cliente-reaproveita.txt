@@ -7,7 +7,9 @@ bgp 64512
  peer 198.51.100.10 as-number 270620
  peer 198.51.100.10 description NETMAC-BKP
  peer 198.51.100.10 capability-advertise graceful-restart
+ y
  peer 198.51.100.10 bfd enable
+ y
 
  ipv4-family unicast
   peer 198.51.100.10 enable

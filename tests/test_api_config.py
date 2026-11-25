@@ -195,6 +195,11 @@ def test_a_config_organizada_junta_tudo_por_tipo(api):
     # isso o `peer ... group` do membro referencia um grupo que ainda nao existe
     assert bgp.index("group PARCEIROS_CDN external") < bgp.index(
         "peer 198.51.100.2 group PARCEIROS_CDN")
+    # o y que responde ao "Continue? [Y/N]" viaja colado no comando que
+    # pergunta, inclusive no arquivo reagrupado: e a mesma colagem, e sem ele
+    # ela para no prompt
+    assert " peer PARCEIROS_CDN bfd enable\n y\n" in bgp
+    assert "  peer 198.51.100.2 enable\n  y\n" in bgp
 
 
 def test_a_config_organizada_exige_sessao(api_anonimo):

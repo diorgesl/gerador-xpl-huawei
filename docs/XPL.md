@@ -424,7 +424,8 @@ bgp 64512
 - **`network`.** `network <ip> <mask> route-filter <nome>` existe e completa com `label-index`, `non-relay-tunnel` e `<cr>`. `[F1A]` Se o filtro roda de fato na originação, aplicando LP e communities, ainda está `[aberto]`: confira com `display bgp routing-table <prefixo>`.
 - **`advertise-community` não é padrão**, nem em iBGP. Sem ele a community não sai, por mais que o filtro a aplique. O mesmo vale para `advertise-large-community`.
 - **A default de `default-route-advertise` não passa pelo filtro de export.** O VRP origina `0.0.0.0/0` e `::/0` na sessão mesmo sem default na RIB, e por fora do route-filter. Nenhum `refuse` do export a segura. `[F1A]`
-- **Ao habilitar o peer**, o VRP pergunta `This operation will reset the peer session. Continue? [Y/N]`. Num bloco colado, inclua a linha `y` logo depois, senão o resto do bloco cai no prompt.
+- **Ao habilitar o peer**, o VRP pergunta `This operation will reset the peer session. Continue? [Y/N]`. Num bloco colado, inclua a linha `y` logo depois, senão o resto do bloco cai no prompt. `[gerado]`
+- **Os knobs de sessão** — `peer <ip> timer keepalive <k> hold <h>`, `peer <ip> capability-advertise graceful-restart` e `peer <ip> bfd enable` — também pedem confirmação. São três perguntas separadas, então cada linha leva o seu `y` logo abaixo; um `y` só no fim do grupo responderia a uma e deixaria as outras duas presas. O `y` sai sempre, inclusive quando não há pergunta: aí ele é só recusado como comando inexistente, o equipamento acusa e segue. O mesmo vale para o grupo (`peer <grupo> ...`). `[F1A]`
 
 ## Testar antes de colar
 

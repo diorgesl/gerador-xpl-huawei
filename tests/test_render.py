@@ -814,7 +814,7 @@ def test_bloco_bgp_do_upstream_tem_uma_linha_em_branco_antes_da_familia():
     # a emenda do grupo de sessao com o primeiro ipv4-family: uma linha em
     # branco so, como no golden do cliente
     texto = render.render_peer(peer_upstream())
-    assert "peer 203.0.113.1 bfd enable\n\n ipv4-family unicast\n" in texto
+    assert "peer 203.0.113.1 bfd enable\n y\n\n ipv4-family unicast\n" in texto
 
 
 # Task 7: o template de IX. Mesmos sets por peer do cliente e do upstream,
@@ -972,7 +972,7 @@ def test_bloco_bgp_do_ix_tem_uma_linha_em_branco_antes_da_familia():
     # a emenda do grupo de sessao com o primeiro ipv4-family: uma linha em
     # branco so, como no golden do cliente
     texto = render.render_peer(peer_ix())
-    assert "peer 187.16.192.2 bfd enable\n\n ipv4-family unicast\n" in texto
+    assert "peer 187.16.192.2 bfd enable\n y\n\n ipv4-family unicast\n" in texto
 
 
 # Incremento: o check-first-as desligado na sessao de IX. O route server e
@@ -1380,7 +1380,7 @@ def test_bloco_bgp_do_pni_tem_uma_linha_em_branco_antes_da_familia():
     # a emenda do grupo de sessao com o primeiro ipv4-family: uma linha em
     # branco so, como no golden do cliente
     texto = render.render_peer(peer_pni())
-    assert "peer 10.0.0.2 bfd enable\n\n ipv4-family unicast\n" in texto
+    assert "peer 10.0.0.2 bfd enable\n y\n\n ipv4-family unicast\n" in texto
 
 
 # Task 12 (fix final): o quadro "ao criar o peer". O par CL-PEER-<T> /
@@ -3357,3 +3357,39 @@ def test_reaproveita_leva_o_multihop_do_proprio_peer():
                                         "remoto": "198.51.100.10"}})
     texto = render.render_peer(alvo, origem=origem)
     assert " peer 198.51.100.10 ebgp-max-hop 64\n" in texto
+
+
+# As linhas em que o VRP pergunta "This operation will reset the peer session.
+# Continue? [Y/N]". O `y` vai sempre, mesmo quando nao ha pergunta: ai ele
+# vira um comando inexistente, o VRP acusa e segue - e o preco de nunca deixar
+# o resto do bloco colado cair no prompt.
+PERGUNTAM = re.compile(
+    r"^ +peer \S+ (?:enable"
+    r"|timer keepalive \d+ hold \d+"
+    r"|capability-advertise graceful-restart"
+    r"|bfd enable)$")
+
+
+def _sem_y_logo_abaixo(texto):
+    """As linhas que perguntam e que ficaram sem o `y` na linha de baixo."""
+    linhas = texto.splitlines()
+    return [linha for linha, seguinte in zip(linhas, linhas[1:])
+            if PERGUNTAM.match(linha) and seguinte.strip() != "y"]
+
+
+@pytest.mark.parametrize("monta", [peer_cliente, peer_upstream, peer_ix, peer_pni])
+def test_o_bloco_do_peer_avulso_responde_as_perguntas_do_vrp(monta):
+    assert _sem_y_logo_abaixo(render.render_peer(monta())) == []
+
+
+@pytest.mark.parametrize("tipo", ["cliente", "parceiro", "upstream", "ix", "pni"])
+def test_o_bloco_do_grupo_responde_as_perguntas_do_vrp(tipo):
+    assert _sem_y_logo_abaixo(render.render_grupo(grupo_do_tipo(tipo))) == []
+
+
+@pytest.mark.parametrize("tipo", ["cliente", "parceiro", "upstream", "ix", "pni"])
+def test_o_bloco_do_membro_responde_as_perguntas_do_vrp(tipo):
+    grupo = grupo_do_tipo(tipo)
+    texto = render.render_peer(membro_com_override_do_tipo(tipo, grupo),
+                               grupo=grupo)
+    assert _sem_y_logo_abaixo(texto) == []

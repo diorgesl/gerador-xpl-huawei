@@ -35,6 +35,8 @@ bgp {{ plan.ASN }}
 {% set s = peer.sessoes[fam] %}
  {{ "ipv6-family" if fam == "v6" else "ipv4-family" }} unicast
   peer {{ s.remoto }} enable
+  {# o y do "Continue? [Y/N]" do enable, como no familia_bgp #}
+  y
   peer {{ s.remoto }} group {{ grupo.nome }}
   peer {{ s.remoto }} route-limit {{ peer.route_limit }} {{ plan.ACAO_LIMITE }}
 {% if peer.preserva_nexthop %}
